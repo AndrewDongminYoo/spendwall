@@ -1,0 +1,10 @@
+{
+  "name": "@spendwall/agent-demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}
