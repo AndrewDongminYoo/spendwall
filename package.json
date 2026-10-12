@@ -1,14 +1,17 @@
 {
   "name": "spendwall",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "A deterministic payment policy firewall for AI agents.",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "lint": "prettier --check .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "node --test tests/*.test.mjs",
+    "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "hooks:install": "trunk git-hooks sync"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
@@ -17,5 +20,13 @@
     }
   },
   "packageManager": "pnpm@11.24.0",
-  "type": "module"
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=24.21.0 <25"
+  },
+  "devDependencies": {
+    "prettier": "3.9.10",
+    "typescript": "7.0.2"
+  }
 }
