@@ -16,6 +16,8 @@ runtimes:
 # This is the section where you manage your linters. (https://docs.trunk.io/check/configuration)
 lint:
   enabled:
+    - pinact@4.1.1:
+        commands: [lint, upgrade]
     - gitleaks@8.30.1
     - prettier@3.9.10
     - actionlint@1.7.12
