@@ -1,0 +1,408 @@
+{
+  "schemaVersion": 1,
+  "environment": "sandbox",
+  "clientIdHash": "6249b57c1140b10753969bfd63526d6977487b982052e68b0932d1a34915c942",
+  "captures": [
+    {
+      "id": "4YM00645KJ797323T",
+      "orderId": "9104866655880892F",
+      "amount": "5.00",
+      "currency": "USD",
+      "customerId": "seed-92b76fc9-da25-44b0-9315-841fa12f3702-1",
+      "batchId": "92b76fc9-da25-44b0-9315-841fa12f3702",
+      "requestId": "780bd4da-5feb-4dae-8ab9-5f31d1aeae72",
+      "createdAt": "2026-10-13T01:05:29.901Z"
+    },
+    {
+      "id": "9J520725SS851552M",
+      "orderId": "6U120404Y5358780E",
+      "amount": "10.00",
+      "currency": "USD",
+      "customerId": "seed-92b76fc9-da25-44b0-9315-841fa12f3702-2",
+      "batchId": "92b76fc9-da25-44b0-9315-841fa12f3702",
+      "requestId": "7c1724e5-5fb3-4b62-8b36-a584b31dfdc7",
+      "createdAt": "2026-10-13T01:05:32.811Z"
+    },
+    {
+      "id": "3DR98070SP615532E",
+      "orderId": "85D17353M29714002",
+      "amount": "20.00",
+      "currency": "USD",
+      "customerId": "seed-92b76fc9-da25-44b0-9315-841fa12f3702-3",
+      "batchId": "92b76fc9-da25-44b0-9315-841fa12f3702",
+      "requestId": "5426990b-78e2-464a-8cc3-2bb625b277ef",
+      "createdAt": "2026-10-13T01:05:35.716Z"
+    },
+    {
+      "id": "86D8423192514322D",
+      "orderId": "0DH45337EX374164L",
+      "amount": "30.00",
+      "currency": "USD",
+      "customerId": "seed-92b76fc9-da25-44b0-9315-841fa12f3702-4",
+      "batchId": "92b76fc9-da25-44b0-9315-841fa12f3702",
+      "requestId": "dbe995ff-a117-448c-9bf1-442eff83d61e",
+      "createdAt": "2026-10-13T01:05:39.228Z"
+    },
+    {
+      "id": "6RD75322L80499058",
+      "orderId": "7KX3692648850274Y",
+      "amount": "40.00",
+      "currency": "USD",
+      "customerId": "seed-92b76fc9-da25-44b0-9315-841fa12f3702-5",
+      "batchId": "92b76fc9-da25-44b0-9315-841fa12f3702",
+      "requestId": "0d3e3787-7ec7-4286-8a6c-fd0472292af2",
+      "createdAt": "2026-10-13T01:05:42.328Z"
+    },
+    {
+      "id": "4VF69183K94616007",
+      "orderId": "77P92876MB267535D",
+      "amount": "80.00",
+      "currency": "USD",
+      "customerId": "seed-92b76fc9-da25-44b0-9315-841fa12f3702-6",
+      "batchId": "92b76fc9-da25-44b0-9315-841fa12f3702",
+      "requestId": "6d8b5474-dbd8-4bf3-9955-c1d735cd5c6c",
+      "createdAt": "2026-10-13T01:05:46.034Z"
+    },
+    {
+      "id": "3PS50944UH923950S",
+      "orderId": "8HB54157RX0218311",
+      "amount": "120.00",
+      "currency": "USD",
+      "customerId": "seed-92b76fc9-da25-44b0-9315-841fa12f3702-7",
+      "batchId": "92b76fc9-da25-44b0-9315-841fa12f3702",
+      "requestId": "f3de15f9-d396-4885-8192-9f53343bebaf",
+      "createdAt": "2026-10-13T01:05:49.336Z"
+    },
+    {
+      "id": "2MJ01492X9640613X",
+      "orderId": "8SA2671614296434G",
+      "amount": "200.00",
+      "currency": "USD",
+      "customerId": "seed-92b76fc9-da25-44b0-9315-841fa12f3702-8",
+      "batchId": "92b76fc9-da25-44b0-9315-841fa12f3702",
+      "requestId": "e7cc585d-c4ff-4ef9-9756-ea84bfd467c2",
+      "createdAt": "2026-10-13T01:05:53.055Z"
+    },
+    {
+      "id": "0KE10368AE7370459",
+      "orderId": "3FH53253VP563681M",
+      "amount": "350.00",
+      "currency": "USD",
+      "customerId": "seed-92b76fc9-da25-44b0-9315-841fa12f3702-9",
+      "batchId": "92b76fc9-da25-44b0-9315-841fa12f3702",
+      "requestId": "292ac72a-bd74-46fa-9f9f-a10494f39f47",
+      "createdAt": "2026-10-13T01:05:55.356Z"
+    },
+    {
+      "id": "92458679P5530645W",
+      "orderId": "36T24868DM914004E",
+      "amount": "500.00",
+      "currency": "USD",
+      "customerId": "seed-92b76fc9-da25-44b0-9315-841fa12f3702-10",
+      "batchId": "92b76fc9-da25-44b0-9315-841fa12f3702",
+      "requestId": "c97d5911-cb3e-43a2-941f-5580c77693c0",
+      "createdAt": "2026-10-13T01:05:58.673Z"
+    },
+    {
+      "id": "88896157CU229004T",
+      "orderId": "4MJ889031Y221125D",
+      "amount": "1.00",
+      "currency": "USD",
+      "customerId": "seed-92b76fc9-da25-44b0-9315-841fa12f3702-velocity",
+      "batchId": "92b76fc9-da25-44b0-9315-841fa12f3702",
+      "requestId": "6cc0a39b-4192-434f-8058-106812803438",
+      "createdAt": "2026-10-13T01:06:01.580Z"
+    },
+    {
+      "id": "09P9035548811832F",
+      "orderId": "8TS10334LE494692Y",
+      "amount": "1.01",
+      "currency": "USD",
+      "customerId": "seed-92b76fc9-da25-44b0-9315-841fa12f3702-velocity",
+      "batchId": "92b76fc9-da25-44b0-9315-841fa12f3702",
+      "requestId": "b7041c45-929a-419f-8a3d-4aac1ba88d02",
+      "createdAt": "2026-10-13T01:06:04.483Z"
+    },
+    {
+      "id": "9WK43232CU624033G",
+      "orderId": "2XT954409N7130427",
+      "amount": "1.02",
+      "currency": "USD",
+      "customerId": "seed-92b76fc9-da25-44b0-9315-841fa12f3702-velocity",
+      "batchId": "92b76fc9-da25-44b0-9315-841fa12f3702",
+      "requestId": "641b41a1-85ff-4cae-822f-8bfb133b3c38",
+      "createdAt": "2026-10-13T01:06:08.385Z"
+    },
+    {
+      "id": "2HC96925E9488240T",
+      "orderId": "1VR79766NN8241948",
+      "amount": "1.03",
+      "currency": "USD",
+      "customerId": "seed-92b76fc9-da25-44b0-9315-841fa12f3702-velocity",
+      "batchId": "92b76fc9-da25-44b0-9315-841fa12f3702",
+      "requestId": "282a6288-9ca9-4c5c-83c1-6a65b684157c",
+      "createdAt": "2026-10-13T01:06:11.700Z"
+    },
+    {
+      "id": "80W077111W502781R",
+      "orderId": "3V49165079828442E",
+      "amount": "1.04",
+      "currency": "USD",
+      "customerId": "seed-92b76fc9-da25-44b0-9315-841fa12f3702-velocity",
+      "batchId": "92b76fc9-da25-44b0-9315-841fa12f3702",
+      "requestId": "9083c8b0-e909-44ad-9f2d-e70e13b2358d",
+      "createdAt": "2026-10-13T01:06:15.392Z"
+    },
+    {
+      "id": "0NC43073S3393773Y",
+      "orderId": "0TA93093SB510231N",
+      "amount": "1.05",
+      "currency": "USD",
+      "customerId": "seed-92b76fc9-da25-44b0-9315-841fa12f3702-velocity",
+      "batchId": "92b76fc9-da25-44b0-9315-841fa12f3702",
+      "requestId": "101c0542-e1e4-457f-8961-0f95a9fff1e3",
+      "createdAt": "2026-10-13T01:06:18.696Z"
+    },
+    {
+      "id": "0U2538640S1013222",
+      "orderId": "8B4136274X823281J",
+      "amount": "1.06",
+      "currency": "USD",
+      "customerId": "seed-92b76fc9-da25-44b0-9315-841fa12f3702-velocity",
+      "batchId": "92b76fc9-da25-44b0-9315-841fa12f3702",
+      "requestId": "07405f5b-6ce6-47a5-91dc-26700bd276a2",
+      "createdAt": "2026-10-13T01:06:21.393Z"
+    },
+    {
+      "id": "4U977339NF024261Y",
+      "orderId": "7UW94546SM101092T",
+      "amount": "1.07",
+      "currency": "USD",
+      "customerId": "seed-92b76fc9-da25-44b0-9315-841fa12f3702-velocity",
+      "batchId": "92b76fc9-da25-44b0-9315-841fa12f3702",
+      "requestId": "cc01a3c6-8a91-4f52-aa34-f3ec2fdd0479",
+      "createdAt": "2026-10-13T01:06:24.900Z"
+    },
+    {
+      "id": "1VJ543925F688282U",
+      "orderId": "1CD84228PM0470439",
+      "amount": "1.08",
+      "currency": "USD",
+      "customerId": "seed-92b76fc9-da25-44b0-9315-841fa12f3702-velocity",
+      "batchId": "92b76fc9-da25-44b0-9315-841fa12f3702",
+      "requestId": "04bca4cf-8e7c-49c2-92a1-0fd66e07cfce",
+      "createdAt": "2026-10-13T01:06:28.207Z"
+    },
+    {
+      "id": "0G854007X52162623",
+      "orderId": "5JX91634DK2025207",
+      "amount": "1.09",
+      "currency": "USD",
+      "customerId": "seed-92b76fc9-da25-44b0-9315-841fa12f3702-velocity",
+      "batchId": "92b76fc9-da25-44b0-9315-841fa12f3702",
+      "requestId": "ad8e4ccc-eb3d-4864-9333-9d15b6c2e549",
+      "createdAt": "2026-10-13T01:06:31.919Z"
+    },
+    {
+      "id": "1TC531498L424862A",
+      "orderId": "3JV33369R8937834E",
+      "amount": "5.00",
+      "currency": "USD",
+      "customerId": "seed-1147612e-dca0-42a2-b3be-e686b1250e82-1",
+      "batchId": "1147612e-dca0-42a2-b3be-e686b1250e82",
+      "requestId": "3f8873b0-b8de-4b97-abb4-098ad52b3b11",
+      "createdAt": "2026-10-13T01:11:33.246Z"
+    },
+    {
+      "id": "3CH99063XH4394805",
+      "orderId": "7J6052643R5474220",
+      "amount": "10.00",
+      "currency": "USD",
+      "customerId": "seed-1147612e-dca0-42a2-b3be-e686b1250e82-2",
+      "batchId": "1147612e-dca0-42a2-b3be-e686b1250e82",
+      "requestId": "bb76a727-c9c6-4a53-904e-3673daff7193",
+      "createdAt": "2026-10-13T01:11:36.762Z"
+    },
+    {
+      "id": "5D5692625J362841M",
+      "orderId": "88V0381510821734A",
+      "amount": "20.00",
+      "currency": "USD",
+      "customerId": "seed-1147612e-dca0-42a2-b3be-e686b1250e82-3",
+      "batchId": "1147612e-dca0-42a2-b3be-e686b1250e82",
+      "requestId": "4f695d47-7a29-4623-bd4a-88eb09457840",
+      "createdAt": "2026-10-13T01:11:40.469Z"
+    },
+    {
+      "id": "8U172843UT937001T",
+      "orderId": "6J538585B1236045R",
+      "amount": "30.00",
+      "currency": "USD",
+      "customerId": "seed-1147612e-dca0-42a2-b3be-e686b1250e82-4",
+      "batchId": "1147612e-dca0-42a2-b3be-e686b1250e82",
+      "requestId": "ea23d1b7-99bc-4315-b6c7-242a11f866df",
+      "createdAt": "2026-10-13T01:11:43.979Z"
+    },
+    {
+      "id": "94U60492KE5161039",
+      "orderId": "75885166201618812",
+      "amount": "40.00",
+      "currency": "USD",
+      "customerId": "seed-1147612e-dca0-42a2-b3be-e686b1250e82-5",
+      "batchId": "1147612e-dca0-42a2-b3be-e686b1250e82",
+      "requestId": "d23ed7f7-d9f2-41b3-a3b9-37a555a8ef9c",
+      "createdAt": "2026-10-13T01:11:47.682Z"
+    },
+    {
+      "id": "80A135754G633420C",
+      "orderId": "58U254863F991890J",
+      "amount": "80.00",
+      "currency": "USD",
+      "customerId": "seed-1147612e-dca0-42a2-b3be-e686b1250e82-6",
+      "batchId": "1147612e-dca0-42a2-b3be-e686b1250e82",
+      "requestId": "cc3c899b-9254-49e7-8b69-26128c27de6b",
+      "createdAt": "2026-10-13T01:11:50.601Z"
+    },
+    {
+      "id": "8BT068287E498884J",
+      "orderId": "5S20611400070793N",
+      "amount": "120.00",
+      "currency": "USD",
+      "customerId": "seed-1147612e-dca0-42a2-b3be-e686b1250e82-7",
+      "batchId": "1147612e-dca0-42a2-b3be-e686b1250e82",
+      "requestId": "4b36a7f6-ad3a-4268-b229-9db12bab42a5",
+      "createdAt": "2026-10-13T01:11:53.514Z"
+    },
+    {
+      "id": "7ML37855J3944871W",
+      "orderId": "0J7656936J873454T",
+      "amount": "200.00",
+      "currency": "USD",
+      "customerId": "seed-1147612e-dca0-42a2-b3be-e686b1250e82-8",
+      "batchId": "1147612e-dca0-42a2-b3be-e686b1250e82",
+      "requestId": "958ffba5-8436-45be-a479-c971d6ab4114",
+      "createdAt": "2026-10-13T01:11:56.224Z"
+    },
+    {
+      "id": "6HW29102N2251842W",
+      "orderId": "5PW406808V484031P",
+      "amount": "350.00",
+      "currency": "USD",
+      "customerId": "seed-1147612e-dca0-42a2-b3be-e686b1250e82-9",
+      "batchId": "1147612e-dca0-42a2-b3be-e686b1250e82",
+      "requestId": "4d63aee9-e22b-46cc-aa7e-5f3cb75901e2",
+      "createdAt": "2026-10-13T01:11:58.927Z"
+    },
+    {
+      "id": "92X01803KK710933F",
+      "orderId": "5F112775EG374820D",
+      "amount": "500.00",
+      "currency": "USD",
+      "customerId": "seed-1147612e-dca0-42a2-b3be-e686b1250e82-10",
+      "batchId": "1147612e-dca0-42a2-b3be-e686b1250e82",
+      "requestId": "f5877d2e-4f50-49fc-8935-df21ffecec82",
+      "createdAt": "2026-10-13T01:12:01.835Z"
+    },
+    {
+      "id": "4MG867289V0335847",
+      "orderId": "7B428728CB708653L",
+      "amount": "1.00",
+      "currency": "USD",
+      "customerId": "seed-1147612e-dca0-42a2-b3be-e686b1250e82-velocity",
+      "batchId": "1147612e-dca0-42a2-b3be-e686b1250e82",
+      "requestId": "b9034338-98bb-4600-8b89-4988751391bd",
+      "createdAt": "2026-10-13T01:12:05.164Z"
+    },
+    {
+      "id": "0CM584738A837205E",
+      "orderId": "3553343091908713R",
+      "amount": "1.01",
+      "currency": "USD",
+      "customerId": "seed-1147612e-dca0-42a2-b3be-e686b1250e82-velocity",
+      "batchId": "1147612e-dca0-42a2-b3be-e686b1250e82",
+      "requestId": "91afbfe1-f28a-4bfd-b402-3739a59089cf",
+      "createdAt": "2026-10-13T01:12:08.880Z"
+    },
+    {
+      "id": "8YU572346C551601F",
+      "orderId": "3NJ18919707454948",
+      "amount": "1.02",
+      "currency": "USD",
+      "customerId": "seed-1147612e-dca0-42a2-b3be-e686b1250e82-velocity",
+      "batchId": "1147612e-dca0-42a2-b3be-e686b1250e82",
+      "requestId": "3da2ef45-4ed6-47c4-a089-50f46dc05e14",
+      "createdAt": "2026-10-13T01:12:12.580Z"
+    },
+    {
+      "id": "49N2660809452392D",
+      "orderId": "9JB434562S787891H",
+      "amount": "1.03",
+      "currency": "USD",
+      "customerId": "seed-1147612e-dca0-42a2-b3be-e686b1250e82-velocity",
+      "batchId": "1147612e-dca0-42a2-b3be-e686b1250e82",
+      "requestId": "fd6ff739-09a5-4507-8f0b-b61b244715b0",
+      "createdAt": "2026-10-13T01:12:16.098Z"
+    },
+    {
+      "id": "9KT20880EL394921U",
+      "orderId": "5JT98799JF7082439",
+      "amount": "1.04",
+      "currency": "USD",
+      "customerId": "seed-1147612e-dca0-42a2-b3be-e686b1250e82-velocity",
+      "batchId": "1147612e-dca0-42a2-b3be-e686b1250e82",
+      "requestId": "6cae907d-9ba1-4e50-a961-0fc87cb17824",
+      "createdAt": "2026-10-13T01:12:18.815Z"
+    },
+    {
+      "id": "24078390PH134932A",
+      "orderId": "8TN54833SB970171V",
+      "amount": "1.05",
+      "currency": "USD",
+      "customerId": "seed-1147612e-dca0-42a2-b3be-e686b1250e82-velocity",
+      "batchId": "1147612e-dca0-42a2-b3be-e686b1250e82",
+      "requestId": "c10e7e7f-2d3f-47bd-a131-c9b3dca2baf9",
+      "createdAt": "2026-10-13T01:12:21.516Z"
+    },
+    {
+      "id": "5HH82918KU831722E",
+      "orderId": "2DS04492G1877915J",
+      "amount": "1.06",
+      "currency": "USD",
+      "customerId": "seed-1147612e-dca0-42a2-b3be-e686b1250e82-velocity",
+      "batchId": "1147612e-dca0-42a2-b3be-e686b1250e82",
+      "requestId": "4fe80b27-587b-492f-9222-3e68bf7a16cc",
+      "createdAt": "2026-10-13T01:12:25.630Z"
+    },
+    {
+      "id": "53H72321KH462601E",
+      "orderId": "01K198328K102801C",
+      "amount": "1.07",
+      "currency": "USD",
+      "customerId": "seed-1147612e-dca0-42a2-b3be-e686b1250e82-velocity",
+      "batchId": "1147612e-dca0-42a2-b3be-e686b1250e82",
+      "requestId": "a6334ea1-2816-477e-ba51-9aef79a1171a",
+      "createdAt": "2026-10-13T01:12:29.148Z"
+    },
+    {
+      "id": "6M777911VN8021208",
+      "orderId": "5T399866R34104823",
+      "amount": "1.08",
+      "currency": "USD",
+      "customerId": "seed-1147612e-dca0-42a2-b3be-e686b1250e82-velocity",
+      "batchId": "1147612e-dca0-42a2-b3be-e686b1250e82",
+      "requestId": "a372adb7-dbf5-4580-94cc-dddbe0e9ac56",
+      "createdAt": "2026-10-13T01:12:31.861Z"
+    },
+    {
+      "id": "6LT95566TU405021B",
+      "orderId": "31F31318SA762500N",
+      "amount": "1.09",
+      "currency": "USD",
+      "customerId": "seed-1147612e-dca0-42a2-b3be-e686b1250e82-velocity",
+      "batchId": "1147612e-dca0-42a2-b3be-e686b1250e82",
+      "requestId": "219ae282-6d87-47e1-bd63-686466114897",
+      "createdAt": "2026-10-13T01:12:35.590Z"
+    }
+  ],
+  "pending": null
+}
