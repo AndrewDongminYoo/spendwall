@@ -41,6 +41,7 @@ const refund = {
 
 async function fixture(t, config = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'spendwall-proxy-'));
+  const servedCatalog = config.catalog ?? catalog;
   const resources = [];
   const downstreams = [];
   const sessions = new Map();
@@ -103,13 +104,16 @@ async function fixture(t, config = {}) {
       if (config.drift)
         return {
           tools: [
-            { ...catalog[0], inputSchema: { type: 'object', properties: {} } },
-            ...catalog.slice(1),
+            {
+              ...servedCatalog[0],
+              inputSchema: { type: 'object', properties: {} },
+            },
+            ...servedCatalog.slice(1),
           ],
         };
       return request.params?.cursor === 'page-2'
-        ? { tools: catalog.slice(1) }
-        : { tools: catalog.slice(0, 1), nextCursor: 'page-2' };
+        ? { tools: servedCatalog.slice(1) }
+        : { tools: servedCatalog.slice(0, 1), nextCursor: 'page-2' };
     });
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
       seen.calls.push(request.params);
@@ -168,7 +172,7 @@ async function fixture(t, config = {}) {
     },
     proxyKey: key,
     ledgerPath: join(dir, 'refunds.json'),
-    expectedTools: catalog,
+    expectedTools: config.expectedTools ?? catalog,
     port: 0,
     timeoutMs: config.timeoutMs ?? 1_000,
     transport: config.transport ?? 'http',
@@ -371,4 +375,51 @@ test('startup errors expose the failed MCP stage and HTTP status without secrets
     assert.doesNotMatch(error.message, /private-paypal-token|fake-secret/);
     return true;
   });
+});
+
+test('rolling transaction date defaults do not change the reviewed input contract', async (t) => {
+  const updated = structuredClone(snapshot.tools);
+  const transaction = updated.find((tool) => tool.name === 'list_transactions');
+  transaction.inputSchema.properties.start_date.default =
+    '2026-09-12T13:55:07.550Z';
+  transaction.inputSchema.properties.end_date.default =
+    '2026-10-13T13:55:07.550Z';
+  const f = await fixture(t, {
+    catalog: updated,
+    expectedTools: snapshot.tools,
+  });
+  const { client } = await f.start();
+  const listed = (await client.listTools()).tools;
+  assert.equal(listed.length, snapshot.tools.length);
+  assert.deepEqual(
+    listed.find((tool) => tool.name === 'list_transactions').inputSchema,
+    transaction.inputSchema,
+  );
+  assert.equal(
+    snapshot.tools.find((tool) => tool.name === 'list_transactions').inputSchema
+      .properties.end_date.default,
+    '2026-10-13T00:13:32.669Z',
+  );
+});
+
+test('transaction constraints and other defaults still fail catalog review', async (t) => {
+  for (const change of ['type', 'missing', 'invalid', 'otherDefault']) {
+    await t.test(change, async (t) => {
+      const updated = structuredClone(snapshot.tools);
+      const properties = updated.find(
+        (tool) => tool.name === 'list_transactions',
+      ).inputSchema.properties;
+      if (change === 'type') properties.start_date.type = 'number';
+      if (change === 'missing') delete properties.start_date.default;
+      if (change === 'invalid') properties.start_date.default = 'not-a-date';
+      if (change === 'otherDefault') properties.page_size.default = 500;
+      const f = await fixture(t, {
+        catalog: updated,
+        expectedTools: snapshot.tools,
+      });
+      await assert.rejects(startProxy(f.options), /catalog\/schema drift/);
+      assert.equal(f.seen.calls.length, 0);
+      assert.equal(f.seen.refunds, 0);
+    });
+  }
 });

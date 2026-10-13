@@ -18,6 +18,8 @@ The operator approved this direction, related issue updates, and the implementat
 - Serve stateless Streamable HTTP at `/mcp` using the installed MCP SDK.
 - Retrieve the actual upstream tool catalog with pagination and compare its names and input schemas with the committed snapshot before exposing it.
   Refuse drift instead of silently accepting a changed payment contract.
+  Ignore only valid timestamp values in `list_transactions.start_date.default` and `list_transactions.end_date.default`, which change between discovery calls.
+  Preserve their presence, field constraints, and every other default in the comparison; expose the actual upstream schema unchanged.
 - Forward validated ordinary tool calls through the selected upstream transport without automatic mutation retries.
   W0 forwards tool names and arguments; it does not relay progress notifications, task state, or ordinary-call protocol metadata.
 - Route `create_refund` to the fixed sandbox Payments v2 REST endpoint.

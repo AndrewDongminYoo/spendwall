@@ -4,7 +4,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import type { CallToolRequest, Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 
-import { canonical } from './refunds.ts';
+import { canonical, isRecord } from './refunds.ts';
 import type { createTokenManager } from './token.ts';
 
 type Options = {
@@ -117,7 +117,28 @@ export class PayPalUpstream {
     });
     const contract = (items: Tool[]) =>
       items
-        .map((tool) => ({ name: tool.name, inputSchema: tool.inputSchema }))
+        .map((tool) => {
+          const inputSchema = structuredClone(tool.inputSchema);
+          if (
+            tool.name === 'list_transactions' &&
+            isRecord(inputSchema.properties)
+          ) {
+            // PayPal regenerates these two default timestamps when listing tools.
+            for (const field of ['start_date', 'end_date']) {
+              const property = inputSchema.properties[field];
+              if (
+                isRecord(property) &&
+                typeof property.default === 'string' &&
+                /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/.test(
+                  property.default,
+                ) &&
+                Number.isFinite(Date.parse(property.default))
+              )
+                property.default = '<rolling timestamp>';
+            }
+          }
+          return { name: tool.name, inputSchema };
+        })
         .sort((a, b) => a.name.localeCompare(b.name, 'en'));
     if (
       tools.length === 0 ||

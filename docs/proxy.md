@@ -14,6 +14,7 @@ Upstream defaults to `https://mcp.sandbox.paypal.com/http`.
 Set `PAYPAL_MCP_TRANSPORT=sse` explicitly to use the compatibility transport.
 There is no automatic transport fallback.
 The complete upstream tool names and input schemas must match [the reviewed snapshot](paypal-mcp-tools.json), which was captured over SSE.
+The comparison permits changing timestamp defaults only for `list_transactions.start_date` and `list_transactions.end_date`; their constraints and all other defaults remain checked.
 An HTTP connection must be verified separately.
 
 ## Start
