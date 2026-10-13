@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { dirname, resolve } from 'node:path';
 
 import { createTokenManager } from './token.ts';
 import type { TokenOptions } from './token.ts';
@@ -69,6 +69,15 @@ export function canonical(value: unknown): string {
 
 function hash(value: string) {
   return createHash('sha256').update(value).digest('hex');
+}
+
+async function syncDirectory(directoryPath: string) {
+  const directory = await open(directoryPath, 'r');
+  try {
+    await directory.sync();
+  } finally {
+    await directory.close();
+  }
 }
 
 function money(value: unknown): Money {
@@ -267,7 +276,13 @@ export class RefundExecutor {
     const env = options.env ?? process.env;
     if (!env.PAYPAL_CLIENT_ID?.trim() || !env.PAYPAL_CLIENT_SECRET?.trim())
       throw new Error('Set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET locally.');
-    await mkdir(dirname(options.ledgerPath), { recursive: true, mode: 0o700 });
+    const ledgerDirectory = resolve(dirname(options.ledgerPath));
+    await mkdir(ledgerDirectory, { recursive: true, mode: 0o700 });
+    // A previous startup may have failed after mkdir, so sync existing parents too.
+    for (let parent = dirname(ledgerDirectory); ; parent = dirname(parent)) {
+      await syncDirectory(parent);
+      if (parent === dirname(parent)) break;
+    }
     let lock: FileHandle;
     try {
       lock = await open(`${options.ledgerPath}.lock`, 'wx', 0o600);
@@ -314,12 +329,7 @@ export class RefundExecutor {
         await file.close();
       }
       await rename(temporary, this.options.ledgerPath);
-      const directory = await open(dirname(this.options.ledgerPath), 'r');
-      try {
-        await directory.sync();
-      } finally {
-        await directory.close();
-      }
+      await syncDirectory(dirname(this.options.ledgerPath));
     } catch {
       this.persistenceFailed = true;
       throw new Error(

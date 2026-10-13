@@ -1,8 +1,16 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  open,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 
 import { createTokenManager } from '../apps/firewall/src/token.ts';
@@ -30,7 +38,11 @@ const refund = {
 
 async function fixture(t, options = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'spendwall-refund-'));
-  const ledgerPath = join(dir, 'refunds.json');
+  const ledgerPath = join(
+    dir,
+    options.ledgerSubdirectory ?? '',
+    'refunds.json',
+  );
   const seen = { tokens: 0, posts: [], gets: [], captureGets: 0 };
   const cleanups = [];
   const server = createServer(async (req, res) => {
@@ -399,5 +411,42 @@ test('documented sandbox link aliases preserve capture binding', async (t) => {
   const executor = await RefundExecutor.open(f);
   f.after(() => executor.close());
   assert.equal((await executor.execute(executionId, args)).id, refund.id);
+  assert.equal(f.seen.posts.length, 1);
+});
+
+test('new ledger directories are persisted in every created ancestor before refunds', async (t) => {
+  const f = await fixture(t, { ledgerSubdirectory: 'new/nested' });
+  const createdParent = dirname(dirname(f.ledgerPath));
+  const stableParent = dirname(createdParent);
+  const handle = await open(stableParent, 'r');
+  const originalSync = handle.sync;
+  const prototype = Object.getPrototypeOf(handle);
+  const stableInode = (await handle.stat()).ino;
+  await handle.close();
+  const synced = [];
+  let failOnce = true;
+  t.mock.method(prototype, 'sync', async function () {
+    const details = await this.stat();
+    if (details.isDirectory()) synced.push(details.ino);
+    if (details.ino === stableInode && failOnce) {
+      failOnce = false;
+      throw new Error('Simulated parent sync failure');
+    }
+    return originalSync.call(this);
+  });
+  await assert.rejects(RefundExecutor.open(f), /Simulated parent sync failure/);
+  assert.equal(f.seen.tokens, 0);
+  synced.length = 0;
+  const executor = await RefundExecutor.open(f);
+  f.after(() => executor.close());
+  const required = await Promise.all(
+    [createdParent, stableParent].map(async (dir) => (await stat(dir)).ino),
+  );
+  assert.deepEqual(
+    synced.slice(0, required.length),
+    required,
+    'Each new directory entry must be synced in its parent before any refund can execute',
+  );
+  await executor.execute(executionId, args);
   assert.equal(f.seen.posts.length, 1);
 });
