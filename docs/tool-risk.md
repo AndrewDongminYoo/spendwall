@@ -99,7 +99,7 @@ ID lookups below are requirements for the future context resolver, not claims th
 
 ## Direct monetary fields and modifiers
 
-The following details supplement the inventory rows for `create_invoice`, `create_order`, `create_recurring_series`, and `update_invoicing`.
+The following details supplement the inventory's amount and currency summaries.
 Requiredness comes from the captured JSON Schema, including required children inside optional parents; descriptive conditions can impose additional requirements that the schema does not enforce.
 
 ### Orders
@@ -144,6 +144,40 @@ The recurring variants also require `interval_unit`, `interval_count`, and `star
 `total_cycles` is optional; its description says omission creates an indefinite series.
 For updates these paths are `recurring_series_update.interval_unit`, `recurring_series_update.interval_count`, `recurring_series_update.start_series_date`, and `recurring_series_update.total_cycles`.
 Resolve exposure over an explicit policy time horizon; neither omitted `items` nor omitted `total_cycles` establishes zero exposure.
+
+### Subscriptions and billing plans
+
+For `create_subscription`, `quantity` and the `shipping_amount` object are optional.
+When `shipping_amount` is supplied, both `shipping_amount.value` and `shipping_amount.currency_code` are required; the currency enum permits USD only.
+The required `plan_id` still needs a trusted lookup for the base price, taxes, setup fee and billing horizon.
+
+For `create_subscription_plan`, `billing_cycles` is required, as is each cycle's `billing_cycles[].pricing_scheme` object.
+Within that object, `billing_cycles[].pricing_scheme.fixed_price` is optional.
+If supplied, both `billing_cycles[].pricing_scheme.fixed_price.value` and `billing_cycles[].pricing_scheme.fixed_price.currency_code` are required; the currency enum permits USD only.
+Both `payment_preferences` and `payment_preferences.setup_fee` are optional, and the nested `payment_preferences.setup_fee.value` and `payment_preferences.setup_fee.currency_code` are individually optional even when their parents are supplied.
+The setup-fee currency enum permits USD only; missing value or currency remains unresolved monetary context rather than a complete zero fee.
+The optional `taxes` object contains optional `taxes.percentage` and `taxes.inclusive` fields.
+The optional `payment_preferences.auto_bill_outstanding`, `payment_preferences.setup_fee_failure_action`, and `payment_preferences.payment_failure_threshold` affect collection behavior.
+Each supplied cycle requires `billing_cycles[].frequency.interval_unit` and `billing_cycles[].frequency.interval_count`; `billing_cycles[].total_cycles` is optional.
+These nested plan objects allow additional properties, so the declared paths do not establish the meaning of arbitrary additional pricing inputs.
+
+For `update_subscription`, `currency_code` is optional with schema default USD and a USD-only enum; verify its effective value against the merchant-owned subscription.
+`outstanding_balance`, `shipping_amount`, and the `fixed_price` object are optional.
+When `fixed_price` is present, both `fixed_price.value` and `fixed_price.sequence` are required; `sequence` selects the billing cycle and is not an amount.
+These monetary inputs use the top-level currency; unlike creation, this tool's `shipping_amount` is a decimal string, not an object.
+`taxes_percentage`, `taxes_inclusive`, `auto_bill_outstanding`, and `payment_failure_threshold` are optional collection modifiers.
+Resolve the existing subscription's amounts, cycles and taxes before applying any partial update.
+
+### Refunds, bookkeeping and search ranges
+
+For `create_refund`, `record_payment_for_invoice`, and `record_refund_for_invoice`, the `amount` object is optional, but both `amount.value` and `amount.currency_code` are required when it is present.
+Their effects differ as described in the inventory; a bookkeeping amount is not evidence of a money transfer.
+
+For `search_invoicing`, `invoice_filters.currency_code` and `recurring_series_filters.search_filters.currency_code` are optional currency filters.
+The optional range roots are `invoice_filters.total_amount_range` and `recurring_series_filters.search_filters.total_amount_range`, under optional filter objects.
+When a range is supplied, both `lower_amount` and `upper_amount` are required, and each requires `value` and `currency_code`.
+Thus each root expands with `.lower_amount.value`, `.lower_amount.currency_code`, `.upper_amount.value`, and `.upper_amount.currency_code`.
+These are selection bounds, not execution amounts or proof of complete ledger coverage.
 
 ## Resolver and execution implications
 
