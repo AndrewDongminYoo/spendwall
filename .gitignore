@@ -10,3 +10,4 @@ coverage/
 build/
 fixtures/**/*.json.lock
 fixtures/**/*.json.*.tmp
+.spendwall/
