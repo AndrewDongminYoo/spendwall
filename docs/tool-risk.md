@@ -97,6 +97,54 @@ ID lookups below are requirements for the future context resolver, not claims th
 | `update_shipment_tracking`             | destructive | None                                                                                                    | Resolve `transaction_id` and tracking identity; changes fulfillment status and carrier data.                                                                                                                                                                      |
 | `update_subscription`                  | money-in    | Optional `outstanding_balance`, `fixed_price.value`, `shipping_amount`; `currency_code` defaults to USD | Resolve `subscription_id`, current plan/cycles and status. Validate currency, cycle sequence, tax changes and automatic billing of outstanding funds.                                                                                                             |
 
+## Direct monetary fields and modifiers
+
+The following details supplement the inventory rows for `create_invoice`, `create_order`, `create_recurring_series`, and `update_invoicing`.
+Requiredness comes from the captured JSON Schema, including required children inside optional parents; descriptive conditions can impose additional requirements that the schema does not enforce.
+
+### Orders
+
+For `create_order`, `currencyCode`, `items`, `items[].itemCost`, and `items[].itemTotal` are required.
+`currencyCode` permits USD only.
+The optional numeric inputs are `items[].quantity`, `items[].taxPercent`, `discount`, and `shippingCost`.
+`discount` is an order-level amount, while `items[].taxPercent` is a percentage; amounts use `currencyCode`.
+Reconcile every modifier and quantity with the supplied line totals instead of accepting `items[].itemTotal` as authoritative.
+An omitted quantity needs an established upstream default or trusted context before a total can be resolved.
+
+### Invoice and recurring-series templates
+
+Apply every suffix in the next table within the matching argument root:
+
+| Tool and variant                                     | Argument root             | Required template inputs                                 |
+| ---------------------------------------------------- | ------------------------- | -------------------------------------------------------- |
+| `create_invoice`                                     | Top level                 | `currency_code` and `items`                              |
+| `create_recurring_series`                            | Top level                 | `currency_code`; `items` is optional                     |
+| `update_invoicing`, `resource_type=invoice`          | `invoice_update`          | Within this object, `currency_code` and `items`          |
+| `update_invoicing`, `resource_type=recurring_series` | `recurring_series_update` | Within this object, `currency_code`; `items` is optional |
+
+Both update objects are optional in the JSON Schema; their descriptions require selecting the object that matches `resource_type` and describe full replacement content.
+Require that selected object in the resolver rather than treating an absent update body as zero exposure.
+For example, the invoice update's shipping path is `invoice_update.shipping_cost`, and the recurring update's discount value path is `recurring_series_update.items[].discount.amount.value`.
+All suffixes below expand with the same rule, including each amount's currency.
+
+| Field suffix within the argument root                                    | Presence and monetary meaning                                                                                                                                                                              |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `currency_code`                                                          | Required template currency; also applies to `shipping_cost` and `minimum_partial_payment_amount`.                                                                                                          |
+| `items[].quantity`                                                       | Required for each supplied item; decimal string multiplier.                                                                                                                                                |
+| `items[].unit_amount.value`, `items[].unit_amount.currency_code`         | Both required inside the required `items[].unit_amount` of each supplied item; reconcile each item currency with the template currency.                                                                    |
+| `items[].tax.percent`                                                    | Required inside optional `items[].tax`; percentage, not a currency amount.                                                                                                                                 |
+| `items[].discount.percent`                                               | Optional inside optional `items[].discount`; percentage discount.                                                                                                                                          |
+| `items[].discount.amount.value`, `items[].discount.amount.currency_code` | Both required inside optional `items[].discount.amount`; fixed discount and its currency. The descriptions make `amount` and `percent` mutually exclusive, but the schema does not enforce that condition. |
+| `shipping_cost`                                                          | Optional decimal-string amount in `currency_code`.                                                                                                                                                         |
+| `minimum_partial_payment_amount`                                         | Optional decimal-string minimum payment in `currency_code`; described as valid only when `allow_partial_payment` is true. This is a collection threshold, not an additional charge.                        |
+| `allow_partial_payment`                                                  | Optional boolean controlling collection terms; does not reduce the invoice's total obligation.                                                                                                             |
+| `allow_tip`                                                              | Optional boolean allowing a payer-selected amount not present in these arguments; account for that unresolved amount before executing a policy-sensitive operation.                                        |
+
+The recurring variants also require `interval_unit`, `interval_count`, and `start_series_date` within their argument root.
+`total_cycles` is optional; its description says omission creates an indefinite series.
+For updates these paths are `recurring_series_update.interval_unit`, `recurring_series_update.interval_count`, `recurring_series_update.start_series_date`, and `recurring_series_update.total_cycles`.
+Resolve exposure over an explicit policy time horizon; neither omitted `items` nor omitted `total_cycles` establishes zero exposure.
+
 ## Resolver and execution implications
 
 `create_refund` and `accept_dispute_claim` are the directly identified money-out tools in this snapshot.
