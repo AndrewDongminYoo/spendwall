@@ -169,6 +169,9 @@ export async function startProxy(options: Options = {}) {
               if (tokens.isSensitive(result))
                 throw new Error('Unsafe refund result.');
               return {
+                ...(['FAILED', 'CANCELLED'].includes(result.status)
+                  ? { isError: true }
+                  : {}),
                 content: [{ type: 'text', text: JSON.stringify(result) }],
                 structuredContent: result,
               };

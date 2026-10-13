@@ -73,7 +73,12 @@ async function fixture(t, config = {}) {
     if (req.url === `/v2/payments/captures/${captureId}/refund`) {
       seen.refunds++;
       assert.equal(req.headers['paypal-request-id'], executionId);
-      res.end(JSON.stringify(refund));
+      res.end(
+        JSON.stringify({
+          ...refund,
+          status: config.refundStatus ?? refund.status,
+        }),
+      );
       return;
     }
     if (req.url?.startsWith('/messages')) {
@@ -420,6 +425,27 @@ test('transaction constraints and other defaults still fail catalog review', asy
       await assert.rejects(startProxy(f.options), /catalog\/schema drift/);
       assert.equal(f.seen.calls.length, 0);
       assert.equal(f.seen.refunds, 0);
+    });
+  }
+});
+
+test('terminal refund statuses are MCP errors on the first call and retry', async (t) => {
+  for (const status of ['FAILED', 'CANCELLED']) {
+    await t.test(status, async (t) => {
+      const f = await fixture(t, { refundStatus: status });
+      const { client } = await f.start();
+      const request = {
+        name: 'create_refund',
+        arguments: { capture_id: captureId },
+        _meta: { 'spendwall/execution-id': executionId },
+      };
+      const first = await client.callTool(request);
+      assert.equal(first.isError, true);
+      assert.equal(first.structuredContent.status, status);
+      assert.equal((await client.callTool(request)).isError, true);
+      assert.equal(f.seen.refunds, 1);
+      const ledger = JSON.parse(await readFile(f.options.ledgerPath));
+      assert.equal(ledger.executions[executionId].status, 'failed');
     });
   }
 });
