@@ -34,7 +34,7 @@ Generate a local key in that shell and start the server:
 
 ```sh
 export SPENDWALL_PROXY_KEY="$(node -e 'console.log(require("node:crypto").randomBytes(32).toString("base64url"))')"
-pnpm proxy
+PAYPAL_MCP_TRANSPORT=sse pnpm proxy
 ```
 
 The default port is 3001; `SPENDWALL_PROXY_PORT` can change it.
@@ -46,7 +46,7 @@ Stop the server with Ctrl+C before running a smoke command, because both use the
 ## Read-only connection check
 
 ```sh
-pnpm proxy:check
+PAYPAL_MCP_TRANSPORT=sse pnpm proxy:check
 ```
 
 This command starts a temporary local proxy, authenticates with an ephemeral local key, lists the upstream tools, and reads a seeded order through MCP.
@@ -61,7 +61,7 @@ Generate one UUID for that logical refund, record it, and reuse it for every att
 The command requires both values and only accepts captures from the current app's fixture.
 
 ```sh
-pnpm proxy:refund --capture CAPTURE_ID --execution-id UUID
+PAYPAL_MCP_TRANSPORT=sse pnpm proxy:refund --capture CAPTURE_ID --execution-id UUID
 ```
 
 This requests a full refund of that capture through the local MCP endpoint.

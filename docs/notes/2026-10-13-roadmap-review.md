@@ -56,4 +56,5 @@ The original snapshot remains unchanged.
 The operator then verified a normal MCP read and a USD 1.00 REST refund through the local Streamable HTTP proxy using explicit SSE upstream.
 The repeated execution ID returned the same refund ID, and a refund GET confirmed `COMPLETED`.
 See [connection evidence](../../fixtures/proxy-connection.json) and [refund evidence](../../fixtures/proxy-refund.json).
-Issue #5's authenticated upstream HTTP acceptance criterion remains unmet and needs an explicit decision before closure.
+The operator approved adjusting issue #5 to record the HTTP failure and accept the verified, explicitly selected SSE path for W0.
+Keep the HTTP default and leave hosted upstream HTTP compatibility unverified.

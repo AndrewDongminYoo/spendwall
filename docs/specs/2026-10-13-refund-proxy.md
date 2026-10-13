@@ -11,6 +11,8 @@ Keep the downstream MCP interface and use a dedicated REST execution path for `c
 Use Streamable HTTP upstream by default and allow an explicit SSE compatibility mode.
 Never change transports or replay a mutation automatically after an ambiguous result.
 The operator approved this direction, related issue updates, and the implementation-to-PR workflow on 2026-10-13.
+After the documented HTTP endpoint returned 404, the operator approved completing W0 through explicitly selected SSE on the same date.
+Keep the HTTP default and record its observed failure without claiming hosted HTTP compatibility.
 
 ## W0 scope
 
@@ -52,7 +54,8 @@ The operator approved this direction, related issue updates, and the implementat
 5. Short-lived tokens renew based on a controlled clock; concurrent requests share renewal and a 401 retry keeps the payment identity unchanged.
 6. Unauthenticated, wrong-origin, invalid-schema, and drifted-catalog requests fail before upstream execution.
 7. An upstream disconnect or stall produces a safe bounded error instead of hanging; no transport fallback repeats a mutation.
-8. An authenticated sandbox `/http` connection is observed before claiming live HTTP compatibility.
+8. Record the authenticated sandbox `/http` initialization result.
+   If unavailable, verify catalog and read calls through explicitly selected SSE; claim live HTTP compatibility only after observing a successful authenticated HTTP connection.
 9. The operator runs the explicit refund smoke command against one selected fixture capture.
    Two calls with the same execution ID return the same refund ID, and a refund GET confirms the final state.
    Save safe acceptance evidence separately from the private runtime ledger.
