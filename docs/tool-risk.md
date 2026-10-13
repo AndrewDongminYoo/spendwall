@@ -2,7 +2,7 @@
 
 ## Evidence and reproduction
 
-The [committed snapshot](paypal-mcp-tools.json) contains 46 tools from one authenticated `tools/list` page at `2026-10-13T00:12:13.673Z`.
+The [committed snapshot](paypal-mcp-tools.json) contains 46 tools from one authenticated `tools/list` page at `2026-10-13T00:13:32.703Z`.
 It was collected from `https://mcp.sandbox.paypal.com/sse` using `@modelcontextprotocol/sdk` 1.32.1 and the US sandbox merchant app prepared in issue #2.
 The operator ran the command with local credentials; no payment tool was called.
 The operator's shell reported Node 24.20.0, while repository checks ran on the declared Node 24.21.0.
