@@ -7,7 +7,8 @@
     "typecheck": "pnpm -r typecheck",
     "test": "node --test tests/*.test.mjs",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
-    "hooks:install": "trunk git-hooks sync"
+    "hooks:install": "trunk git-hooks sync",
+    "mcp:dump": "node scripts/dump-paypal-mcp-tools.mjs"
   },
   "keywords": [],
   "author": "",
@@ -26,6 +27,7 @@
     "node": ">=24.21.0 <25"
   },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
     "prettier": "3.9.10",
     "typescript": "7.0.2"
   }

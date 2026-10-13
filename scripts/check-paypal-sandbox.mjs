@@ -1,4 +1,4 @@
-export async function checkSandboxToken({
+export async function requestSandboxToken({
   env = process.env,
   fetchImpl = fetch,
 } = {}) {
@@ -47,6 +47,11 @@ export async function checkSandboxToken({
   ) {
     throw new Error('PayPal sandbox returned an invalid token response.');
   }
+  return token;
+}
+
+export async function checkSandboxToken(options) {
+  const token = await requestSandboxToken(options);
   return {
     environment: 'sandbox',
     token_type: 'Bearer',
