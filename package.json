@@ -9,7 +9,10 @@
     "check": "pnpm lint && pnpm typecheck && pnpm test",
     "hooks:install": "trunk git-hooks sync",
     "mcp:dump": "node scripts/dump-paypal-mcp-tools.mjs",
-    "seed": "node scripts/seed.mjs"
+    "seed": "node scripts/seed.mjs",
+    "proxy": "node apps/firewall/src/index.ts",
+    "proxy:check": "node scripts/proxy-smoke.mjs",
+    "proxy:refund": "node scripts/proxy-smoke.mjs --refund"
   },
   "keywords": [],
   "author": "",

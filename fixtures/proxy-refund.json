@@ -1,0 +1,16 @@
+{
+  "environment": "sandbox",
+  "transport": "sse",
+  "toolCount": 46,
+  "readTool": "get_order",
+  "orderId": "4MJ889031Y221125D",
+  "checkedAt": "2026-10-13T14:01:41.309Z",
+  "captureId": "88896157CU229004T",
+  "executionId": "65496fba-0a64-48d1-bdd0-38bdf891cfd9",
+  "refundId": "87H97021S1343912T",
+  "duplicateRefundId": "87H97021S1343912T",
+  "amount": "1.00",
+  "currency": "USD",
+  "status": "COMPLETED",
+  "verifiedBy": "GET /v2/payments/refunds/{refund_id}"
+}

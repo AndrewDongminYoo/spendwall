@@ -32,3 +32,29 @@ See [PayPal authentication](https://developer.paypal.com/api/rest/authentication
 - Treat local biometric success as an interface control; require authenticated and authorized approval at the server.
 
 These are recommendations for follow-up issues, not features implemented by the scaffold PR.
+
+## Accepted W0 execution decision
+
+The operator approved the following alignment on 2026-10-13 after issues #2 through #4 completed.
+The actual SSE snapshot remains historical evidence; it is not evidence of a Streamable HTTP connection.
+Its `create_refund` schema exposes no caller-controlled idempotency key and rejects additional properties.
+Hosted MCP header forwarding remains unverified.
+
+Issue #5 keeps the downstream MCP interface and routes refunds through a sandbox REST adapter with a persisted execution ID and bound request body.
+Upstream MCP uses Streamable HTTP by default, with explicit SSE compatibility mode and no automatic mutation replay across transports.
+Issue #10 uses actual `expires_in` and limits payment retries to the same persisted request identity.
+Issue #12 separates approval decisions from execution, including unknown results that require reconciliation.
+See the [approved proxy contract](../specs/2026-10-13-refund-proxy.md) for acceptance checks and scope limits.
+
+## W0 sandbox observations
+
+Authenticated upstream HTTP initialization returned 404 at the documented `/http` endpoint on 2026-10-13.
+Explicit SSE mode retrieved the same 46 tools; only the two rolling transaction date defaults differed from the historical snapshot.
+The proxy now compares their schema constraints while permitting valid timestamp values to change.
+The original snapshot remains unchanged.
+
+The operator then verified a normal MCP read and a USD 1.00 REST refund through the local Streamable HTTP proxy using explicit SSE upstream.
+The repeated execution ID returned the same refund ID, and a refund GET confirmed `COMPLETED`.
+See [connection evidence](../../fixtures/proxy-connection.json) and [refund evidence](../../fixtures/proxy-refund.json).
+The operator approved adjusting issue #5 to record the HTTP failure and accept the verified, explicitly selected SSE path for W0.
+Keep the HTTP default and leave hosted upstream HTTP compatibility unverified.
