@@ -35,4 +35,6 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: trunk check --all --no-fix --ci
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - run: docker compose --env-file .env.example config --quiet
