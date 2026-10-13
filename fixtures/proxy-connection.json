@@ -1,0 +1,8 @@
+{
+  "environment": "sandbox",
+  "transport": "sse",
+  "toolCount": 46,
+  "readTool": "get_order",
+  "orderId": "9104866655880892F",
+  "checkedAt": "2026-10-13T14:01:35.050Z"
+}

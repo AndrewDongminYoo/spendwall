@@ -17,6 +17,16 @@ The complete upstream tool names and input schemas must match [the reviewed snap
 The comparison permits changing timestamp defaults only for `list_transactions.start_date` and `list_transactions.end_date`; their constraints and all other defaults remain checked.
 An HTTP connection must be verified separately.
 
+## Observed sandbox result
+
+On 2026-10-13 the documented upstream `/http` endpoint returned HTTP 404 during authenticated initialization.
+Explicit SSE mode listed all 46 tools, passed the reviewed catalog check, and returned a seeded order through the local Streamable HTTP proxy.
+Use `PAYPAL_MCP_TRANSPORT=sse` for the verified sandbox path; this does not change the HTTP default or enable automatic fallback.
+
+The [connection evidence](../fixtures/proxy-connection.json) records the successful read.
+The [refund evidence](../fixtures/proxy-refund.json) records a USD 1.00 refund for capture `88896157CU229004T`, identical refund ID `87H97021S1343912T` on the duplicate call, and a completed refund GET.
+This establishes the SSE and REST execution path, not hosted upstream HTTP compatibility.
+
 ## Start
 
 Load the sandbox credentials privately as described in [sandbox setup](sandbox.md).

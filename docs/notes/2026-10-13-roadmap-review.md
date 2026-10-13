@@ -45,3 +45,15 @@ Upstream MCP uses Streamable HTTP by default, with explicit SSE compatibility mo
 Issue #10 uses actual `expires_in` and limits payment retries to the same persisted request identity.
 Issue #12 separates approval decisions from execution, including unknown results that require reconciliation.
 See the [approved proxy contract](../specs/2026-10-13-refund-proxy.md) for acceptance checks and scope limits.
+
+## W0 sandbox observations
+
+Authenticated upstream HTTP initialization returned 404 at the documented `/http` endpoint on 2026-10-13.
+Explicit SSE mode retrieved the same 46 tools; only the two rolling transaction date defaults differed from the historical snapshot.
+The proxy now compares their schema constraints while permitting valid timestamp values to change.
+The original snapshot remains unchanged.
+
+The operator then verified a normal MCP read and a USD 1.00 REST refund through the local Streamable HTTP proxy using explicit SSE upstream.
+The repeated execution ID returned the same refund ID, and a refund GET confirmed `COMPLETED`.
+See [connection evidence](../../fixtures/proxy-connection.json) and [refund evidence](../../fixtures/proxy-refund.json).
+Issue #5's authenticated upstream HTTP acceptance criterion remains unmet and needs an explicit decision before closure.
