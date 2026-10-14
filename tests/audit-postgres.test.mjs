@@ -204,6 +204,50 @@ test('Postgres audit boundary', { skip: !url }, async (t) => {
   );
 
   await t.test(
+    'raw SQL append cannot persist numeric identifiers in generic value fields',
+    async (t) => {
+      const { owner, app } = await fixture(t);
+      for (const input of [
+        { value: '123456' },
+        { value: '123456', currency: 'USD' },
+        { amount: { value: '123456' } },
+        { amount: { value: '123456', currency_code: 'ZZZ' } },
+        { amount: { value: '123456', currency_code: 'USD', currency: 'EUR' } },
+        { amount: { value: '5.25', currency_code: 'KRW' } },
+        { amount: { value: '5.00', currency_code: 'USD' } },
+        { amount: { value: '5.00', currency: 'EUR' } },
+        { amount: { value: '500', currency: 'KRW' } },
+      ]) {
+        const prepared = prepareEvent({
+          ...event,
+          args: input,
+          resolvedCtx: input,
+        });
+        const payload = {
+          ...prepared,
+          args_redacted: input,
+          resolved_ctx: input,
+        };
+        const receipt = (
+          await app.query('SELECT * FROM audit.append_event($1::jsonb)', [
+            JSON.stringify(payload),
+          ])
+        ).rows[0];
+        const row = (
+          await owner.query(
+            'SELECT args_redacted, resolved_ctx FROM audit.audit_events WHERE id=$1',
+            [receipt.id],
+          )
+        ).rows[0];
+        assert.doesNotMatch(JSON.stringify(row), /123456|5\.25/);
+        assert.deepEqual(row.args_redacted, prepared.args_redacted);
+        assert.deepEqual(row.resolved_ctx, prepared.resolved_ctx);
+      }
+      assert.equal((await verifyAudit(app)).count, 9);
+    },
+  );
+
+  await t.test(
     'concurrent connections produce one ordered chain; rollback changes neither events nor head',
     async (t) => {
       const { app, log } = await fixture(t);

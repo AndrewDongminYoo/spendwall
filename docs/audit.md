@@ -77,11 +77,14 @@ SHA-256 of the recursively key-sorted original JSON arguments. Original argument
 are never sent to SQL or stored by this module. This is an unkeyed commitment,
 not encryption: low-entropy arguments may be guessed from the hash.
 
-Both module and append function retain only an allowlist: nested `amount`,
-decimal money `value`, three-letter `currency`/`currency_code`, nonnegative safe
+Both module and append function retain only an allowlist: validated `amount`
+objects with a decimal `value` and a supported `currency`/`currency_code`
+(USD/EUR/KRW, matching the demo; KRW has no fractional part), nonnegative safe
 integer `amount_minor`, `refunded_minor`, `remaining_minor`, `age_hours`,
 `quantity`, and a fixed set of payment statuses. Other keys, arrays, credentials,
-PII, payment identifiers and free text are discarded. Changing this list is a
+PII, payment identifiers and free text are discarded. A generic `value` field or
+an amount without a supported, consistent currency is discarded, so digit-only
+OTPs/account IDs cannot be mistaken for amounts. Changing this list is a
 schema/contract decision: add matching module and real DB tests together.
 
 `row_hash` is SHA-256 of version 1's UTF-8 JSONB payload from actual row columns,

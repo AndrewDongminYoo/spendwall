@@ -55,27 +55,35 @@ $$;
 
 -- Repeat the allowlist in the DB boundary to prevent raw SQL callers from
 -- storing credentials/PII in JSON fields. Unknown keys and text are discarded.
-CREATE FUNCTION audit.redact(value jsonb, depth integer DEFAULT 0) RETURNS jsonb
+CREATE FUNCTION audit.redact(value jsonb) RETURNS jsonb
 LANGUAGE plpgsql IMMUTABLE SET search_path = pg_catalog, audit
 AS $$
-DECLARE result jsonb := '{}'; item record;
+DECLARE result jsonb := '{}'; item record; currency text; amount jsonb;
 BEGIN
-  IF depth > 32 OR octet_length(value::text) > 65536 THEN
+  IF octet_length(value::text) > 65536 THEN
     RAISE EXCEPTION 'Invalid audit event';
   END IF;
   IF jsonb_typeof(value) IS DISTINCT FROM 'object' THEN RETURN result; END IF;
   FOR item IN SELECT * FROM jsonb_each(value) LOOP
     IF item.key = 'amount' AND jsonb_typeof(item.value) = 'object' THEN
-      result := result || jsonb_build_object(item.key, audit.redact(item.value, depth + 1));
+      currency := COALESCE(item.value ->> 'currency_code', item.value ->> 'currency');
+      IF currency IN ('USD', 'EUR', 'KRW')
+        AND jsonb_typeof(item.value -> 'value') = 'string'
+        AND item.value ->> 'value' ~ '^[0-9]{1,12}(\.[0-9]{1,2})?$'
+        AND (currency <> 'KRW' OR item.value ->> 'value' !~ '\.')
+        AND (NOT item.value ? 'currency' OR item.value ->> 'currency' = currency)
+        AND (NOT item.value ? 'currency_code' OR item.value ->> 'currency_code' = currency) THEN
+        amount := jsonb_build_object('value', item.value -> 'value');
+        IF item.value ? 'currency' THEN amount := amount || jsonb_build_object('currency', currency); END IF;
+        IF item.value ? 'currency_code' THEN amount := amount || jsonb_build_object('currency_code', currency); END IF;
+        result := result || jsonb_build_object(item.key, amount);
+      END IF;
     ELSIF item.key IN ('amount_minor', 'refunded_minor', 'remaining_minor', 'age_hours', 'quantity')
       AND jsonb_typeof(item.value) = 'number' AND item.value::text ~ '^[0-9]+$'
       AND item.value::numeric <= 9007199254740991 THEN
       result := result || jsonb_build_object(item.key, item.value);
-    ELSIF item.key = 'value' AND jsonb_typeof(item.value) = 'string'
-      AND item.value #>> '{}' ~ '^[0-9]{1,12}(\.[0-9]{1,2})?$' THEN
-      result := result || jsonb_build_object(item.key, item.value);
     ELSIF item.key IN ('currency', 'currency_code') AND jsonb_typeof(item.value) = 'string'
-      AND item.value #>> '{}' ~ '^[A-Z]{3}$' THEN
+      AND item.value #>> '{}' IN ('USD', 'EUR', 'KRW') THEN
       result := result || jsonb_build_object(item.key, item.value);
     ELSIF item.key = 'status' AND jsonb_typeof(item.value) = 'string'
       AND item.value #>> '{}' IN ('COMPLETED', 'PENDING', 'FAILED', 'CANCELLED', 'DENIED', 'REFUNDED', 'PARTIALLY_REFUNDED') THEN

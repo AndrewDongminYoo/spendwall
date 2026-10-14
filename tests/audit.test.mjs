@@ -112,6 +112,34 @@ test('invalid JSON and malformed metadata fail without echoing input', () => {
   assert.equal(called, false);
 });
 
+test('numeric identifiers survive only as value in a validated amount/currency pair', () => {
+  for (const input of [
+    { value: '123456' },
+    { value: '123456', currency: 'USD' },
+    { amount: { value: '123456' } },
+    { amount: { value: '123456', currency_code: 'ZZZ' } },
+    { amount: { value: '123456', currency_code: 'USD', currency: 'EUR' } },
+    { amount: { value: '5.25', currency_code: 'KRW' } },
+  ]) {
+    const prepared = prepareEvent({
+      ...event,
+      args: input,
+      resolvedCtx: input,
+    });
+    assert.doesNotMatch(JSON.stringify(prepared.args_redacted), /123456|5\.25/);
+    assert.doesNotMatch(JSON.stringify(prepared.resolved_ctx), /123456|5\.25/);
+  }
+  for (const amount of [
+    { value: '5.00', currency_code: 'USD' },
+    { value: '5.00', currency: 'EUR' },
+    { value: '500', currency: 'KRW' },
+  ])
+    assert.deepEqual(
+      prepareEvent({ ...event, args: { amount } }).args_redacted,
+      { amount },
+    );
+});
+
 test('input limits reject oversized and excessively nested data', () => {
   assert.throws(
     () => prepareEvent({ ...event, args: { note: 'x'.repeat(70_000) } }),

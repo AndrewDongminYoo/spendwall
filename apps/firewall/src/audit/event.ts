@@ -84,6 +84,31 @@ const statuses = new Set([
   'REFUNDED',
   'PARTIALLY_REFUNDED',
 ]);
+// Match the demo's supported currencies without importing policy code.
+const currencies = new Set(['USD', 'EUR', 'KRW']);
+
+function money(value: Json): Json | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value))
+    return;
+  const currency = value.currency_code ?? value.currency;
+  if (
+    typeof currency !== 'string' ||
+    !currencies.has(currency) ||
+    typeof value.value !== 'string' ||
+    !/^\d{1,12}(?:\.\d{1,2})?$/.test(value.value) ||
+    (currency === 'KRW' && value.value.includes('.')) ||
+    (Object.hasOwn(value, 'currency') && value.currency !== currency) ||
+    (Object.hasOwn(value, 'currency_code') && value.currency_code !== currency)
+  )
+    return;
+  return {
+    value: value.value,
+    ...(Object.hasOwn(value, 'currency') ? { currency } : {}),
+    ...(Object.hasOwn(value, 'currency_code')
+      ? { currency_code: currency }
+      : {}),
+  };
+}
 
 // Conservative allowlist: no arbitrary field names, identifiers, arrays or text.
 function redact(value: Json): Json {
@@ -91,14 +116,10 @@ function redact(value: Json): Json {
   if (value === null || typeof value !== 'object' || Array.isArray(value))
     return safe;
   for (const [key, entry] of Object.entries(value)) {
-    if (
-      key === 'amount' &&
-      entry !== null &&
-      typeof entry === 'object' &&
-      !Array.isArray(entry)
-    )
-      safe[key] = redact(entry);
-    else if (
+    if (key === 'amount') {
+      const amount = money(entry);
+      if (amount !== undefined) safe[key] = amount;
+    } else if (
       numericFields.has(key) &&
       typeof entry === 'number' &&
       Number.isSafeInteger(entry) &&
@@ -106,15 +127,9 @@ function redact(value: Json): Json {
     )
       safe[key] = entry;
     else if (
-      key === 'value' &&
-      typeof entry === 'string' &&
-      /^\d{1,12}(?:\.\d{1,2})?$/.test(entry)
-    )
-      safe[key] = entry;
-    else if (
       ['currency', 'currency_code'].includes(key) &&
       typeof entry === 'string' &&
-      /^[A-Z]{3}$/.test(entry)
+      currencies.has(entry)
     )
       safe[key] = entry;
     else if (
