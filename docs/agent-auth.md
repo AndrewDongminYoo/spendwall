@@ -80,7 +80,12 @@ MCP writes are not automatically retried.
 
 Known credentials/tokens, nested Authorization headers and textual Bearer/Basic
 credentials cause whole-result denial with a constant message. Escaped secret
-strings are also checked. Standalone Basic values must decode as base64
+strings are also checked. Credential-bearing fields are rejected regardless of
+whether their values were issued locally: access/refresh/ID tokens, client
+secrets, API keys, password/secret/token, and Authorization/Proxy-Authorization.
+The guard recognizes underscore, hyphen and camel-case spellings in object keys
+and quoted textual JSON/header syntax. It never interprets a secret-labelled
+value as harmless metadata. Standalone Basic values must decode as base64
 user:password. Unknown Bearer-shaped values are denied regardless of scheme case,
 token length or alphabet, including repeated spaces, tabs, line breaks and
 Unicode whitespace. No context guess permits an ambiguous Bearer value.

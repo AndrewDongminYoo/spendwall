@@ -1,5 +1,13 @@
 import { requestSandboxToken } from '../../../scripts/check-paypal-sandbox.mjs';
 
+const credentialFields =
+  '(?:(?:access|refresh|id)[_-]?token|client[_-]?secret|api[_-]?key|password|secret|token|(?:proxy[_-]?)?authorization)';
+const credentialField = new RegExp(`^${credentialFields}$`, 'i');
+const credentialFieldText = new RegExp(
+  `\\b${credentialFields}\\b[\\s\\p{White_Space}]*(?::|["'][\\s\\p{White_Space}]*:)`,
+  'iu',
+);
+
 export type TokenOptions = {
   env?: Record<string, string | undefined>;
   fetchImpl?: typeof fetch;
@@ -67,7 +75,7 @@ export function createTokenManager(options: TokenOptions = {}) {
         bytes += Buffer.byteLength(text);
         return (
           bytes > 1_048_576 ||
-          /\b(?:proxy-)?authorization\b\s*(?::|["']\s*:)/i.test(text) ||
+          credentialFieldText.test(text) ||
           credentialText(text) ||
           [...secrets].some(
             (secret) =>
@@ -87,7 +95,7 @@ export function createTokenManager(options: TokenOptions = {}) {
           if (
             typeof key !== 'string' ||
             sensitiveText(key) ||
-            /^(?:proxy-)?authorization$/i.test(key)
+            credentialField.test(key)
           )
             return true;
           if (Array.isArray(entry) && key === 'length') continue;

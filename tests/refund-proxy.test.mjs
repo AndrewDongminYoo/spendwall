@@ -679,6 +679,38 @@ test('approval without an injected store fails closed and is never sent upstream
 
 test('nested or textual Authorization headers and tokens never reach downstream or logs', async (t) => {
   for (const leak of [
+    ...[
+      'access_token',
+      'refresh_token',
+      'client_secret',
+      'AccessToken',
+      'REFRESH-TOKEN',
+      'clientSecret',
+      'api_key',
+      'apiKey',
+      'password',
+      'secret',
+      'token',
+      'id_token',
+      'proxyAuthorization',
+    ].flatMap((field) => [
+      {
+        content: [{ type: 'text', text: 'ordinary text' }],
+        structuredContent: {
+          nested: { [field]: 'synthetic-unfamiliar-credential' },
+        },
+      },
+      {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              [field]: 'synthetic-unfamiliar-credential',
+            }),
+          },
+        ],
+      },
+    ]),
     ...['Bearer', 'BEARER', 'bearer', 'bEaReR'].flatMap((scheme) =>
       [
         ' ',
@@ -763,7 +795,7 @@ test('nested or textual Authorization headers and tokens never reach downstream 
       assert.equal(result.isError, true);
       assert.doesNotMatch(
         JSON.stringify(result) + output.join(''),
-        /private-paypal-token|header-only-secret|synthetic-other-token|synthetic-unknown-credential|tab-token|fake-secret|Authorization|ZmFrZS1jbGllbnQ6ZmFrZS1zZWNyZXQ=/i,
+        /private-paypal-token|header-only-secret|synthetic-other-token|synthetic-unknown-credential|synthetic-unfamiliar-credential|tab-token|fake-secret|Authorization|ZmFrZS1jbGllbnQ6ZmFrZS1zZWNyZXQ=/i,
       );
     });
 });
