@@ -49,18 +49,33 @@ CREATE FUNCTION audit.event_payload(e audit.audit_events) RETURNS text
 LANGUAGE sql STABLE SET search_path = pg_catalog
 AS $$
   SELECT jsonb_build_object('v', 1, 'event',
-    (to_jsonb(e) - 'row_hash' - 'ts') || jsonb_build_object('ts',
-      to_char(e.ts AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')))::text
+    jsonb_build_object(
+      'id', e.id,
+      'ts', to_char(e.ts AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+      'agent_id', e.agent_id,
+      'tool', e.tool,
+      'args_redacted', e.args_redacted,
+      'args_hash', e.args_hash,
+      'resolved_ctx', e.resolved_ctx,
+      'decision', e.decision,
+      'matched_rules', e.matched_rules,
+      'policy_version', e.policy_version,
+      'approval_id', e.approval_id,
+      'upstream_status', e.upstream_status,
+      'upstream_result_ref', e.upstream_result_ref,
+      'latency_ms', e.latency_ms,
+      'prev_hash', e.prev_hash,
+      'event_kind', e.event_kind))::text
 $$;
 
 -- Repeat the allowlist in the DB boundary to prevent raw SQL callers from
 -- storing credentials/PII in JSON fields. Unknown keys and text are discarded.
-CREATE FUNCTION audit.redact(value jsonb) RETURNS jsonb
+CREATE FUNCTION audit.redact(value jsonb, depth integer DEFAULT 0) RETURNS jsonb
 LANGUAGE plpgsql IMMUTABLE SET search_path = pg_catalog, audit
 AS $$
 DECLARE result jsonb := '{}'; item record; currency text; amount jsonb;
 BEGIN
-  IF octet_length(value::text) > 65536 THEN
+  IF depth > 32 OR octet_length(value::text) > 65536 THEN
     RAISE EXCEPTION 'Invalid audit event';
   END IF;
   IF jsonb_typeof(value) IS DISTINCT FROM 'object' THEN RETURN result; END IF;
@@ -78,6 +93,14 @@ BEGIN
         IF item.value ? 'currency_code' THEN amount := amount || jsonb_build_object('currency_code', currency); END IF;
         result := result || jsonb_build_object(item.key, amount);
       END IF;
+    ELSIF item.key IN ('capture', 'payment', 'refund', 'order', 'invoice')
+      AND jsonb_typeof(item.value) = 'object' THEN
+      result := result || jsonb_build_object(item.key, audit.redact(item.value, depth + 1));
+    ELSIF item.key = 'items' AND jsonb_typeof(item.value) = 'array' THEN
+      SELECT COALESCE(jsonb_agg(audit.redact(part.value, depth + 1) ORDER BY part.ordinality), '[]'::jsonb)
+        INTO amount FROM jsonb_array_elements(item.value) WITH ORDINALITY AS part(value, ordinality)
+        WHERE jsonb_typeof(part.value) = 'object';
+      result := result || jsonb_build_object(item.key, amount);
     ELSIF item.key IN ('amount_minor', 'refunded_minor', 'remaining_minor', 'age_hours', 'quantity')
       AND jsonb_typeof(item.value) = 'number' AND item.value::text ~ '^[0-9]+$'
       AND item.value::numeric <= 9007199254740991 THEN

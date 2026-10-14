@@ -150,6 +150,43 @@ test('input limits reject oversized and excessively nested data', () => {
   assert.throws(() => prepareEvent({ ...event, args }), /Invalid audit event/);
 });
 
+test('nested payment containers retain safe fields while arbitrary keys and item text are discarded', () => {
+  const input = {
+    capture: {
+      amount: { value: '5.00', currency_code: 'USD' },
+      remaining_minor: 500,
+      status: 'COMPLETED',
+      email: 'private-nested',
+    },
+    order: {
+      items: [
+        {
+          refund: {
+            amount: { value: '1.00', currency: 'EUR' },
+            note: 'private-nested',
+          },
+        },
+        'private-nested',
+      ],
+    },
+    'private-nested': { value: '123456', token: 'private-nested' },
+  };
+  const expected = {
+    capture: {
+      amount: { value: '5.00', currency_code: 'USD' },
+      remaining_minor: 500,
+      status: 'COMPLETED',
+    },
+    order: {
+      items: [{ refund: { amount: { value: '1.00', currency: 'EUR' } } }],
+    },
+  };
+  const prepared = prepareEvent({ ...event, args: input, resolvedCtx: input });
+  assert.deepEqual(prepared.args_redacted, expected);
+  assert.deepEqual(prepared.resolved_ctx, expected);
+  assert.doesNotMatch(JSON.stringify(prepared), /private-nested|123456/);
+});
+
 test('database append failures expose no payload, credentials or database error details', async () => {
   const log = new AuditLog({
     async query() {

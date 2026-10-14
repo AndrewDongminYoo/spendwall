@@ -86,6 +86,13 @@ const statuses = new Set([
 ]);
 // Match the demo's supported currencies without importing policy code.
 const currencies = new Set(['USD', 'EUR', 'KRW']);
+const containers = new Set([
+  'capture',
+  'payment',
+  'refund',
+  'order',
+  'invoice',
+]);
 
 function money(value: Json): Json | undefined {
   if (value === null || typeof value !== 'object' || Array.isArray(value))
@@ -110,7 +117,7 @@ function money(value: Json): Json | undefined {
   };
 }
 
-// Conservative allowlist: no arbitrary field names, identifiers, arrays or text.
+// Traverse only fixed payment containers; never persist arbitrary wrapper names.
 function redact(value: Json): Json {
   const safe: { [key: string]: Json } = {};
   if (value === null || typeof value !== 'object' || Array.isArray(value))
@@ -119,6 +126,20 @@ function redact(value: Json): Json {
     if (key === 'amount') {
       const amount = money(entry);
       if (amount !== undefined) safe[key] = amount;
+    } else if (
+      containers.has(key) &&
+      entry !== null &&
+      typeof entry === 'object' &&
+      !Array.isArray(entry)
+    ) {
+      safe[key] = redact(entry);
+    } else if (key === 'items' && Array.isArray(entry)) {
+      safe[key] = entry
+        .filter(
+          (item) =>
+            item !== null && typeof item === 'object' && !Array.isArray(item),
+        )
+        .map(redact);
     } else if (
       numericFields.has(key) &&
       typeof entry === 'number' &&

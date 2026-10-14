@@ -81,14 +81,19 @@ Both module and append function retain only an allowlist: validated `amount`
 objects with a decimal `value` and a supported `currency`/`currency_code`
 (USD/EUR/KRW, matching the demo; KRW has no fractional part), nonnegative safe
 integer `amount_minor`, `refunded_minor`, `remaining_minor`, `age_hours`,
-`quantity`, and a fixed set of payment statuses. Other keys, arrays, credentials,
+`quantity`, and a fixed set of payment statuses. These fields are retained
+recursively inside fixed `capture`, `payment`, `refund`, `order`, `invoice`
+object containers and object entries of `items` arrays. Arbitrary wrapper names,
+scalar array entries, other keys, credentials,
 PII, payment identifiers and free text are discarded. A generic `value` field or
 an amount without a supported, consistent currency is discarded, so digit-only
 OTPs/account IDs cannot be mistaken for amounts. Changing this list is a
 schema/contract decision: add matching module and real DB tests together.
 
 `row_hash` is SHA-256 of version 1's UTF-8 JSONB payload from actual row columns,
-including UTC timestamp, ID, all metadata and `prev_hash`. Genesis is 64 zeros.
+including UTC timestamp, ID, all metadata and `prev_hash`. Version 1 enumerates
+its fixed column list, so adding a column does not invalidate historical hashes.
+Genesis is 64 zeros.
 The payload function is part of the trusted owner-managed schema. Do not change
 existing payload semantics; a future hash format needs an explicit versioned
 migration and verifier support.
@@ -133,6 +138,7 @@ the tests drop their audit schema.
 The database tests cover decisions and approval kinds, direct-function redaction,
 app privilege denial using a separate unprivileged test login, unsafe existing
 group rejection, 40 concurrent writers, rollback, pagination under writes,
-every hashed column, exact first/middle/tail mutation reports, empty chains,
+every hashed column, nested redaction, nullable-column schema evolution,
+exact first/middle/tail mutation reports, empty chains,
 missing tails and damaged heads. CLI verification is exercised for success and
 each mutation location. All events and credentials in these tests are synthetic.

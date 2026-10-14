@@ -275,6 +275,76 @@ test('Postgres audit boundary', { skip: !url }, async (t) => {
     },
   );
 
+  await t.test(
+    'nested payment JSON receives recursive DB redaction without retaining free-text keys',
+    async (t) => {
+      const { owner, app } = await fixture(t);
+      const input = {
+        capture: {
+          amount: { value: '5.00', currency_code: 'USD' },
+          remaining_minor: 500,
+          status: 'COMPLETED',
+          email: 'private-nested',
+        },
+        order: {
+          items: [
+            {
+              refund: {
+                amount: { value: '1.00', currency: 'EUR' },
+                note: 'private-nested',
+              },
+            },
+            'private-nested',
+          ],
+        },
+        'private-nested': { value: '123456', token: 'private-nested' },
+      };
+      const expected = {
+        capture: {
+          amount: { value: '5.00', currency_code: 'USD' },
+          remaining_minor: 500,
+          status: 'COMPLETED',
+        },
+        order: {
+          items: [{ refund: { amount: { value: '1.00', currency: 'EUR' } } }],
+        },
+      };
+      const payload = {
+        ...prepareEvent(event),
+        args_redacted: input,
+        resolved_ctx: input,
+      };
+      await app.query('SELECT * FROM audit.append_event($1::jsonb)', [
+        JSON.stringify(payload),
+      ]);
+      const row = (
+        await owner.query(
+          'SELECT args_redacted, resolved_ctx FROM audit.audit_events',
+        )
+      ).rows[0];
+      assert.deepEqual(row.args_redacted, expected);
+      assert.deepEqual(row.resolved_ctx, expected);
+      assert.doesNotMatch(JSON.stringify(row), /private-nested|123456/);
+      assert.equal((await verifyAudit(app)).count, 1);
+    },
+  );
+
+  await t.test(
+    'adding a nullable column leaves the explicit v1 hash payload and historical chain unchanged',
+    async (t) => {
+      const { owner, app, log } = await fixture(t);
+      await log.append(event);
+      const before = await verifyAudit(app);
+      await owner.query(
+        'ALTER TABLE audit.audit_events ADD COLUMN future_nullable text',
+      );
+      const after = await verifyAudit(app);
+      assert.deepEqual(after, before);
+      await log.append(event);
+      assert.equal((await verifyAudit(app)).count, 2);
+    },
+  );
+
   for (const position of [0, 1, 2])
     await t.test(
       `reports exact modified row at position ${position + 1}, including the tail`,
