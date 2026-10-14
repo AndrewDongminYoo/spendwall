@@ -24,8 +24,10 @@ As the schema owner, run `SELECT audit.app_role()` in the target database to obt
 Use distinct application logins for separate deployments and a different trusted schema owner; never run the app with the Compose owner login.
 The database name is part of this role assignment; renaming or restoring into a different database requires reviewing and replacing its audit-role grants.
 Do not grant the application ownership, superuser, role administration, or membership in privileged roles.
-The migration rejects an existing app group with elevated attributes or any inherited role membership.
-An existing group must also have no members before migration; application membership is granted only afterward, so an unrelated role administrator cannot preassign a login to the predictable group name.
+This one-time migration requires the database-specific group not to exist and creates it with NOLOGIN, NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOREPLICATION, and NOBYPASSRLS.
+An existing group always aborts migration, including a memberless group with residual grants or object ownership.
+The database owner must review an existing role separately before retrying; the migration does not delete roles or adopt their privileges.
+Application membership is granted only after successful migration.
 No login, password or external credential is created by the migration.
 
 The group has SELECT and append-function EXECUTE only. UPDATE, DELETE, INSERT,

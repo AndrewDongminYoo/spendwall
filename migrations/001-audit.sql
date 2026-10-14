@@ -14,16 +14,10 @@ $$;
 DO $$
 DECLARE app_group text := audit.app_role();
 BEGIN
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = app_group) THEN
-    EXECUTE format('CREATE ROLE %I NOLOGIN', app_group);
-  ELSIF EXISTS (SELECT FROM pg_auth_members WHERE roleid = app_group::regrole) THEN
-    RAISE EXCEPTION 'Audit app group must have no existing members';
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = app_group) THEN
+    RAISE EXCEPTION 'Audit app group already exists';
   END IF;
-  IF EXISTS (SELECT FROM pg_roles WHERE rolname = app_group
-             AND (rolsuper OR rolcreaterole OR rolcreatedb OR rolbypassrls OR rolcanlogin OR rolreplication))
-     OR EXISTS (SELECT FROM pg_auth_members WHERE member = app_group::regrole) THEN
-    RAISE EXCEPTION 'Audit app group must be an unprivileged NOLOGIN role';
-  END IF;
+  EXECUTE format('CREATE ROLE %I NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS', app_group);
 END $$;
 
 CREATE SEQUENCE audit.event_ids AS bigint;
