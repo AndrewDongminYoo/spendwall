@@ -55,13 +55,17 @@ async function fixture(t) {
       CREATE ROLE audit_test_login LOGIN PASSWORD 'audit-test-only';
     END IF;
   END $$`);
-  await owner.query('GRANT spendwall_audit_app TO audit_test_login');
+  const appRole = (await owner.query('SELECT audit.app_role() AS name')).rows[0]
+    .name;
+  await owner.query(
+    `GRANT ${pg.escapeIdentifier(appRole)} TO audit_test_login`,
+  );
   const app = new pg.Pool({
     connectionString: appUrl(),
     max: 12,
   });
   t.after(() => app.end());
-  return { owner, app, log: new AuditLog(app) };
+  return { owner, app, appRole, log: new AuditLog(app) };
 }
 
 function cli() {
@@ -448,12 +452,66 @@ test('Postgres audit boundary', { skip: !url }, async (t) => {
   );
 
   await t.test(
-    'migration rejects a replication-capable app group',
+    'an app login cannot read or append audit events in another database',
     async (t) => {
       const { owner } = await fixture(t);
+      await owner.query('CREATE DATABASE spendwall_audit_other_test');
+      const otherUrl = new URL(url);
+      otherUrl.pathname = '/spendwall_audit_other_test';
+      const otherOwner = new pg.Pool({ connectionString: otherUrl.toString() });
+      const otherAppUrl = new URL(appUrl());
+      otherAppUrl.pathname = '/spendwall_audit_other_test';
+      const otherApp = new pg.Pool({
+        connectionString: otherAppUrl.toString(),
+      });
+      try {
+        await otherOwner.query(
+          await readFile(
+            new URL('../migrations/001-audit.sql', import.meta.url),
+            'utf8',
+          ),
+        );
+        await assert.rejects(
+          otherApp.query('SELECT * FROM audit.audit_events'),
+          (error) => error.code === '42501',
+        );
+        await assert.rejects(
+          new AuditLog(otherApp).append(event),
+          /Audit append failed/,
+        );
+        assert.equal(
+          (await otherOwner.query('SELECT count(*) FROM audit.audit_events'))
+            .rows[0].count,
+          '0',
+        );
+        const otherRole = (
+          await otherOwner.query('SELECT audit.app_role() AS name')
+        ).rows[0].name;
+        await otherOwner.query(
+          `GRANT ${pg.escapeIdentifier(otherRole)} TO audit_test_login`,
+        );
+        await new AuditLog(otherApp).append(event);
+        assert.equal((await verifyAudit(otherApp)).count, 1);
+        await otherOwner.query(
+          `REVOKE ${pg.escapeIdentifier(otherRole)} FROM audit_test_login`,
+        );
+      } finally {
+        await otherApp.end();
+        await otherOwner.end();
+        await owner.query('DROP DATABASE spendwall_audit_other_test');
+      }
+    },
+  );
+
+  await t.test(
+    'migration rejects a replication-capable app group',
+    async (t) => {
+      const { owner, appRole } = await fixture(t);
       const client = await owner.connect();
       try {
-        await client.query('ALTER ROLE spendwall_audit_app REPLICATION');
+        await client.query(
+          `ALTER ROLE ${pg.escapeIdentifier(appRole)} REPLICATION`,
+        );
         await client.query('DROP SCHEMA audit CASCADE');
         const migration = await readFile(
           new URL('../migrations/001-audit.sql', import.meta.url),
@@ -465,7 +523,9 @@ test('Postgres audit boundary', { skip: !url }, async (t) => {
         );
       } finally {
         await client.query('ROLLBACK');
-        await client.query('ALTER ROLE spendwall_audit_app NOREPLICATION');
+        await client.query(
+          `ALTER ROLE ${pg.escapeIdentifier(appRole)} NOREPLICATION`,
+        );
         client.release();
       }
     },
@@ -474,12 +534,12 @@ test('Postgres audit boundary', { skip: !url }, async (t) => {
   await t.test(
     'migration rejects an app group with inherited role memberships',
     async (t) => {
-      const { owner } = await fixture(t);
+      const { owner, appRole } = await fixture(t);
       const client = await owner.connect();
       try {
         await client.query('CREATE ROLE audit_test_privileged NOLOGIN');
         await client.query(
-          'GRANT audit_test_privileged TO spendwall_audit_app',
+          `GRANT audit_test_privileged TO ${pg.escapeIdentifier(appRole)}`,
         );
         await client.query('DROP SCHEMA audit CASCADE');
         const migration = await readFile(
@@ -493,7 +553,7 @@ test('Postgres audit boundary', { skip: !url }, async (t) => {
       } finally {
         await client.query('ROLLBACK');
         await client.query(
-          'REVOKE audit_test_privileged FROM spendwall_audit_app',
+          `REVOKE audit_test_privileged FROM ${pg.escapeIdentifier(appRole)}`,
         );
         await client.query('DROP ROLE audit_test_privileged');
         client.release();

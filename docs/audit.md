@@ -18,14 +18,14 @@ docker compose --env-file .env.example exec -T postgres \
   psql -U spendwall -d spendwall -v ON_ERROR_STOP=1 < migrations/001-audit.sql
 ```
 
-The migration creates the unprivileged NOLOGIN group `spendwall_audit_app`.
-An administrator must separately grant this group to an existing unprivileged
-application login. Use a different trusted schema owner; never run the app with
-the Compose owner login. Do not grant the application ownership, superuser,
-role administration, or membership in privileged roles. The migration rejects an
-existing app group with elevated attributes or any inherited role membership.
-No login, password or
-external credential is created by the migration.
+The migration creates an unprivileged NOLOGIN group named `spendwall_audit_app_` followed by the first 40 hexadecimal characters of the current database name's SHA-256 hash.
+[PostgreSQL roles are shared across databases in a cluster](https://www.postgresql.org/docs/17/database-roles.html), so a fixed group name would reuse memberships across deployments.
+As the schema owner, run `SELECT audit.app_role()` in the target database to obtain its exact group name, then grant that group only to the corresponding unprivileged application login.
+Use distinct application logins for separate deployments and a different trusted schema owner; never run the app with the Compose owner login.
+The database name is part of this role assignment; renaming or restoring into a different database requires reviewing and replacing its audit-role grants.
+Do not grant the application ownership, superuser, role administration, or membership in privileged roles.
+The migration rejects an existing app group with elevated attributes or any inherited role membership.
+No login, password or external credential is created by the migration.
 
 The group has SELECT and append-function EXECUTE only. UPDATE, DELETE, INSERT,
 TRUNCATE, sequence access and schema creation are revoked. The fixed-search-path

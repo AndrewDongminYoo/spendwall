@@ -1,20 +1,29 @@
 -- Run once as a trusted schema owner, separately from the application login.
 BEGIN;
 
+CREATE SCHEMA audit;
+REVOKE ALL ON SCHEMA audit FROM PUBLIC;
+
+-- Roles are cluster-wide. Derive a bounded role name from this database only.
+CREATE FUNCTION audit.app_role() RETURNS text
+LANGUAGE sql STABLE SET search_path = pg_catalog
+AS $$
+  SELECT 'spendwall_audit_app_' || left(encode(sha256(convert_to(current_database(), 'UTF8')), 'hex'), 40)
+$$;
+
 DO $$
+DECLARE app_group text := audit.app_role();
 BEGIN
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'spendwall_audit_app') THEN
-    CREATE ROLE spendwall_audit_app NOLOGIN;
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = app_group) THEN
+    EXECUTE format('CREATE ROLE %I NOLOGIN', app_group);
   END IF;
-  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'spendwall_audit_app'
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = app_group
              AND (rolsuper OR rolcreaterole OR rolcreatedb OR rolbypassrls OR rolcanlogin OR rolreplication))
-     OR EXISTS (SELECT FROM pg_auth_members WHERE member = 'spendwall_audit_app'::regrole) THEN
+     OR EXISTS (SELECT FROM pg_auth_members WHERE member = app_group::regrole) THEN
     RAISE EXCEPTION 'Audit app group must be an unprivileged NOLOGIN role';
   END IF;
 END $$;
 
-CREATE SCHEMA audit;
-REVOKE ALL ON SCHEMA audit FROM PUBLIC;
 CREATE SEQUENCE audit.event_ids AS bigint;
 CREATE TABLE audit.audit_events (
   id bigint PRIMARY KEY CHECK (id > 0),
@@ -159,10 +168,17 @@ BEGIN
   RETURN QUERY SELECT next_event.id::text, next_event.row_hash;
 END $$;
 
-REVOKE ALL ON ALL TABLES IN SCHEMA audit FROM PUBLIC, spendwall_audit_app;
-REVOKE ALL ON ALL SEQUENCES IN SCHEMA audit FROM PUBLIC, spendwall_audit_app;
-REVOKE ALL ON ALL FUNCTIONS IN SCHEMA audit FROM PUBLIC, spendwall_audit_app;
-GRANT USAGE ON SCHEMA audit TO spendwall_audit_app;
-GRANT SELECT ON audit.audit_events, audit.chain_head TO spendwall_audit_app;
-GRANT EXECUTE ON FUNCTION audit.append_event(jsonb), audit.event_payload(audit.audit_events) TO spendwall_audit_app;
+REVOKE ALL ON ALL TABLES IN SCHEMA audit FROM PUBLIC;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA audit FROM PUBLIC;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA audit FROM PUBLIC;
+DO $$
+DECLARE app_group text := audit.app_role();
+BEGIN
+  EXECUTE format('REVOKE ALL ON ALL TABLES IN SCHEMA audit FROM %I', app_group);
+  EXECUTE format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA audit FROM %I', app_group);
+  EXECUTE format('REVOKE ALL ON ALL FUNCTIONS IN SCHEMA audit FROM %I', app_group);
+  EXECUTE format('GRANT USAGE ON SCHEMA audit TO %I', app_group);
+  EXECUTE format('GRANT SELECT ON audit.audit_events, audit.chain_head TO %I', app_group);
+  EXECUTE format('GRANT EXECUTE ON FUNCTION audit.append_event(jsonb), audit.event_payload(audit.audit_events) TO %I', app_group);
+END $$;
 COMMIT;
