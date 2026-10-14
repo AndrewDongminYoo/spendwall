@@ -1,7 +1,12 @@
 import { createHash } from 'node:crypto';
-import { Environment, type ASTNode } from '@marcbachmann/cel-js';
 import { parseDocument } from 'yaml';
 import { z } from 'zod';
+import { prepareCondition, type PreparedCondition } from './cel.ts';
+
+export { evaluatePolicy } from './evaluator.ts';
+export { normalizeAmount } from './money.ts';
+export type { PolicyDecision } from './evaluator.ts';
+export type { NormalizedAmount } from './money.ts';
 
 const name = z
   .string()
@@ -60,17 +65,12 @@ export const policySchema = z
 
 export type Policy = z.infer<typeof policySchema>;
 type CompiledRule = Policy['rules'][number] & {
-  readonly condition: (context: Record<string, unknown>) => unknown;
+  readonly condition: PreparedCondition;
 };
 export type LoadedPolicy = Omit<Policy, 'rules'> & {
   readonly rules: readonly CompiledRule[];
   readonly policyVersion: string;
 };
-
-const cel = new Environment({
-  unlistedVariablesAreDyn: true,
-  limits: { maxDepth: 64, maxAstNodes: 4_096 },
-});
 
 function pathFor(parts: PropertyKey[]): string {
   return parts.reduce<string>((path, part) => {
@@ -84,27 +84,6 @@ function pathFor(parts: PropertyKey[]): string {
 
 function invalid(path: string, reason: string): never {
   throw new Error(`Invalid policy at ${path}: ${reason}`);
-}
-
-function checkAstDepth(ast: ASTNode): void {
-  const pending: { value: unknown; depth: number }[] = [
-    { value: ast, depth: 0 },
-  ];
-  while (pending.length > 0) {
-    const { value, depth } = pending.pop()!;
-    if (Array.isArray(value)) {
-      for (const child of value) pending.push({ value: child, depth });
-    } else if (
-      value !== null &&
-      typeof value === 'object' &&
-      'op' in value &&
-      'args' in value
-    ) {
-      if (depth > 64) throw new Error('Excessive CEL AST depth.');
-      if (value.op !== 'value' && value.op !== 'id')
-        pending.push({ value: value.args, depth: depth + 1 });
-    }
-  }
 }
 
 function canonical(value: unknown): string {
@@ -154,17 +133,13 @@ export function loadPolicy(source: string): LoadedPolicy {
   }
   const policy = parsed.data;
   const rules = policy.rules.map((entry, index) => {
-    let expression;
+    let condition;
     try {
-      expression = cel.parse(entry.when);
-      // The parser's depth limit does not cover every operator, including unary.
-      checkAstDepth(expression.ast);
+      condition = prepareCondition(entry.when);
     } catch {
       invalid(`$.rules[${index}].when`, 'Invalid or excessive CEL expression.');
     }
-    const condition = (context: Record<string, unknown>): unknown =>
-      expression(context);
-    return Object.freeze({ ...entry, condition: Object.freeze(condition) });
+    return Object.freeze({ ...entry, condition });
   });
   return Object.freeze({
     ...policy,
