@@ -84,25 +84,34 @@ strings are also checked. Credential-bearing fields are rejected regardless of
 whether their values were issued locally: access/refresh/ID tokens, client
 secrets, API keys, password/secret/token, and Authorization/Proxy-Authorization.
 The guard recognizes underscore, hyphen and camel-case spellings in object keys
-and quoted textual JSON/header syntax. Every original complete quoted JSON string literal
-is decoded and checked before whole-text parsing, including literals in prefixed
-text, malformed/truncated JSON, or overwritten duplicate-key values. Valid
-JSON-looking payloads are also checked recursively under the same shared depth,
-node and byte budgets. Unicode-escaped keys/values and nested JSON string
-encodings cannot hide a supported credential field or token. Malformed
-JSON-looking payloads or invalid complete quoted JSON escapes are conservatively denied;
-ordinary prose with valid quoted strings remains supported. This can over-block
-incomplete benign JSON and prose with non-JSON backslash escapes. No
-secret-labelled value is interpreted as harmless metadata.
+and quoted textual JSON/header syntax. Before literal or whole-text JSON parsing,
+it rejects every literal backslash in an already decoded runtime response string
+or object key, regardless of context or whether a quoted fragment is complete.
+The entire result is denied with a constant error; original values are never
+included in downstream errors or logs. This covers prefixed/unclosed quoted
+secrets, malformed escapes, nested JSON string encodings and escaped keys without
+requiring the payload to parse successfully.
 
-An unresolved P1 keeps this PR Draft: prefixed text with an unclosed quoted
-literal skips literal decoding and whole-JSON parsing. For example, the synthetic
-managed-token fragment `Result: "pri\u0076ate-paypal-token` is currently accepted;
-an equivalent escaped Bearer fragment also passes. The bounded review loop has
-stopped with this exact pattern requiring a further repair. Standalone Basic values must decode as base64
-user:password. Unknown Bearer-shaped values are denied regardless of scheme case,
-token length or alphabet, including repeated spaces, tabs, line breaks and
-Unicode whitespace. No context guess permits an ambiguous Bearer value.
+The restriction applies after the SDK or REST transport has decoded JSON. An
+actual newline character in a decoded string or key remains allowed by this rule;
+the two literal characters backslash and `n` are denied. Existing credential and
+resource checks still apply to both forms. This intentionally rejects Windows
+paths, JSON-in-text containing escape sequences, and harmless literal
+backslashes. Exposed catalog descriptions, metadata keys and input-schema strings
+use the same guard with no exception for schema patterns. The checked-in full
+catalog currently has six backslash-containing regular-expression strings in
+`search_invoicing`; fetching that full catalog therefore refuses startup under
+this restriction. A synthetic regression makes this availability limit explicit.
+No live catalog fetch was performed, and this change does not claim universal
+detection of arbitrary encodings or undisclosed secrets.
+
+Valid backslash-free JSON-looking payloads are also inspected recursively under
+the shared depth, node and byte budgets. Malformed JSON-looking payloads or
+invalid complete quoted JSON literals conservatively deny. Standalone Basic
+values must decode as base64 user:password. Unknown Bearer-shaped values are
+denied regardless of scheme case, token length or alphabet, including repeated
+spaces, tabs, line breaks and Unicode whitespace. No context guess permits an
+ambiguous Bearer value.
 
 This intentionally rejects legitimate prose such as `bearer bonds`, including
 that phrase inside an otherwise ordinary sentence. Leakage prevention takes

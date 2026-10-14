@@ -74,6 +74,7 @@ export function createTokenManager(options: TokenOptions = {}) {
       const sensitiveText = (text: string) => {
         bytes += Buffer.byteLength(text);
         return (
+          text.includes('\\') ||
           bytes > 1_048_576 ||
           credentialFieldText.test(text) ||
           credentialText(text) ||

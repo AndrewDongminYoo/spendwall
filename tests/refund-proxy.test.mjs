@@ -412,7 +412,10 @@ test('startup errors expose the failed MCP stage and HTTP status without secrets
 });
 
 test('rolling transaction date defaults do not change the reviewed input contract', async (t) => {
-  const updated = structuredClone(snapshot.tools);
+  const reviewed = snapshot.tools.filter(
+    (tool) => tool.name === 'list_transactions',
+  );
+  const updated = structuredClone(reviewed);
   const transaction = updated.find((tool) => tool.name === 'list_transactions');
   transaction.inputSchema.properties.start_date.default =
     '2026-09-12T13:55:07.550Z';
@@ -420,11 +423,11 @@ test('rolling transaction date defaults do not change the reviewed input contrac
     '2026-10-13T13:55:07.550Z';
   const f = await fixture(t, {
     catalog: updated,
-    expectedTools: snapshot.tools,
+    expectedTools: reviewed,
   });
   const { client } = await f.start();
   const listed = (await client.listTools()).tools;
-  assert.equal(listed.length, snapshot.tools.length);
+  assert.equal(listed.length, reviewed.length);
   assert.deepEqual(
     listed.find((tool) => tool.name === 'list_transactions').inputSchema,
     transaction.inputSchema,
@@ -439,7 +442,10 @@ test('rolling transaction date defaults do not change the reviewed input contrac
 test('transaction constraints and other defaults still fail catalog review', async (t) => {
   for (const change of ['type', 'missing', 'invalid', 'otherDefault']) {
     await t.test(change, async (t) => {
-      const updated = structuredClone(snapshot.tools);
+      const reviewed = snapshot.tools.filter(
+        (tool) => tool.name === 'list_transactions',
+      );
+      const updated = structuredClone(reviewed);
       const properties = updated.find(
         (tool) => tool.name === 'list_transactions',
       ).inputSchema.properties;
@@ -449,7 +455,7 @@ test('transaction constraints and other defaults still fail catalog review', asy
       if (change === 'otherDefault') properties.page_size.default = 500;
       const f = await fixture(t, {
         catalog: updated,
-        expectedTools: snapshot.tools,
+        expectedTools: reviewed,
       });
       await assert.rejects(startProxy(f.options), /catalog\/schema drift/);
       assert.equal(f.seen.calls.length, 0);
@@ -680,6 +686,26 @@ test('approval without an injected store fails closed and is never sent upstream
 test('nested or textual Authorization headers and tokens never reach downstream or logs', async (t) => {
   for (const leak of [
     ...[
+      String.raw`Result: "pri\u0076ate-paypal-token`,
+      String.raw`Result: "BEA\u0052ER synthetic-unfamiliar-credential`,
+      String.raw`Result: "ignored\q`,
+      String.raw`safe prefix \u0061ccess_token: synthetic-unfamiliar-credential`,
+      String.raw`C:\safe\invoice.txt`,
+      String.raw`first\nsecond`,
+      JSON.stringify({ note: 'first\nsecond' }),
+      JSON.stringify(JSON.stringify({ note: 'ordinary nested JSON text' })),
+    ].map((text) => ({ content: [{ type: 'text', text }] })),
+    {
+      content: [{ type: 'text', text: 'ordinary text' }],
+      structuredContent: {
+        nested: { [String.raw`pri\u0076ate-paypal-token`]: 'ordinary' },
+      },
+    },
+    {
+      content: [{ type: 'text', text: 'ordinary text' }],
+      structuredContent: { nested: { [String.raw`ordinary\key`]: 'ordinary' } },
+    },
+    ...[
       String.raw`{"data":"pri\u0076ate-paypal-token","data":"safe"}`,
       String.raw`{"data":"BEA\u0052ER synthetic-unfamiliar-credential","data":"safe"}`,
       String.raw`{"data":{"access\u005ftoken":"synthetic-unfamiliar-credential"},"data":"safe"}`,
@@ -834,6 +860,13 @@ test('nested or textual Authorization headers and tokens never reach downstream 
         [process.stdout.write, process.stderr.write] = writes;
       }
       assert.equal(result.isError, true);
+      assert.deepEqual(result.content, [
+        {
+          type: 'text',
+          text: 'PayPal MCP request failed or timed out; no automatic retry was attempted.',
+        },
+      ]);
+      assert.equal(output.join(''), '');
       assert.doesNotMatch(
         JSON.stringify(result) + output.join(''),
         /private-paypal-token|header-only-secret|synthetic-other-token|synthetic-unknown-credential|synthetic-unfamiliar-credential|tab-token|fake-secret|Authorization|ZmFrZS1jbGllbnQ6ZmFrZS1zZWNyZXQ=/i,
@@ -913,6 +946,7 @@ test('ordinary Basic prose and benign JSON metadata remain supported', async (t)
     'Basic Plan',
     'basic information',
     'He said "hello".',
+    'First line\nSecond line',
     JSON.stringify({ token_type: 'Bearer', expires_in: 120, count: 2 }),
   ])
     await t.test(text, async (t) => {
@@ -947,4 +981,68 @@ test('ambiguous bearer prose is conservatively denied under the supported safety
       assert.equal(result.isError, true);
       assert.doesNotMatch(JSON.stringify(result), /bonds/i);
     });
+});
+
+test('literal backslashes in catalog metadata or schema strings refuse startup with a constant safe error', async (t) => {
+  for (const change of [
+    { description: String.raw`Result: "pri\u0076ate-paypal-token` },
+    { description: String.raw`C:\safe\invoice.txt` },
+    { _meta: { [String.raw`metadata\key`]: 'ordinary' } },
+    {
+      inputSchema: {
+        ...catalog[0].inputSchema,
+        description: String.raw`Result: "BEA\u0052ER synthetic-unfamiliar-credential`,
+      },
+    },
+    { inputSchema: { ...catalog[0].inputSchema, pattern: String.raw`^\d+$` } },
+  ])
+    await t.test('unsafe catalog', async (t) => {
+      const f = await fixture(t, {
+        catalog: [{ ...catalog[0], ...change }, ...catalog.slice(1)],
+      });
+      await assert.rejects(
+        async () => {
+          const proxy = await startProxy(f.options);
+          f.resources.push(proxy);
+        },
+        {
+          message:
+            'PayPal MCP http catalog failed (authentication, network, protocol or timeout); no automatic retry was attempted.',
+        },
+      );
+      assert.equal(f.seen.calls.length, 0);
+      await assert.rejects(readFile(f.options.ledgerPath + '.lock'), {
+        code: 'ENOENT',
+      });
+    });
+});
+
+test('actual newline characters in decoded catalog metadata remain supported', async (t) => {
+  const updated = [
+    {
+      ...catalog[0],
+      description: 'First line\nSecond line',
+      _meta: { ['line\nkey']: 'ordinary' },
+    },
+    ...catalog.slice(1),
+  ];
+  const f = await fixture(t, { catalog: updated });
+  const { client } = await f.start();
+  const found = (await client.listTools()).tools.find(
+    (tool) => tool.name === catalog[0].name,
+  );
+  assert.equal(found.description, 'First line\nSecond line');
+  assert.equal(found._meta['line\nkey'], 'ordinary');
+});
+
+test('the current full reviewed catalog fails closed on its backslash-containing patterns', async (t) => {
+  const f = await fixture(t, {
+    catalog: snapshot.tools,
+    expectedTools: snapshot.tools,
+  });
+  await assert.rejects(startProxy(f.options), {
+    message:
+      'PayPal MCP http catalog failed (authentication, network, protocol or timeout); no automatic retry was attempted.',
+  });
+  assert.equal(f.seen.calls.length, 0);
 });
