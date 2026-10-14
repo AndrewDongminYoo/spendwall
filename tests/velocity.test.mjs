@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { prepareEvent } from '../apps/firewall/src/audit/event.ts';
 import { foldHistory } from '../apps/firewall/src/velocity/aggregate.ts';
+import {
+  encodeRuleReferences,
+  decodeRuleReferences,
+} from '../apps/firewall/src/velocity/references.ts';
 
 const hour = 3_600_000;
 const now = Date.UTC(2026, 9, 14);
@@ -253,3 +257,61 @@ for (const malformed of [
     );
   });
 }
+
+test('audit rule references preserve arbitrary names and validate every generated label', () => {
+  const rules = Array.from({ length: 129 }, (_, i) => ({
+    id: `refund rule ${i} ` + 'long '.repeat(40),
+  }));
+  const names = rules.map((r) => r.id);
+  const refs = encodeRuleReferences(rules, names);
+  assert.deepEqual(decodeRuleReferences(rules, refs), names);
+  assert.ok(refs.length <= 128);
+  assert.deepEqual(
+    prepareEvent({ ...auditEvent, matchedRules: refs }).matched_rules,
+    refs,
+  );
+  for (const invalid of [
+    ['rules.v1:00'],
+    ['rules.v1:0:0'],
+    ['rules.v1:1:0'],
+    ['rules.v1:zzz'],
+    ['rules.v1:!'],
+    ['rules.v1:0', 'rules.v1:1'],
+  ])
+    assert.throws(
+      () => decodeRuleReferences(rules, invalid),
+      /rule references/i,
+    );
+});
+
+test('audit reference chunks admit exact capacity and reject one-position overflow', () => {
+  const rules = Array.from({ length: 5000 }, (_, i) => ({ id: String(i) }));
+  let boundary = 0;
+  // Independent packing oracle measures the literal on-disk label contract.
+  let chunks = 1,
+    width = 'rules.v1'.length;
+  for (let i = 0; i < rules.length; i++) {
+    const token = ':' + i.toString(36);
+    if (width + token.length > 128) {
+      chunks++;
+      width = 'rules.v1'.length;
+    }
+    if (chunks > 128) break;
+    width += token.length;
+    boundary++;
+  }
+  assert.ok(boundary > 129 && boundary < rules.length);
+  const names = rules.slice(0, boundary).map((r) => r.id);
+  const refs = encodeRuleReferences(rules, names);
+  assert.equal(refs.length, 128);
+  assert.ok(refs.every((v) => v.length <= 128));
+  assert.deepEqual(decodeRuleReferences(rules, refs), names);
+  assert.throws(
+    () => encodeRuleReferences(rules, [...names, rules[boundary].id]),
+    /rule references/i,
+  );
+  assert.throws(
+    () => encodeRuleReferences(rules, ['unknown']),
+    /rule references/i,
+  );
+});

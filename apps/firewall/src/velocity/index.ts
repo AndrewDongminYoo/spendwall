@@ -16,6 +16,7 @@ import { identifier, object, snapshot } from '../context/json.ts';
 import type { Json } from '../context/json.ts';
 import { foldHistory } from './aggregate.ts';
 import type { HistoryRow } from './aggregate.ts';
+import { encodeRuleReferences, decodeRuleReferences } from './references.ts';
 
 export type VelocityResult = PolicyDecision &
   Readonly<{
@@ -103,6 +104,7 @@ export class VelocityPolicy {
         throw new Error();
       object(context.args);
       const agentId = identifier(object(context.agent).id);
+      const auditAgentId = `agent:${this.reference('agent', agentId)}`;
       const merchantId = identifier(object(context.merchant).id);
       const customerId = identifier(object(context.customer).id);
       const amount = normalizeAmount(context.amount);
@@ -128,7 +130,7 @@ export class VelocityPolicy {
         usd_cents: Math.round(amount.usd * 100),
       });
       const auditInput = {
-        agentId,
+        agentId: auditAgentId,
         tool: 'create_refund',
         args: context.args,
         resolvedCtx,
@@ -162,7 +164,7 @@ export class VelocityPolicy {
         now,
         merchantRef: metadata.merchant_ref,
         customerRef: metadata.customer_ref,
-        agentId,
+        agentId: auditAgentId,
         keyId: metadata.key_id,
       });
       const previous = history.requests.get(metadata.request_id);
@@ -175,7 +177,9 @@ export class VelocityPolicy {
         const initial = previous.initial;
         const result: VelocityResult = Object.freeze({
           decision: initial.decision,
-          matchedRules: Object.freeze([...initial.matched_rules]),
+          matchedRules: Object.freeze(
+            decodeRuleReferences(policy.rules, initial.matched_rules),
+          ),
           policyVersion: initial.policy_version,
           receipt: Object.freeze({
             id: initial.id,
@@ -194,6 +198,7 @@ export class VelocityPolicy {
       const receipt = await new AuditLog(client).append({
         ...auditInput,
         ...decision,
+        matchedRules: encodeRuleReferences(policy.rules, decision.matchedRules),
         ...(approvalId ? { approvalId } : {}),
         latencyMs: Math.min(
           2_147_483_647,

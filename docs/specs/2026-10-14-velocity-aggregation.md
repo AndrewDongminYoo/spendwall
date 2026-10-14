@@ -9,8 +9,8 @@ The existing `evaluatePolicy` API and original audit migration remain unchanged.
 ## Identity and history contract
 
 Require one stable 32-byte secret HMAC key, supplied as 64 hexadecimal characters through server configuration.
-Domain-separated HMAC-SHA256 values identify the merchant, merchant-scoped customer, request binding, and key continuity tag.
-Raw merchant/customer IDs, emails, and the key are never persisted.
+Domain-separated HMAC-SHA256 values identify the merchant, merchant-scoped customer, agent, request binding, and key continuity tag.
+Raw merchant/customer/agent IDs, emails, and the key are never persisted by this API.
 Key rotation is unsupported: a different key continuity tag in reservation history fails closed instead of treating old usage as zero.
 Persist an explicit `velocity` metadata object inside the already-hashed `resolved_ctx` column: `v`, `key_id`, `merchant_ref`, `customer_ref`, `request_id`, `binding_hash`, and integer `usd_cents`.
 Bind the canonical trusted context, source arguments, resolved payment facts, and policy version; ignore caller-supplied `agg` in that binding and replace it before policy evaluation.
@@ -19,6 +19,12 @@ The optional typed audit metadata input is separate from arbitrary argument/cont
 Both TypeScript and an owner-applied `002` migration validate this allowlist.
 Preserve the original payment redactor and fixed v1 event payload so existing hashes remain valid.
 No migration or backfill may rewrite existing events.
+Store the agent as an `agent:<64hex>` audit label while evaluating the unchanged trusted agent context.
+Persist matched rule positions as canonical `rules.v1:<base36 position>:...` chunks, each at most 128 characters with at most 128 chunks.
+Measure encoding capacity and deny safely on overflow.
+The trusted loader's content-hash `policyVersion` binds these positions to immutable policy content; replay decodes them back to the original rule names.
+Malformed, out-of-range, duplicate, unordered, or noncanonical references deny.
+Lifecycle writers copy the initial event's stored agent label and rule references.
 
 Only `create_refund` is in this reservation API's scope.
 Read refund audit events in numeric ID order, with a bounded 10,000-row history budget.

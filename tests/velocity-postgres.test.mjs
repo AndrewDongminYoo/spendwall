@@ -282,6 +282,68 @@ test('Postgres velocity boundary', { skip: !url }, async (t) => {
     },
   );
   await t.test(
+    'source identifiers round-trip through strict audit references',
+    async (t) => {
+      for (const [name, agentId, ids] of [
+        ['numeric agent', '123', ['limit']],
+        ['credential-like agent', 'BearerAgent', ['limit']],
+        ['underscore agent', '_support', ['limit']],
+        ['spaced rule', 'support', ['refund limit']],
+        ['long rule', 'support', ['refund '.repeat(100)]],
+        [
+          'many matches',
+          'support',
+          Array.from({ length: 129 }, (_, i) => `rule ${i}`),
+        ],
+      ]) {
+        await t.test(name, async (t) => {
+          const { app, service } = await fixture(t);
+          const loaded = loadPolicy(
+            JSON.stringify({
+              agents: {
+                [agentId]: { tools: { allow: ['create_refund'], deny: [] } },
+              },
+              rules: ids.map((id) => ({
+                id,
+                when: 'agg.refund_count_1h < 1',
+                then: 'allow',
+              })),
+              default: 'deny',
+            }),
+          );
+          const input = request({ agent: { id: agentId } });
+          const initial = await service.evaluateAndReserve(loaded, input);
+          assert.equal(initial.decision, 'allow');
+          assert.deepEqual(initial.matchedRules, ids);
+          const retry = await service.evaluateAndReserve(loaded, input);
+          assert.equal(retry.replayed, true);
+          assert.equal(retry.receipt.id, initial.receipt.id);
+          assert.deepEqual(retry.matchedRules, ids);
+          assert.equal(
+            (
+              await service.evaluateAndReserve(
+                loaded,
+                request({ agent: { id: agentId } }),
+              )
+            ).decision,
+            'deny',
+          );
+          const stored = (
+            await app.query(
+              'SELECT agent_id, matched_rules FROM audit.audit_events WHERE id=$1',
+              [initial.receipt.id],
+            )
+          ).rows[0];
+          assert.match(stored.agent_id, /^agent:[a-f0-9]{64}$/);
+          assert.ok(stored.matched_rules.length <= 128);
+          for (const reference of stored.matched_rules)
+            assert.match(reference, /^[A-Za-z][A-Za-z0-9_.:-]{0,127}$/);
+          assert.equal((await verifyAudit(app)).ok, true);
+        });
+      }
+    },
+  );
+  await t.test(
     'pending approval reserves capacity and same request is not counted twice',
     async (t) => {
       const { app, service } = await fixture(t);
@@ -337,23 +399,23 @@ test('Postgres velocity boundary', { skip: !url }, async (t) => {
           const input = request();
           const first = await service.evaluateAndReserve(loaded, input);
           assert.equal(first.decision, 'require_approval');
-          const metadata = (
+          const initialAudit = (
             await app.query(
-              "SELECT resolved_ctx -> 'velocity' AS velocity FROM audit.audit_events WHERE id=$1",
+              "SELECT agent_id, matched_rules, resolved_ctx -> 'velocity' AS velocity FROM audit.audit_events WHERE id=$1",
               [first.receipt.id],
             )
-          ).rows[0].velocity;
+          ).rows[0];
           const append = (eventKind, decision, extra = {}) =>
             new AuditLog(app).append({
-              agentId: 'support',
+              agentId: initialAudit.agent_id,
               tool: 'create_refund',
               args: input.context.args,
               resolvedCtx: input.resolvedCtx,
-              matchedRules: first.matchedRules,
+              matchedRules: initialAudit.matched_rules,
               policyVersion: first.policyVersion,
               approvalId: first.approvalId,
               latencyMs: 0,
-              velocity: metadata,
+              velocity: initialAudit.velocity,
               eventKind,
               decision,
               ...extra,
