@@ -1,5 +1,4 @@
 import 'reflect-metadata';
-import { timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { fileURLToPath } from 'node:url';
@@ -18,12 +17,18 @@ import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv';
 import type { JsonSchemaType } from '@modelcontextprotocol/sdk/validation/types.js';
 
+import { authenticateAgent, hashAgentKey } from './auth.ts';
+import type { AgentKeyStore } from './auth.ts';
+import { approvalTool, checkApproval } from './approval-tool.ts';
+import type { ApprovalLookup } from './approval-tool.ts';
 import { RefundExecutor } from './refunds.ts';
 import { createTokenManager } from './token.ts';
 import type { TokenOptions } from './token.ts';
 import { PayPalUpstream } from './upstream.ts';
 
-type Options = TokenOptions & {
+export type ProxyOptions = TokenOptions & {
+  agentKeys?: AgentKeyStore;
+  approvalLookup?: ApprovalLookup;
   proxyKey?: string;
   ledgerPath?: string;
   expectedTools?: Tool[];
@@ -40,10 +45,10 @@ function reject(res: ServerResponse, status: number, message: string) {
   res.end(JSON.stringify({ error: message }));
 }
 
-export async function startProxy(options: Options = {}) {
+export async function startProxy(options: ProxyOptions = {}) {
   const env = options.env ?? process.env;
   const key = options.proxyKey ?? env.SPENDWALL_PROXY_KEY;
-  if (!key || !/^[A-Za-z0-9_-]{32,128}$/.test(key))
+  if (!options.agentKeys && (!key || !/^[A-Za-z0-9_-]{32,128}$/.test(key)))
     throw new Error('Set a 32–128 character SPENDWALL_PROXY_KEY locally.');
   const transport = options.transport ?? env.PAYPAL_MCP_TRANSPORT ?? 'http';
   if (transport !== 'http' && transport !== 'sse')
@@ -62,9 +67,26 @@ export async function startProxy(options: Options = {}) {
       ),
     ).tools.map((tool: unknown) => ToolSchema.parse(tool));
   const tools = await upstream.listTools(expected);
+  if (tools.some((tool) => tool.name === approvalTool.name))
+    throw new Error('Upstream tool conflicts with firewall tool.');
+  const localHash = options.agentKeys ? undefined : hashAgentKey(key!);
+  const agentKeys = options.agentKeys ?? {
+    async findByHash(hash: string) {
+      return hash === localHash
+        ? {
+            keyHash: localHash,
+            agentId: 'local-proxy',
+            allowedTools: tools.map((tool) => tool.name),
+            enabled: true,
+            revoked: false,
+          }
+        : null;
+    },
+  };
+  const availableTools = [...tools, approvalTool];
   const validator = new AjvJsonSchemaValidator();
   const validators = new Map(
-    tools.map((tool) => [
+    availableTools.map((tool) => [
       tool.name,
       validator.getValidator(tool.inputSchema as JsonSchemaType),
     ]),
@@ -97,13 +119,12 @@ export async function startProxy(options: Options = {}) {
           reject(res, 403, 'Forbidden origin or host.');
           return;
         }
-        const provided = Buffer.from(req.headers.authorization ?? '');
-        const expectedKey = Buffer.from(`Bearer ${key}`);
-        if (
-          provided.length !== expectedKey.length ||
-          !timingSafeEqual(provided, expectedKey)
-        ) {
-          reject(res, 401, 'Local proxy authentication required.');
+        const agent = await authenticateAgent(
+          agentKeys,
+          req.headers.authorization,
+        );
+        if (!agent) {
+          reject(res, 401, 'Agent authentication required.');
           return;
         }
         if (req.method !== 'POST') {
@@ -140,18 +161,30 @@ export async function startProxy(options: Options = {}) {
         );
         active.add(server);
         server.setRequestHandler(ListToolsRequestSchema, async () => ({
-          tools,
+          tools: availableTools.filter((tool) =>
+            agent.allowedTools.includes(tool.name),
+          ),
         }));
         server.setRequestHandler(CallToolRequestSchema, async (request) => {
           const { name, arguments: args = {}, _meta } = request.params;
           const check = validators.get(name);
-          if (!check || !check(args).valid)
+          if (
+            !agent.allowedTools.includes(name) ||
+            !check ||
+            !check(args).valid
+          )
             return {
               isError: true,
               content: [
                 { type: 'text', text: 'Unknown tool or invalid arguments.' },
               ],
             };
+          if (name === 'check_approval')
+            return checkApproval(
+              String(args.approval_id),
+              agent,
+              options.approvalLookup,
+            );
           if (name === 'create_refund') {
             const id = _meta?.['spendwall/execution-id'];
             if (typeof id !== 'string')

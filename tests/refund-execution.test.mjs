@@ -55,6 +55,7 @@ async function fixture(t, options = {}) {
         'Basic ZmFrZS1jbGllbnQ6ZmFrZS1zZWNyZXQ=',
       );
       seen.tokens++;
+      if (options.onToken) await options.onToken(seen.tokens);
       res.end(
         JSON.stringify({
           access_token: `private-token-${seen.tokens}`,
@@ -130,7 +131,10 @@ test('short token expiry drives renewal and concurrent callers share one refresh
   clock += 8_000;
   assert.equal(await manager.get(), 'private-token-1');
   clock += 1_100;
-  assert.equal(await manager.get(), 'private-token-2');
+  assert.deepEqual(
+    await Promise.all([manager.get(), manager.get(), manager.get()]),
+    ['private-token-2', 'private-token-2', 'private-token-2'],
+  );
   manager.invalidate('private-token-1');
   assert.equal(await manager.get(), 'private-token-2');
   assert.equal(f.seen.tokens, 2);
@@ -449,4 +453,20 @@ test('new ledger directories are persisted in every created ancestor before refu
   );
   await executor.execute(executionId, args);
   assert.equal(f.seen.posts.length, 1);
+});
+
+test('token freshness starts at issuance request start rather than response completion', async (t) => {
+  let clock = 100_000;
+  const f = await fixture(t, {
+    onToken(count) {
+      if (count === 1) clock = 104_000;
+    },
+  });
+  const manager = createTokenManager({ ...f, now: () => clock });
+  assert.equal(await manager.get(), 'private-token-1');
+  clock = 108_999;
+  assert.equal(await manager.get(), 'private-token-1');
+  clock = 109_000;
+  assert.equal(await manager.get(), 'private-token-2');
+  assert.equal(f.seen.tokens, 2);
 });

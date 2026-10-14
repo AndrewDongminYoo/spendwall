@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -45,21 +46,28 @@ async function fixture(t, config = {}) {
   const resources = [];
   const downstreams = [];
   const sessions = new Map();
-  const seen = { calls: [], refunds: 0, http: 0, sse: 0, tokens: 0 };
+  const seen = { calls: [], refunds: 0, posts: [], http: 0, sse: 0, tokens: 0 };
   const upstream = createServer(async (req, res) => {
     res.setHeader('content-type', 'application/json');
     if (req.url === '/v1/oauth2/token') {
       seen.tokens++;
       res.end(
         JSON.stringify({
-          access_token: 'private-paypal-token',
+          access_token: config.rotatingTokens
+            ? `private-paypal-token-${seen.tokens}`
+            : 'private-paypal-token',
           token_type: 'Bearer',
           expires_in: 120,
         }),
       );
       return;
     }
-    assert.equal(req.headers.authorization, 'Bearer private-paypal-token');
+    assert.equal(
+      req.headers.authorization,
+      config.rotatingTokens
+        ? `Bearer private-paypal-token-${seen.tokens}`
+        : 'Bearer private-paypal-token',
+    );
     if (req.url === `/v2/payments/captures/${captureId}`) {
       res.end(
         JSON.stringify({
@@ -73,6 +81,18 @@ async function fixture(t, config = {}) {
     if (req.url === `/v2/payments/captures/${captureId}/refund`) {
       seen.refunds++;
       assert.equal(req.headers['paypal-request-id'], executionId);
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      seen.posts.push({
+        body,
+        id: req.headers['paypal-request-id'],
+        authorization: req.headers.authorization,
+      });
+      if (config.refund401 && seen.refunds === 1) {
+        res.statusCode = 401;
+        res.end('Authorization: private-paypal-token fake-secret');
+        return;
+      }
       res.end(
         JSON.stringify({
           ...refund,
@@ -127,7 +147,9 @@ async function fixture(t, config = {}) {
           resources.push({ close: async () => resolve() }),
         );
       if (config.leak)
-        return { content: [{ type: 'text', text: 'private-paypal-token' }] };
+        return config.leak === true
+          ? { content: [{ type: 'text', text: 'private-paypal-token' }] }
+          : config.leak;
       return {
         content: [
           {
@@ -176,6 +198,8 @@ async function fixture(t, config = {}) {
       PAYPAL_CLIENT_SECRET: 'fake-secret',
     },
     proxyKey: key,
+    ...(config.agentKeys ? { agentKeys: config.agentKeys } : {}),
+    ...(config.approvalLookup ? { approvalLookup: config.approvalLookup } : {}),
     ledgerPath: join(dir, 'refunds.json'),
     expectedTools: config.expectedTools ?? catalog,
     port: 0,
@@ -192,22 +216,27 @@ async function fixture(t, config = {}) {
       return fetch(origin + url.pathname + url.search, init);
     },
   };
+  async function connect(proxy, clientKey = key) {
+    const client = new Client({ name: 'proxy-test', version: '1' });
+    downstreams.push(client);
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL(proxy.url), {
+        requestInit: { headers: { Authorization: `Bearer ${clientKey}` } },
+      }),
+    );
+    return client;
+  }
   return {
     seen,
     options,
     config,
     resources,
-    async start() {
+    connect,
+    async start(clientKey = key) {
       const proxy = await startProxy(options);
       assert.ok(proxy?.url, 'Expected a running localhost MCP proxy');
       resources.push(proxy);
-      const client = new Client({ name: 'proxy-test', version: '1' });
-      downstreams.push(client);
-      await client.connect(
-        new StreamableHTTPClientTransport(new URL(proxy.url), {
-          requestInit: { headers: { Authorization: `Bearer ${key}` } },
-        }),
-      );
+      const client = await connect(proxy, clientKey);
       return { proxy, client };
     },
   };
@@ -448,4 +477,328 @@ test('terminal refund statuses are MCP errors on the first call and retry', asyn
       assert.equal(ledger.executions[executionId].status, 'failed');
     });
   }
+});
+
+const keyB = 'synthetic-agent-B-key-that-is-long-enough';
+const keyHash = (value) => createHash('sha256').update(value).digest('hex');
+function agents() {
+  const rows = new Map([
+    [
+      keyHash(key),
+      {
+        keyHash: keyHash(key),
+        agentId: 'agent-A',
+        allowedTools: ['get_order'],
+        enabled: true,
+        revoked: false,
+      },
+    ],
+    [
+      keyHash(keyB),
+      {
+        keyHash: keyHash(keyB),
+        agentId: 'agent-B',
+        allowedTools: ['get_refund'],
+        enabled: true,
+        revoked: false,
+      },
+    ],
+  ]);
+  return {
+    rows,
+    async findByHash(hash) {
+      return rows.get(hash) ?? null;
+    },
+    async insertKey() {
+      throw new Error('fixture issuance disabled');
+    },
+  };
+}
+
+test('agent A and B see only their own tools and forged direct calls never dispatch', async (t) => {
+  const store = agents();
+  const f = await fixture(t, { agentKeys: store });
+  const { proxy, client } = await f.start();
+  const b = await f.connect(proxy, keyB);
+  assert.deepEqual(
+    (await client.listTools()).tools.map((tool) => tool.name),
+    ['get_order'],
+  );
+  assert.deepEqual(
+    (await b.listTools()).tools.map((tool) => tool.name),
+    ['get_refund'],
+  );
+  const errors = [];
+  for (const name of ['get_refund', 'create_refund', 'unknown_tool']) {
+    errors.push(
+      await client.callTool({
+        name,
+        arguments: { capture_id: captureId },
+        _meta: {
+          'spendwall/agent-id': 'agent-B',
+          'spendwall/execution-id': executionId,
+        },
+      }),
+    );
+  }
+  assert.ok(errors.every((error) => error.isError));
+  assert.deepEqual(errors[0], errors[1]);
+  assert.deepEqual(errors[0], errors[2]);
+  assert.equal(f.seen.calls.length, 0);
+  assert.equal(f.seen.refunds, 0);
+  assert.equal(
+    (
+      await client.callTool({
+        name: 'get_order',
+        arguments: { id: orderIdForTest },
+      })
+    ).isError,
+    undefined,
+  );
+  assert.equal(f.seen.calls.length, 1);
+});
+const orderIdForTest = 'ORDER123456789012';
+
+test('allowlist and revocation changes affect the next request; shared local key is no fallback', async (t) => {
+  const store = agents();
+  const f = await fixture(t, { agentKeys: store });
+  const { proxy, client } = await f.start();
+  store.rows.get(keyHash(key)).allowedTools = [];
+  assert.deepEqual((await client.listTools()).tools, []);
+  assert.equal(
+    (
+      await client.callTool({
+        name: 'get_order',
+        arguments: { id: orderIdForTest },
+      })
+    ).isError,
+    true,
+  );
+  store.rows.get(keyHash(key)).revoked = true;
+  await assert.rejects(client.listTools(), /Agent authentication required/);
+  const revoked = await fetch(proxy.url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${key}`,
+    },
+    body: '{}',
+  });
+  assert.equal(revoked.status, 401);
+  store.rows.delete(keyHash(key));
+  await assert.rejects(f.connect(proxy), /Agent authentication required/);
+  assert.equal(f.seen.calls.length, 0);
+});
+
+test('approval is a separately allowed local tool bound to the authenticated agent', async (t) => {
+  const store = agents();
+  store.rows.get(keyHash(key)).allowedTools.push('check_approval');
+  const requests = [];
+  const approvalId = 'e3857242-30c3-4772-8b4c-218df041e6cd';
+  let result = {
+    agentId: 'agent-A',
+    approvalId,
+    status: 'pending',
+    private: 'never expose this',
+  };
+  const f = await fixture(t, {
+    agentKeys: store,
+    approvalLookup: async (request) => {
+      requests.push(request);
+      return result;
+    },
+  });
+  const { proxy, client } = await f.start();
+  assert.deepEqual(
+    (await client.listTools()).tools.map((tool) => tool.name),
+    ['get_order', 'check_approval'],
+  );
+  const call = () =>
+    client.callTool({
+      name: 'check_approval',
+      arguments: { approval_id: approvalId },
+    });
+  const first = await call();
+  assert.equal(first.isError, undefined);
+  assert.deepEqual(first.structuredContent, {
+    approval_id: approvalId,
+    status: 'pending',
+  });
+  assert.doesNotMatch(JSON.stringify(first), /private|never expose/);
+  assert.deepEqual(requests, [{ agentId: 'agent-A', approvalId }]);
+  for (const invalid of [
+    null,
+    { ...result, agentId: 'agent-B' },
+    { ...result, approvalId: 'different' },
+    { ...result, status: 'unknown' },
+    { ...result, status: ['approved'] },
+  ]) {
+    result = invalid;
+    assert.equal((await call()).isError, true);
+  }
+  const b = await f.connect(proxy, keyB);
+  assert.equal(
+    (
+      await b.callTool({
+        name: 'check_approval',
+        arguments: { approval_id: approvalId },
+      })
+    ).isError,
+    true,
+  );
+  const before = requests.length;
+  assert.equal(
+    (
+      await client.callTool({
+        name: 'check_approval',
+        arguments: { approval_id: 'bad' },
+      })
+    ).isError,
+    true,
+  );
+  assert.equal(requests.length, before);
+  assert.equal(f.seen.calls.length, 0);
+});
+
+test('approval without an injected store fails closed and is never sent upstream', async (t) => {
+  const store = agents();
+  store.rows.get(keyHash(key)).allowedTools = ['check_approval'];
+  const f = await fixture(t, { agentKeys: store });
+  const { client } = await f.start();
+  assert.equal(
+    (
+      await client.callTool({
+        name: 'check_approval',
+        arguments: { approval_id: executionId },
+      })
+    ).isError,
+    true,
+  );
+  assert.equal(f.seen.calls.length, 0);
+});
+
+test('nested or textual Authorization headers and tokens never reach downstream or logs', async (t) => {
+  for (const leak of [
+    {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({ Authorization: 'synthetic-other-token' }),
+        },
+      ],
+    },
+    { content: [{ type: 'text', text: 'Bearer\ttab-token' }] },
+    {
+      content: [
+        {
+          type: 'text',
+          text: 'Authorization: Basic ZmFrZS1jbGllbnQ6ZmFrZS1zZWNyZXQ=',
+        },
+      ],
+    },
+    {
+      content: [{ type: 'text', text: 'ordinary text' }],
+      structuredContent: {
+        nested: { AUTHORIZATION: 'Bearer header-only-secret' },
+      },
+    },
+    { content: [{ type: 'text', text: 'private-paypal-token' }] },
+  ])
+    await t.test('sensitive response', async (t) => {
+      const f = await fixture(t, { leak });
+      const { client } = await f.start();
+      const output = [];
+      const writes = [process.stdout.write, process.stderr.write];
+      process.stdout.write = process.stderr.write = function (
+        chunk,
+        encoding,
+        callback,
+      ) {
+        output.push(String(chunk));
+        if (typeof encoding === 'function') encoding();
+        else if (typeof callback === 'function') callback();
+        return true;
+      };
+      let result;
+      try {
+        result = await client.callTool({
+          name: 'get_order',
+          arguments: { id: orderIdForTest },
+        });
+      } finally {
+        [process.stdout.write, process.stderr.write] = writes;
+      }
+      assert.equal(result.isError, true);
+      assert.doesNotMatch(
+        JSON.stringify(result) + output.join(''),
+        /private-paypal-token|header-only-secret|synthetic-other-token|tab-token|fake-secret|Authorization|ZmFrZS1jbGllbnQ6ZmFrZS1zZWNyZXQ=/i,
+      );
+    });
+});
+
+test('authenticated agent refunds retain the original request ID and bytes across one 401 refresh', async (t) => {
+  const store = agents();
+  store.rows.get(keyHash(key)).allowedTools = ['create_refund'];
+  const f = await fixture(t, {
+    agentKeys: store,
+    rotatingTokens: true,
+    refund401: true,
+  });
+  const { client } = await f.start();
+  const result = await client.callTool({
+    name: 'create_refund',
+    arguments: { capture_id: captureId },
+    _meta: { 'spendwall/execution-id': executionId },
+  });
+  assert.equal(result.isError, undefined);
+  assert.equal(f.seen.posts.length, 2);
+  assert.deepEqual(
+    f.seen.posts.map((post) => post.id),
+    [executionId, executionId],
+  );
+  assert.equal(f.seen.posts[0].body, f.seen.posts[1].body);
+  assert.deepEqual(
+    f.seen.posts.map((post) => post.authorization),
+    ['Bearer private-paypal-token-1', 'Bearer private-paypal-token-2'],
+  );
+  assert.equal(f.seen.tokens, 2);
+  assert.doesNotMatch(
+    JSON.stringify(result),
+    /private-paypal-token|Authorization/,
+  );
+});
+
+test('approval lookup accessors and inherited identity fields deny without reading getters', async (t) => {
+  const store = agents();
+  store.rows.get(keyHash(key)).allowedTools = ['check_approval'];
+  let reads = 0;
+  let result = {
+    agentId: 'agent-A',
+    approvalId: executionId,
+    get status() {
+      reads++;
+      return reads < 3
+        ? 'approved'
+        : 'Authorization: Bearer synthetic-leaked-token';
+    },
+  };
+  const f = await fixture(t, {
+    agentKeys: store,
+    approvalLookup: async () => result,
+  });
+  const { client } = await f.start();
+  const call = () =>
+    client.callTool({
+      name: 'check_approval',
+      arguments: { approval_id: executionId },
+    });
+  const first = await call();
+  assert.equal(first.isError, true);
+  assert.equal(reads, 0);
+  assert.doesNotMatch(JSON.stringify(first), /synthetic-leaked-token/);
+  result = Object.assign(
+    Object.create({ agentId: 'agent-A', approvalId: executionId }),
+    { status: 'approved' },
+  );
+  assert.equal((await call()).isError, true);
 });

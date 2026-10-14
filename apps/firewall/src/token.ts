@@ -41,8 +41,55 @@ export function createTokenManager(options: TokenOptions = {}) {
       if (cached?.value === token) cached = undefined;
     },
     isSensitive(value: unknown) {
-      const text = JSON.stringify(value);
-      return [...secrets].some((secret) => text.includes(secret));
+      const seen = new Set<object>();
+      let nodes = 0;
+      let bytes = 0;
+      const sensitiveText = (text: string) => {
+        bytes += Buffer.byteLength(text);
+        return (
+          bytes > 1_048_576 ||
+          /\b(?:proxy-)?authorization\b\s*(?::|["']\s*:)|\b(?:Bearer|Basic)\s+\S+/i.test(
+            text,
+          ) ||
+          [...secrets].some(
+            (secret) =>
+              text.includes(secret) ||
+              text.includes(JSON.stringify(secret).slice(1, -1)),
+          )
+        );
+      };
+      const inspect = (entry: unknown, depth = 0): boolean => {
+        if (++nodes > 4096 || depth > 32) return true;
+        if (typeof entry === 'string') return sensitiveText(entry);
+        if (entry === null || typeof entry === 'boolean') return false;
+        if (typeof entry === 'number') return !Number.isFinite(entry);
+        if (typeof entry !== 'object' || seen.has(entry)) return true;
+        seen.add(entry);
+        for (const key of Reflect.ownKeys(entry)) {
+          if (
+            typeof key !== 'string' ||
+            sensitiveText(key) ||
+            /^(?:proxy-)?authorization$/i.test(key)
+          )
+            return true;
+          if (Array.isArray(entry) && key === 'length') continue;
+          const field = Object.getOwnPropertyDescriptor(entry, key);
+          if (
+            !field ||
+            !field.enumerable ||
+            !('value' in field) ||
+            inspect(field.value, depth + 1)
+          )
+            return true;
+        }
+        seen.delete(entry);
+        return false;
+      };
+      try {
+        return inspect(value);
+      } catch {
+        return true;
+      }
     },
   };
 }

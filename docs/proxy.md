@@ -29,6 +29,11 @@ This establishes the SSE and REST execution path, not hosted upstream HTTP compa
 
 ## Start
 
+For per-agent hash-only authentication and tool filtering, use the injected
+storage contract in [agent authentication](agent-auth.md). The CLI below remains
+the explicit single-agent compatibility mode; a configured agent store disables
+that local-key fallback. Policy/audit/ownership integration remains separate.
+
 Load the sandbox credentials privately as described in [sandbox setup](sandbox.md).
 Generate a local key in that shell and start the server:
 
