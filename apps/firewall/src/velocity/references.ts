@@ -4,18 +4,13 @@ function invalid(): never {
   throw new Error('Invalid audit rule references.');
 }
 
-// Positions refer to the immutable policy content identified by policyVersion.
-export function encodeRuleReferences(
-  rules: readonly Rule[],
-  ids: readonly string[],
-): string[] {
-  const positions = new Map(rules.map((rule, index) => [rule.id, index]));
+function encodePositions(positions: readonly number[]): string[] {
   const chunks: string[] = [];
   let chunk = prefix;
   let previous = -1;
-  for (const id of ids) {
-    const position = positions.get(id);
-    if (position === undefined || position <= previous) invalid();
+  for (const position of positions) {
+    if (!Number.isSafeInteger(position) || position < 0 || position <= previous)
+      invalid();
     previous = position;
     const token = `:${position.toString(36)}`;
     if (chunk.length + token.length > 128) {
@@ -29,12 +24,9 @@ export function encodeRuleReferences(
   return chunks;
 }
 
-export function decodeRuleReferences(
-  rules: readonly Rule[],
-  refs: readonly string[],
-): string[] {
-  if (refs.length > 128) invalid();
-  const ids: string[] = [];
+export function parseRuleReferences(refs: readonly string[]): number[] {
+  if (!Array.isArray(refs) || refs.length > 128) invalid();
+  const positions: number[] = [];
   for (const ref of refs) {
     if (
       typeof ref !== 'string' ||
@@ -44,16 +36,33 @@ export function decodeRuleReferences(
       invalid();
     for (const token of ref.slice(prefix.length + 1).split(':')) {
       const position = Number.parseInt(token, 36);
-      const rule = rules[position];
-      if (!rule || position.toString(36) !== token) invalid();
-      ids.push(rule.id);
+      if (position.toString(36) !== token) invalid();
+      positions.push(position);
     }
   }
-  const canonical = encodeRuleReferences(rules, ids);
+  const canonical = encodePositions(positions);
   if (
     canonical.length !== refs.length ||
     canonical.some((v, i) => v !== refs[i])
   )
     invalid();
-  return ids;
+  return positions;
+}
+
+// Positions refer to the immutable policy content identified by policyVersion.
+export function encodeRuleReferences(
+  rules: readonly Rule[],
+  ids: readonly string[],
+): string[] {
+  const positions = new Map(rules.map((rule, index) => [rule.id, index]));
+  return encodePositions(ids.map((id) => positions.get(id) ?? invalid()));
+}
+
+export function decodeRuleReferences(
+  rules: readonly Rule[],
+  refs: readonly string[],
+): string[] {
+  return parseRuleReferences(refs).map(
+    (position) => rules[position]?.id ?? invalid(),
+  );
 }

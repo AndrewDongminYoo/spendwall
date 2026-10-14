@@ -14,7 +14,7 @@ const scope = {
   now,
   merchantRef: '1'.repeat(64),
   customerRef: '2'.repeat(64),
-  agentId: 'support',
+  agentId: 'agent:' + '8'.repeat(64),
   keyId: '3'.repeat(64),
 };
 function metadata(n = 1, changes = {}) {
@@ -43,7 +43,7 @@ function row(n = 1, changes = {}, meta = {}) {
     upstream_status: null,
     upstream_result_ref: null,
     policy_version: '7'.repeat(64),
-    matched_rules: ['limit'],
+    matched_rules: ['rules.v1:0'],
     resolved_ctx: { velocity: metadata(n, meta) },
     ...changes,
   };
@@ -67,8 +67,11 @@ test('velocity windows use integer cents and exclude the exact lower boundary', 
     row(3, { ts_ms: now - hour }, { usd_cents: 300 }),
     row(4, { ts_ms: now - hour + 1 }, { usd_cents: 400 }),
     row(5, {}, { usd_cents: 500 }),
-    row(6, { ts_ms: now - 168 * hour, agent_id: 'other' }),
-    row(7, { ts_ms: now - 168 * hour + 1, agent_id: 'other' }),
+    row(6, { ts_ms: now - 168 * hour, agent_id: 'agent:' + '9'.repeat(64) }),
+    row(7, {
+      ts_ms: now - 168 * hour + 1,
+      agent_id: 'agent:' + '9'.repeat(64),
+    }),
   ];
   assert.deepEqual(foldHistory(history, scope).agg, {
     refund_usd_24h: 14,
@@ -80,7 +83,7 @@ test('velocity windows use integer cents and exclude the exact lower boundary', 
 test('merchant, agent and customer scopes differ without cross-tenant leakage', () => {
   const history = [
     row(1),
-    row(2, { agent_id: 'other' }),
+    row(2, { agent_id: 'agent:' + '9'.repeat(64) }),
     row(3, {}, { customer_ref: 'a'.repeat(64) }),
     row(4, {}, { merchant_ref: 'b'.repeat(64) }),
   ];
@@ -145,6 +148,22 @@ test('explicit approval denial releases a reservation while uncertain execution 
 
 for (const [name, history] of [
   ['unscoped legacy allowance', [row(1, { resolved_ctx: {} })]],
+  ['raw rule name', [row(1, { matched_rules: ['limit'] })]],
+  ['raw audit agent label', [row(1, { agent_id: 'support' })]],
+  ['duplicate rule positions', [row(1, { matched_rules: ['rules.v1:0:0'] })]],
+  [
+    'noncanonical rule chunks',
+    [row(1, { matched_rules: ['rules.v1:0', 'rules.v1:1'] })],
+  ],
+  [
+    'changed lifecycle rule references',
+    [
+      pending(),
+      lifecycle(2, 'approval_decided', 'deny', {
+        matched_rules: ['rules.v1:1'],
+      }),
+    ],
+  ],
   ['future timestamp', [row(1, { ts_ms: now + 1 })]],
   ['changed key', [row(1, {}, { key_id: 'a'.repeat(64) })]],
   ['unsafe cents', [row(1, {}, { usd_cents: Number.MAX_SAFE_INTEGER + 1 })]],

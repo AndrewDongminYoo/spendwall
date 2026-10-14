@@ -103,7 +103,9 @@ This API does not execute payments, and a replay must not authorize another paym
 Pending reservations remain charged until a matching denial or confirmed successful execution.
 The stored `agent_id` is a domain-separated HMAC label, and `matched_rules` contains canonical `rules.v1` labels packing base-36 rule positions within the immutable policy version.
 This supports the context resolver's agent identifiers and arbitrary policy rule names without weakening the audit label contract.
-Results and exact retries return the original rule names; invalid, out-of-range, or excessive stored rule references deny.
+Results and exact retries return the original rule names.
+Every velocity history row must use bounded canonical rule references, and lifecycle rows must preserve the initial reference array exactly.
+Replay additionally checks positions against the supplied immutable policy; historical policy contents are not retrieved by this API.
 Lifecycle writers must copy the stored request metadata, audit agent label, and rule references, together with the original arguments, policy version, and approval UUID.
 Confirmed execution becomes one accepted contribution at execution time, rather than being added on top of the pending contribution.
 Accepted reservations use `(now - window, now]` for the 24-hour USD sum, one-hour agent count, and seven-day customer count.

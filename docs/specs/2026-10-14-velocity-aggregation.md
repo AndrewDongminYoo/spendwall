@@ -20,10 +20,13 @@ Both TypeScript and an owner-applied `002` migration validate this allowlist.
 Preserve the original payment redactor and fixed v1 event payload so existing hashes remain valid.
 No migration or backfill may rewrite existing events.
 Store the agent as an `agent:<64hex>` audit label while evaluating the unchanged trusted agent context.
+Reject typed velocity history without this canonical agent label rather than omitting its agent contribution.
 Persist matched rule positions as canonical `rules.v1:<base36 position>:...` chunks, each at most 128 characters with at most 128 chunks.
 Measure encoding capacity and deny safely on overflow.
 The trusted loader's content-hash `policyVersion` binds these positions to immutable policy content; replay decodes them back to the original rule names.
-Malformed, out-of-range, duplicate, unordered, or noncanonical references deny.
+Every velocity history row must have bounded canonical references; malformed, duplicate, unordered, or noncanonical references deny before aggregation.
+Lifecycle rows must preserve the initial reference array exactly.
+Replay additionally rejects positions outside the supplied policy; this API does not retrieve older policy contents for historical position resolution.
 Lifecycle writers copy the initial event's stored agent label and rule references.
 
 Only `create_refund` is in this reservation API's scope.

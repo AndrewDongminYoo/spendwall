@@ -344,6 +344,53 @@ test('Postgres velocity boundary', { skip: !url }, async (t) => {
     },
   );
   await t.test(
+    'invalid stored rule references deny before using history',
+    async (t) => {
+      for (const [name, references, lifecycle] of [
+        ['raw rule name', ['limit'], false],
+        ['raw agent label', ['rules.v1:0'], false],
+        ['duplicate positions', ['rules.v1:0:0'], false],
+        ['noncanonical chunks', ['rules.v1:0', 'rules.v1:1'], false],
+        ['changed lifecycle references', ['rules.v1:1'], true],
+      ]) {
+        await t.test(name, async (t) => {
+          const { app, service } = await fixture(t);
+          const loaded = policy('agg.refund_count_1h < 1', 'require_approval');
+          const input = request();
+          const first = await service.evaluateAndReserve(loaded, input);
+          assert.equal(first.decision, 'require_approval');
+          const initial = (
+            await app.query('SELECT * FROM audit.audit_events WHERE id=$1', [
+              first.receipt.id,
+            ])
+          ).rows[0];
+          await new AuditLog(app).append({
+            agentId: name === 'raw agent label' ? 'support' : initial.agent_id,
+            tool: 'create_refund',
+            args: input.context.args,
+            resolvedCtx: input.resolvedCtx,
+            matchedRules: references,
+            policyVersion: first.policyVersion,
+            latencyMs: 0,
+            velocity: lifecycle
+              ? initial.resolved_ctx.velocity
+              : { ...initial.resolved_ctx.velocity, request_id: randomUUID() },
+            decision: lifecycle ? 'deny' : 'allow',
+            eventKind: lifecycle ? 'approval_decided' : 'tool_call',
+            ...(lifecycle ? { approvalId: first.approvalId } : {}),
+          });
+          const result = await service.evaluateAndReserve(
+            policy('true'),
+            request(),
+          );
+          assert.equal(result.decision, 'deny');
+          assert.equal(result.reason, 'velocity_unavailable');
+          assert.equal((await verifyAudit(app)).count, 2);
+        });
+      }
+    },
+  );
+  await t.test(
     'pending approval reserves capacity and same request is not counted twice',
     async (t) => {
       const { app, service } = await fixture(t);

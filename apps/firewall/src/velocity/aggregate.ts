@@ -1,6 +1,7 @@
 import { parseVelocityMetadata } from '../audit/velocity.ts';
 import type { VelocityMetadata } from '../audit/velocity.ts';
 import type { PolicyDecision } from '../../../../packages/policy/src/index.ts';
+import { parseRuleReferences } from './references.ts';
 
 export type HistoryRow = {
   id: string;
@@ -65,7 +66,9 @@ export function foldHistory(rows: readonly HistoryRow[], scope: VelocityScope) {
       if (row.decision === 'deny' && row.resolved_ctx.velocity === undefined)
         continue;
       const metadata = parseVelocityMetadata(row.resolved_ctx.velocity);
+      parseRuleReferences(row.matched_rules);
       if (
+        !/^agent:[a-f0-9]{64}$/.test(row.agent_id) ||
         metadata.key_id !== scope.keyId ||
         !Number.isSafeInteger(row.ts_ms) ||
         row.ts_ms < 0 ||
@@ -112,6 +115,10 @@ export function foldHistory(rows: readonly HistoryRow[], scope: VelocityScope) {
         row.agent_id !== existing.initial.agent_id ||
         row.args_hash !== existing.initial.args_hash ||
         row.policy_version !== existing.initial.policy_version ||
+        row.matched_rules.length !== existing.initial.matched_rules.length ||
+        row.matched_rules.some(
+          (rule, index) => rule !== existing.initial.matched_rules[index],
+        ) ||
         Object.keys(metadata).some(
           (key) =>
             metadata[key as keyof VelocityMetadata] !==
