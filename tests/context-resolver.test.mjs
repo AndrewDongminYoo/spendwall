@@ -680,3 +680,88 @@ test('caller mutations after a lookup starts cannot alter the pending policy amo
   assert.equal(result.amount.usd, 10);
   assert.equal(result.context.customer.vip, false);
 });
+
+test('malformed capture, refund and invoice statuses deny instead of coercing strings', async (t) => {
+  for (const kind of ['capture', 'refund', 'invoice'])
+    await t.test(kind, async (t) => {
+      const f = await fixture(t);
+      if (kind === 'capture') {
+        f.capture.status = ['PARTIALLY_REFUNDED'];
+        f.order.purchase_units[0].payments.captures[0].status = [
+          'PARTIALLY_REFUNDED',
+        ];
+      } else if (kind === 'refund') {
+        const extra = structuredClone(
+          f.order.purchase_units[0].payments.refunds[0],
+        );
+        extra.id = 'REFUND987654321012';
+        extra.status = ['COMPLETED'];
+        extra.amount = money('30.00');
+        f.order.purchase_units[0].payments.refunds.push(extra);
+      } else f.invoice.status = ['DRAFT'];
+      const result =
+        kind === 'invoice'
+          ? await f.resolver.resolve(
+              { tool: 'send_invoice', args: { invoice_id: f.invoice.id } },
+              trusted,
+            )
+          : await f.resolve();
+      assert.equal(result.decision, 'deny');
+    });
+});
+
+test('sending denies saved invoice CC recipients and malformed recipient lists', async (t) => {
+  for (const recipients of [
+    ['other@example.invalid'],
+    'other@example.invalid',
+    [null],
+  ])
+    await t.test(JSON.stringify(recipients), async (t) => {
+      const f = await fixture(t);
+      f.invoice.additional_recipients = recipients;
+      const result = await f.resolver.resolve(
+        { tool: 'send_invoice', args: { invoice_id: f.invoice.id } },
+        trusted,
+      );
+      assert.equal(result.decision, 'deny');
+    });
+});
+
+test('cached capture and invoice resolutions deny invalidation before completion', async (t) => {
+  for (const kind of ['capture', 'invoice'])
+    await t.test(kind, async (t) => {
+      const f = await fixture(t);
+      const resolve =
+        kind === 'capture'
+          ? () => f.resolve()
+          : () =>
+              f.resolver.resolve(
+                { tool: 'send_invoice', args: { invoice_id: f.invoice.id } },
+                trusted,
+              );
+      assert.equal((await resolve()).ok, true);
+      const before = f.seen.length;
+      const pending = resolve();
+      if (kind === 'capture') f.resolver.invalidateCapture(captureId);
+      else f.resolver.invalidateInvoice(f.invoice.id);
+      assert.equal((await pending).decision, 'deny');
+      assert.equal(f.seen.length, before);
+      assert.equal((await resolve()).ok, true);
+      assert.ok(f.seen.length > before);
+    });
+});
+
+test('the complete policy envelope must fit the shared JSON budget', async (t) => {
+  const f = await fixture(t);
+  const identity = structuredClone(trusted);
+  identity.agent.description = 'a'.repeat(35_000);
+  assert.equal(
+    (
+      await f.resolve(
+        { capture_id: captureId, note_to_payer: 'n'.repeat(35_000) },
+        identity,
+      )
+    ).decision,
+    'deny',
+  );
+});

@@ -109,13 +109,16 @@ export class ContextResolver {
       identifier(agent.id);
       identifier(customer.id);
       customer.email = email(customer.email);
+      let assertCurrent = () => {};
       let amount;
       let resolvedCtx: JsonObject;
       if (tool === 'create_refund') {
         const id = identifier(args.capture_id, 15, 32);
-        const facts = await this.rest.facts(`capture:${id}`, (get) =>
+        const lease = await this.rest.facts(`capture:${id}`, (get) =>
           readRefund(get, id, String(this.merchant.id)),
         );
+        const facts = lease.value;
+        assertCurrent = lease.assertCurrent;
         amount = refundAmount(args, facts, String(customer.id));
         resolvedCtx = {
           capture: {
@@ -127,22 +130,27 @@ export class ContextResolver {
           },
         };
       } else {
-        const facts =
-          tool === 'create_invoice'
-            ? createInvoice(args, String(this.merchant.email))
-            : await this.rest.facts(
-                `invoice:${identifier(args.invoice_id, 1, 127)}`,
-                (get) =>
-                  readInvoice(
-                    get,
-                    String(args.invoice_id),
-                    String(this.merchant.email),
-                  ),
-              );
+        let facts;
+        if (tool === 'create_invoice') {
+          facts = createInvoice(args, String(this.merchant.email));
+        } else {
+          const lease = await this.rest.facts(
+            `invoice:${identifier(args.invoice_id, 1, 127)}`,
+            (get) =>
+              readInvoice(
+                get,
+                String(args.invoice_id),
+                String(this.merchant.email),
+              ),
+          );
+          facts = lease.value;
+          assertCurrent = lease.assertCurrent;
+        }
         if (
           facts.recipient !== customer.email ||
           (tool === 'send_invoice' &&
             (facts.status !== 'DRAFT' ||
+              facts.additionalRecipients !== 0 ||
               args.send_to_recipient === false ||
               (Array.isArray(args.additional_recipients) &&
                 args.additional_recipients.length > 0)))
@@ -167,6 +175,8 @@ export class ContextResolver {
         merchant: this.merchant,
         agg,
       };
+      snapshot(context);
+      assertCurrent();
       return freeze({
         ok: true,
         context,

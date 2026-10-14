@@ -64,7 +64,7 @@ must match server configuration. It performs no REST write or draft creation.
 
 Invoice reads use GET and reconcile line totals, shipping, currency and the
 reported amount, then bind invoicer and recipient. Sending context requires a
-DRAFT invoice and does not support added notification recipients or disabling
+DRAFT invoice with no saved CC recipients and does not support added notification recipients or disabling
 recipient delivery. It still performs only a GET; sending is a future execution
 integration. Taxes, discounts, fractional quantities, tips, partial payments,
 custom amounts and other unsupported pricing options fail closed. Zero reported
@@ -81,7 +81,8 @@ EUR 90.91 or KRW 140,001 yields USD 100.01.
 `result.amount` includes the independently computed `usd` for inspection.
 `result.context.amount` contains only `value` and `currency`, as required by the
 policy evaluator, which recomputes USD itself. A caller-provided USD field is
-rejected by the tool schema and cannot override the source amount.
+rejected by the tool schema and cannot override the source amount. The assembled
+policy envelope must also fit the shared inert-JSON size/depth budget.
 
 ## Cache and errors
 
@@ -93,6 +94,7 @@ Expired/reversed/invalid clocks and refresh failures never fall back to stale
 facts. Failed reads are not negatively cached.
 
 Call `invalidateCapture(id)` or `invalidateInvoice(id)` when related state changes.
+Every resolution rechecks a freshness/invalidation lease before returning, including cache hits.
 An invalidated in-flight read cannot return as a current resolution or repopulate
 the cache, and its cleanup cannot remove a newer in-flight lookup.
 

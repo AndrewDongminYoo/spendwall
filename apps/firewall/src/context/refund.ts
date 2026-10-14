@@ -18,9 +18,8 @@ export async function readRefund(
   const capture = object(await get(`/v2/payments/captures/${captureId}`));
   if (
     capture.id !== captureId ||
-    !['COMPLETED', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(
-      String(capture.status),
-    ) ||
+    typeof capture.status !== 'string' ||
+    !['COMPLETED', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(capture.status) ||
     object(capture.payee).merchant_id !== merchantId
   )
     fail();
@@ -65,7 +64,8 @@ export async function readRefund(
     const id = identifier(refund.id, 15, 32);
     if (
       ids.has(id) ||
-      !['COMPLETED', 'FAILED', 'CANCELLED'].includes(String(refund.status))
+      typeof refund.status !== 'string' ||
+      !['COMPLETED', 'FAILED', 'CANCELLED'].includes(refund.status)
     )
       fail();
     ids.add(id);
@@ -94,7 +94,7 @@ export async function readRefund(
   return {
     captureId,
     payerId,
-    status: String(capture.status),
+    status: capture.status,
     original,
     refunded: fromMinor(refunded, original.currency),
     remaining: fromMinor(original.minor - refunded, original.currency),

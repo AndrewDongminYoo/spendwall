@@ -8,7 +8,13 @@ export type RestOptions = {
   ttlMs?: number;
   timeoutMs?: number;
 };
-type Entry = { value: unknown; started: number; expires: number };
+type Entry = {
+  value: unknown;
+  started: number;
+  expires: number;
+  invalidated: boolean;
+};
+export type FactsLease<T> = { value: T; assertCurrent(): void };
 type Pending = { promise: Promise<unknown>; invalidated: boolean };
 
 export class ContextRest {
@@ -35,6 +41,8 @@ export class ContextRest {
   }
 
   invalidate(key: string) {
+    const cached = this.cache.get(key);
+    if (cached) cached.invalidated = true;
     this.cache.delete(key);
     const active = this.pending.get(key);
     if (active) {
@@ -43,18 +51,35 @@ export class ContextRest {
     }
   }
 
+  private lease<T>(entry: Entry): FactsLease<T> {
+    return {
+      value: entry.value as T,
+      assertCurrent: () => {
+        const clock = this.now();
+        if (
+          entry.invalidated ||
+          !Number.isSafeInteger(clock) ||
+          clock < entry.started ||
+          clock >= entry.expires
+        )
+          fail('stale_context');
+      },
+    };
+  }
+
   async facts<T>(
     key: string,
     load: (get: (path: string) => Promise<unknown>) => Promise<T>,
-  ): Promise<T> {
+  ): Promise<FactsLease<T>> {
     const clock = this.now();
     if (!Number.isSafeInteger(clock) || clock < 0) fail('stale_context');
     const cached = this.cache.get(key);
     if (cached && clock >= cached.started && clock < cached.expires)
-      return cached.value as T;
+      return this.lease<T>(cached);
+    if (cached) cached.invalidated = true;
     this.cache.delete(key);
     const active = this.pending.get(key);
-    if (active) return active.promise as Promise<T>;
+    if (active) return active.promise as Promise<FactsLease<T>>;
     if (this.pending.size >= 128) fail();
     const abort = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
@@ -133,20 +158,25 @@ export class ContextRest {
         completed >= clock + this.ttl
       )
         fail('stale_context');
-      if (this.cache.size >= 128)
-        this.cache.delete(this.cache.keys().next().value!);
+      if (this.cache.size >= 128) {
+        const oldest = this.cache.keys().next().value!;
+        this.cache.get(oldest)!.invalidated = true;
+        this.cache.delete(oldest);
+      }
       const safe = freeze(value);
-      this.cache.set(key, {
+      const entry: Entry = {
         value: safe,
         started: clock,
         expires: clock + this.ttl,
-      });
-      return safe;
+        invalidated: false,
+      };
+      this.cache.set(key, entry);
+      return this.lease<T>(entry);
     })();
     slot.promise = Promise.race([operation, expired]);
     this.pending.set(key, slot);
     try {
-      return (await slot.promise) as T;
+      return (await slot.promise) as FactsLease<T>;
     } finally {
       clearTimeout(timer!);
       if (this.pending.get(key) === slot) this.pending.delete(key);

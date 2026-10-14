@@ -7,6 +7,7 @@ export type InvoiceFacts = {
   id: string | null;
   status: string;
   recipient: string;
+  additionalRecipients: number;
   total: Money;
   itemTotal: Money;
   shipping: Money;
@@ -73,6 +74,7 @@ export function createInvoice(
     id: null,
     status: 'PROPOSED',
     recipient: recipient(args.primary_recipients),
+    additionalRecipients: 0,
     total,
     itemTotal,
     shipping,
@@ -87,6 +89,7 @@ export async function readInvoice(
   const invoice = object(await get(`/v2/invoicing/invoices/${id}`));
   if (
     invoice.id !== id ||
+    typeof invoice.status !== 'string' ||
     ![
       'DRAFT',
       'SCHEDULED',
@@ -100,7 +103,7 @@ export async function readInvoice(
       'MARKED_AS_PAID',
       'MARKED_AS_REFUNDED',
       'PAYMENT_PENDING',
-    ].includes(String(invoice.status)) ||
+    ].includes(invoice.status) ||
     email(object(invoice.invoicer).email_address) !== merchantEmail
   )
     fail();
@@ -160,10 +163,16 @@ export async function readInvoice(
     }
   }
   if (total.minor !== itemTotal.minor + shipping.minor) fail();
+  const additional = Object.hasOwn(invoice, 'additional_recipients')
+    ? invoice.additional_recipients
+    : [];
+  if (!Array.isArray(additional) || additional.length > 100) fail();
+  for (const address of additional) email(address);
   return {
     id,
-    status: String(invoice.status),
+    status: invoice.status,
     recipient: recipient(invoice.primary_recipients),
+    additionalRecipients: additional.length,
     total,
     itemTotal,
     shipping,
