@@ -28,7 +28,10 @@ or authorize execution.
 
 Token lifetime, start-time expiry calculation, refresh coalescing and the refund
 adapter remain intact. Sensitive results (known credentials/tokens or Authorization
-headers) are denied as a whole with constant errors. Logger remains disabled.
+headers) are denied as a whole with constant errors. Unknown Bearer-shaped text
+is denied case-insensitively across whitespace variants, even when this rejects
+ordinary prose such as bearer bonds; leak prevention takes priority over false
+positives. Logger remains disabled.
 Tests exercise real SDK/NestJS against loopback fixtures, log capture, short
 token expiry/coalescing and identical refund ID/body across the sole 401 retry.
 

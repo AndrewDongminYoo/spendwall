@@ -46,7 +46,7 @@ export function createTokenManager(options: TokenOptions = {}) {
       let bytes = 0;
       const credentialText = (text: string) => {
         for (const match of text.matchAll(
-          /\b(Bearer|Basic)[ \t]+([A-Za-z0-9+/_~.-]+={0,2})/gi,
+          /\b(Bearer|Basic)[\s\p{White_Space}]+([A-Za-z0-9+/_~.-]+={0,2})/giu,
         )) {
           const scheme = match[1]!.toLowerCase();
           const value = match[2]!;
@@ -59,7 +59,7 @@ export function createTokenManager(options: TokenOptions = {}) {
               decoded.includes(58)
             )
               return true;
-          } else if (match[1] === 'Bearer') return true;
+          } else if (scheme === 'bearer') return true;
         }
         return false;
       };

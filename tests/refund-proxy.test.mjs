@@ -679,6 +679,27 @@ test('approval without an injected store fails closed and is never sent upstream
 
 test('nested or textual Authorization headers and tokens never reach downstream or logs', async (t) => {
   for (const leak of [
+    ...['Bearer', 'BEARER', 'bearer', 'bEaReR'].flatMap((scheme) =>
+      [
+        ' ',
+        '\t',
+        '  ',
+        '\r\n',
+        '\u00a0',
+        '\u2003',
+        '\u0085',
+        '\v',
+        '\f',
+        '\ufeff',
+      ].map((space) => ({
+        content: [
+          {
+            type: 'text',
+            text: `${scheme}${space}synthetic-unknown-credential`,
+          },
+        ],
+      })),
+    ),
     { content: [{ type: 'text', text: 'Bearer abcdefghijklmnopqrstuvwx' }] },
     { content: [{ type: 'text', text: 'Bearer abc' }] },
     {
@@ -742,7 +763,7 @@ test('nested or textual Authorization headers and tokens never reach downstream 
       assert.equal(result.isError, true);
       assert.doesNotMatch(
         JSON.stringify(result) + output.join(''),
-        /private-paypal-token|header-only-secret|synthetic-other-token|tab-token|fake-secret|Authorization|ZmFrZS1jbGllbnQ6ZmFrZS1zZWNyZXQ=/i,
+        /private-paypal-token|header-only-secret|synthetic-other-token|synthetic-unknown-credential|tab-token|fake-secret|Authorization|ZmFrZS1jbGllbnQ6ZmFrZS1zZWNyZXQ=/i,
       );
     });
 });
@@ -814,8 +835,8 @@ test('approval lookup accessors and inherited identity fields deny without readi
   assert.equal((await call()).isError, true);
 });
 
-test('ordinary Basic and bearer prose is preserved in legitimate merchant results', async (t) => {
-  for (const text of ['Basic Plan', 'basic information', 'bearer bonds'])
+test('ordinary Basic prose remains supported', async (t) => {
+  for (const text of ['Basic Plan', 'basic information'])
     await t.test(text, async (t) => {
       const f = await fixture(t, {
         leak: { content: [{ type: 'text', text }] },
@@ -827,5 +848,25 @@ test('ordinary Basic and bearer prose is preserved in legitimate merchant result
       });
       assert.equal(result.isError, undefined);
       assert.equal(result.content[0].text, text);
+    });
+});
+
+test('ambiguous bearer prose is conservatively denied under the supported safety contract', async (t) => {
+  for (const text of [
+    'bearer bonds',
+    'Bearer Bonds',
+    'This description mentions bearer bonds.',
+  ])
+    await t.test(text, async (t) => {
+      const f = await fixture(t, {
+        leak: { content: [{ type: 'text', text }] },
+      });
+      const { client } = await f.start();
+      const result = await client.callTool({
+        name: 'get_order',
+        arguments: { id: orderIdForTest },
+      });
+      assert.equal(result.isError, true);
+      assert.doesNotMatch(JSON.stringify(result), /bonds/i);
     });
 });
