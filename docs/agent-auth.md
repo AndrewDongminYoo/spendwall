@@ -80,8 +80,10 @@ MCP writes are not automatically retried.
 
 Known credentials/tokens, nested Authorization headers and textual Bearer/Basic
 credentials cause whole-result denial with a constant message. Escaped secret
-strings are also checked. Standalone Basic values must decode as base64 user:password; standalone Bearer
-values must have an opaque credential shape. Ordinary prose such as `Basic Plan`,
+strings are also checked. Standalone Basic values must decode as base64 user:password; standalone canonical `Bearer`
+values are blocked regardless of length or alphabet. Lowercase plain prose is
+not interpreted as an unknown credential without explicit header syntax; known
+credentials remain blocked regardless of the surrounding text or scheme case. Ordinary prose such as `Basic Plan`,
 `basic information`, and `bearer bonds` is preserved. This guard can conservatively
 reject content with explicit header syntax; it never prints the rejected payload. NestJS logging remains
 disabled and errors expose no request headers or provider bodies.

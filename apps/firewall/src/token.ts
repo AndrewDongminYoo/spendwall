@@ -59,11 +59,7 @@ export function createTokenManager(options: TokenOptions = {}) {
               decoded.includes(58)
             )
               return true;
-          } else if (
-            value.length >= 32 ||
-            (value.length >= 8 && /[0-9+/_~.=-]/.test(value))
-          )
-            return true;
+          } else if (match[1] === 'Bearer') return true;
         }
         return false;
       };

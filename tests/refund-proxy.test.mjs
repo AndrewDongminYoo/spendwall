@@ -679,6 +679,8 @@ test('approval without an injected store fails closed and is never sent upstream
 
 test('nested or textual Authorization headers and tokens never reach downstream or logs', async (t) => {
   for (const leak of [
+    { content: [{ type: 'text', text: 'Bearer abcdefghijklmnopqrstuvwx' }] },
+    { content: [{ type: 'text', text: 'Bearer abc' }] },
     {
       content: [
         {
