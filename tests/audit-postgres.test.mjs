@@ -477,6 +477,7 @@ test('Postgres audit boundary', { skip: !url }, async (t) => {
       const otherApp = new pg.Pool({
         connectionString: otherAppUrl.toString(),
       });
+      let otherRole;
       try {
         await otherOwner.query(
           await readFile(
@@ -484,6 +485,8 @@ test('Postgres audit boundary', { skip: !url }, async (t) => {
             'utf8',
           ),
         );
+        otherRole = (await otherOwner.query('SELECT audit.app_role() AS name'))
+          .rows[0].name;
         await assert.rejects(
           otherApp.query('SELECT * FROM audit.audit_events'),
           (error) => error.code === '42501',
@@ -497,9 +500,6 @@ test('Postgres audit boundary', { skip: !url }, async (t) => {
             .rows[0].count,
           '0',
         );
-        const otherRole = (
-          await otherOwner.query('SELECT audit.app_role() AS name')
-        ).rows[0].name;
         await otherOwner.query(
           `GRANT ${pg.escapeIdentifier(otherRole)} TO audit_test_login`,
         );
@@ -512,7 +512,19 @@ test('Postgres audit boundary', { skip: !url }, async (t) => {
         await otherApp.end();
         await otherOwner.end();
         await owner.query('DROP DATABASE spendwall_audit_other_test');
+        if (otherRole)
+          await owner.query(`DROP ROLE ${pg.escapeIdentifier(otherRole)}`);
       }
+      assert.equal(
+        (
+          await owner.query(
+            'SELECT count(*) FROM pg_roles WHERE rolname = $1',
+            [otherRole],
+          )
+        ).rows[0].count,
+        '0',
+        'Secondary audit role must be removed for repeatable test runs',
+      );
     },
   );
 
