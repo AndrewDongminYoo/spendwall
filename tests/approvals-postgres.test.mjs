@@ -17,7 +17,7 @@ import { ApprovalService } from '../apps/firewall/src/approvals/index.ts';
 import { RefundExecutor } from '../apps/firewall/src/refunds.ts';
 import { foldHistory } from '../apps/firewall/src/velocity/aggregate.ts';
 import { verifyAudit } from '../apps/firewall/src/audit/index.ts';
-import { loadPolicy } from '../packages/policy/src/index.ts';
+import { evaluatePolicy, loadPolicy } from '../packages/policy/src/index.ts';
 
 const url = process.env.AUDIT_TEST_DATABASE_URL;
 const key = '7'.repeat(64),
@@ -226,6 +226,51 @@ async function pending(f, input = request()) {
 }
 
 test('Postgres approval boundary', { skip: !url }, async (t) => {
+  for (const subject of ['agent', 'customer', 'merchant'])
+    await t.test(
+      `changed policy-visible ${subject} attributes cannot execute`,
+      async (t) => {
+        const f = await fixture(t),
+          input = request();
+        input.context[subject].email = 'original@example.test';
+        const scopedPolicy = loadPolicy(
+          JSON.stringify({
+            agents: {
+              support: { tools: { allow: ['create_refund'], deny: [] } },
+            },
+            rules: [
+              { id: 'manual', when: 'true', then: 'require_approval' },
+              {
+                id: 'changed-attribute',
+                when: `${subject}.email != "original@example.test"`,
+                then: 'deny',
+              },
+            ],
+            default: 'deny',
+          }),
+        );
+        const pending = await f.service.request(scopedPolicy, input);
+        assert.equal(pending.status, 'pending_approval');
+        const changed = structuredClone(input);
+        changed.context[subject].email = 'changed@example.test';
+        assert.equal(
+          evaluatePolicy(scopedPolicy, changed.context).decision,
+          'deny',
+        );
+        await assert.rejects(
+          f.service.approve(pending.approval_id, scopedPolicy, changed),
+          /Approval unavailable/,
+        );
+        assert.equal(f.seen.posts.length, 0);
+        assert.equal((await verifyAudit(f.app)).count, 2);
+        assert.equal(
+          (await f.service.approve(pending.approval_id, scopedPolicy, input))
+            .execution_state,
+          'succeeded',
+        );
+        assert.equal(f.seen.posts.length, 1);
+      },
+    );
   await t.test(
     'the database rejects a pending approval jumping straight to success',
     async (t) => {

@@ -17,6 +17,9 @@ export type PreparedApproval = {
     agentId: string;
     customerId: string;
     merchantId: string;
+    agent: JsonObject;
+    customer: JsonObject;
+    merchant: JsonObject;
     amount: { value: string; currency_code: 'USD' };
     policyVersion: string;
     adapter: string;
@@ -130,6 +133,9 @@ export function prepareApproval(
         agentId,
         customerId,
         merchantId,
+        agent,
+        customer,
+        merchant: owner,
         amount: money,
         policyVersion,
         adapter,

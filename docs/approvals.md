@@ -44,6 +44,8 @@ Never replace a failed request with another UUID merely to bypass reserved capac
 
 A trusted human-decision caller invokes `approve(id, currentPolicy, currentResolvedInput)` or `deny(id, trustedAgentId)`.
 Approval verifies the fresh normalized binding against the encrypted stored request, then atomically commits approval, one execution UUID and the audit decision before sending the stored executable request.
+The binding includes every trusted agent, customer and merchant attribute, including nested fields; changed policy-visible facts require a new decision rather than using the old approval.
+Caller aggregate hints do not replace the original audit-backed capacity reservation.
 The call may wait on the execution adapter; the original MCP refund request does not wait for a human decision.
 Approval and execution claim are one transaction, so an approved-but-unclaimed state is impossible.
 A pending approval at the exact deadline becomes expired and cannot execute.

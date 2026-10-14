@@ -19,6 +19,8 @@ Reject conflicting argument/context amounts.
 ## Binding and private persistence
 
 Bind normalized arguments, merchant, capture, customer, agent, amount/currency, immutable policy version, and the executor's sandbox application identity.
+Bind the complete trusted agent, customer and merchant objects, including nested policy-visible attributes; matching IDs alone cannot authorize changed facts.
+Velocity aggregates remain owned by the original audit-backed reservation rather than caller-supplied aggregate hints.
 Source identity comes from the real executor's persisted client-ID hash, not caller arguments.
 Persist authenticated encrypted request/result snapshots separately from the append-only redacted audit history.
 Derive encryption and reference keys in separate domains from the configured server key.

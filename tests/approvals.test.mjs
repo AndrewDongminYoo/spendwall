@@ -59,6 +59,15 @@ test('approval binding changes for every execution authority field', () => {
     (p) => {
       p.context.args.note_to_payer = 'changed';
     },
+    (p) => {
+      p.context.agent.email = 'changed@example.test';
+    },
+    (p) => {
+      p.context.customer.email = 'changed@example.test';
+    },
+    (p) => {
+      p.context.merchant.email = 'changed@example.test';
+    },
   ]) {
     const p = input();
     change(p);
@@ -83,4 +92,24 @@ test('private approval snapshots authenticate the key, row binding and ciphertex
     new ApprovalKeys('8'.repeat(64)).open(sealed, 'approval-1'),
   );
   assert.throws(() => keys.open(sealed.slice(0, -2), 'approval-1'));
+});
+
+test('nested trusted identity attributes are part of the approval binding', () => {
+  const keys = new ApprovalKeys('7'.repeat(64));
+  for (const subject of ['agent', 'customer', 'merchant']) {
+    const original = input();
+    original.context[subject].attributes = { eligibility: 'review' };
+    const changed = structuredClone(original);
+    changed.context[subject].attributes.eligibility = 'blocked';
+    assert.notEqual(
+      keys.reference(
+        'binding',
+        prepareApproval(version, original, 'merchantA', adapter).binding,
+      ),
+      keys.reference(
+        'binding',
+        prepareApproval(version, changed, 'merchantA', adapter).binding,
+      ),
+    );
+  }
 });
