@@ -683,6 +683,15 @@ test('nested or textual Authorization headers and tokens never reach downstream 
       content: [
         {
           type: 'text',
+          text: `Basic ${Buffer.from('synthetic-other-user:synthetic-pass').toString('base64')}`,
+        },
+      ],
+    },
+    { content: [{ type: 'text', text: `Bearer ${'a'.repeat(32)}` }] },
+    {
+      content: [
+        {
+          type: 'text',
           text: JSON.stringify({ Authorization: 'synthetic-other-token' }),
         },
       ],
@@ -801,4 +810,20 @@ test('approval lookup accessors and inherited identity fields deny without readi
     { status: 'approved' },
   );
   assert.equal((await call()).isError, true);
+});
+
+test('ordinary Basic and bearer prose is preserved in legitimate merchant results', async (t) => {
+  for (const text of ['Basic Plan', 'basic information', 'bearer bonds'])
+    await t.test(text, async (t) => {
+      const f = await fixture(t, {
+        leak: { content: [{ type: 'text', text }] },
+      });
+      const { client } = await f.start();
+      const result = await client.callTool({
+        name: 'get_order',
+        arguments: { id: orderIdForTest },
+      });
+      assert.equal(result.isError, undefined);
+      assert.equal(result.content[0].text, text);
+    });
 });

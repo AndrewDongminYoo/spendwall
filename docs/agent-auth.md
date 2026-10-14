@@ -79,9 +79,11 @@ refresh among concurrent callers. Only the refund execution adapter can retry a
 MCP writes are not automatically retried.
 
 Known credentials/tokens, nested Authorization headers and textual Bearer/Basic
-headers cause whole-result denial with a constant message. Escaped secret
-strings are also checked. This guard can conservatively reject content that
-mentions a header; it never prints the rejected payload. NestJS logging remains
+credentials cause whole-result denial with a constant message. Escaped secret
+strings are also checked. Standalone Basic values must decode as base64 user:password; standalone Bearer
+values must have an opaque credential shape. Ordinary prose such as `Basic Plan`,
+`basic information`, and `bearer bonds` is preserved. This guard can conservatively
+reject content with explicit header syntax; it never prints the rejected payload. NestJS logging remains
 disabled and errors expose no request headers or provider bodies.
 
 Tests use synthetic keys/tokens/query results and loopback SDK/REST fixtures.

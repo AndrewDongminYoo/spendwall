@@ -44,13 +44,35 @@ export function createTokenManager(options: TokenOptions = {}) {
       const seen = new Set<object>();
       let nodes = 0;
       let bytes = 0;
+      const credentialText = (text: string) => {
+        for (const match of text.matchAll(
+          /\b(Bearer|Basic)[ \t]+([A-Za-z0-9+/_~.-]+={0,2})/gi,
+        )) {
+          const scheme = match[1]!.toLowerCase();
+          const value = match[2]!;
+          if (scheme === 'basic') {
+            if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value)) continue;
+            const decoded = Buffer.from(value, 'base64');
+            if (
+              decoded.toString('base64').replace(/=+$/, '') ===
+                value.replace(/=+$/, '') &&
+              decoded.includes(58)
+            )
+              return true;
+          } else if (
+            value.length >= 32 ||
+            (value.length >= 8 && /[0-9+/_~.=-]/.test(value))
+          )
+            return true;
+        }
+        return false;
+      };
       const sensitiveText = (text: string) => {
         bytes += Buffer.byteLength(text);
         return (
           bytes > 1_048_576 ||
-          /\b(?:proxy-)?authorization\b\s*(?::|["']\s*:)|\b(?:Bearer|Basic)\s+\S+/i.test(
-            text,
-          ) ||
+          /\b(?:proxy-)?authorization\b\s*(?::|["']\s*:)/i.test(text) ||
+          credentialText(text) ||
           [...secrets].some(
             (secret) =>
               text.includes(secret) ||
