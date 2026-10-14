@@ -86,7 +86,30 @@ export function createTokenManager(options: TokenOptions = {}) {
       };
       const inspect = (entry: unknown, depth = 0): boolean => {
         if (++nodes > 4096 || depth > 32) return true;
-        if (typeof entry === 'string') return sensitiveText(entry);
+        if (typeof entry === 'string') {
+          if (sensitiveText(entry)) return true;
+          if (!/^[\s\p{White_Space}]*[{\["]/u.test(entry)) return false;
+          let decoded: unknown;
+          try {
+            decoded = JSON.parse(entry);
+          } catch {
+            return false;
+          }
+          // JSON.parse drops duplicate-key values; inspect original literals too.
+          for (const literal of entry.matchAll(/"(?:[^"\\]|\\.)*"/gu)) {
+            const text: unknown = JSON.parse(literal[0]);
+            if (
+              (typeof text === 'string' &&
+                credentialField.test(text) &&
+                /^[\s\p{White_Space}]*:/u.test(
+                  entry.slice(literal.index + literal[0].length),
+                )) ||
+              inspect(text, depth + 1)
+            )
+              return true;
+          }
+          return inspect(decoded, depth + 1);
+        }
         if (entry === null || typeof entry === 'boolean') return false;
         if (typeof entry === 'number') return !Number.isFinite(entry);
         if (typeof entry !== 'object' || seen.has(entry)) return true;

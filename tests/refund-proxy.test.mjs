@@ -680,6 +680,38 @@ test('approval without an injected store fails closed and is never sent upstream
 test('nested or textual Authorization headers and tokens never reach downstream or logs', async (t) => {
   for (const leak of [
     ...[
+      String.raw`{"data":"pri\u0076ate-paypal-token","data":"safe"}`,
+      String.raw`{"data":"BEA\u0052ER synthetic-unfamiliar-credential","data":"safe"}`,
+      String.raw`{"data":{"access\u005ftoken":"synthetic-unfamiliar-credential"},"data":"safe"}`,
+    ].flatMap((text) => {
+      assert.equal(JSON.parse(text).data, 'safe');
+      return [text, JSON.stringify(text)].map((text) => ({
+        content: [{ type: 'text', text }],
+      }));
+    }),
+    ...['access_token', 'refresh_token', 'client_secret'].flatMap((field) => {
+      const escaped = JSON.stringify({
+        [field]: 'synthetic-unfamiliar-credential',
+      }).replace(field, field.replace('_', '\\u005f'));
+      assert.ok(Object.hasOwn(JSON.parse(escaped), field));
+      return [escaped, JSON.stringify(escaped)].map((text) => ({
+        content: [{ type: 'text', text }],
+      }));
+    }),
+    {
+      content: [
+        { type: 'text', text: String.raw`"pri\u0076ate-paypal-token"` },
+      ],
+    },
+    {
+      content: [
+        {
+          type: 'text',
+          text: String.raw`"BEA\u0052ER synthetic-unknown-credential"`,
+        },
+      ],
+    },
+    ...[
       'access_token',
       'refresh_token',
       'client_secret',
@@ -867,8 +899,12 @@ test('approval lookup accessors and inherited identity fields deny without readi
   assert.equal((await call()).isError, true);
 });
 
-test('ordinary Basic prose remains supported', async (t) => {
-  for (const text of ['Basic Plan', 'basic information'])
+test('ordinary Basic prose and benign JSON metadata remain supported', async (t) => {
+  for (const text of [
+    'Basic Plan',
+    'basic information',
+    JSON.stringify({ token_type: 'Bearer', expires_in: 120, count: 2 }),
+  ])
     await t.test(text, async (t) => {
       const f = await fixture(t, {
         leak: { content: [{ type: 'text', text }] },

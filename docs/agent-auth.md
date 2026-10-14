@@ -84,7 +84,12 @@ strings are also checked. Credential-bearing fields are rejected regardless of
 whether their values were issued locally: access/refresh/ID tokens, client
 secrets, API keys, password/secret/token, and Authorization/Proxy-Authorization.
 The guard recognizes underscore, hyphen and camel-case spellings in object keys
-and quoted textual JSON/header syntax. It never interprets a secret-labelled
+and quoted textual JSON/header syntax. Valid JSON-looking string payloads are
+also decoded and checked recursively under the same depth, node and byte budgets,
+including every original JSON string literal before duplicate-key values can
+be discarded. Unicode-escaped keys/values, overwritten duplicate-key values and
+nested JSON string encodings cannot hide a supported credential field or token.
+Invalid JSON remains subject to the raw text/header/known-secret checks. It never interprets a secret-labelled
 value as harmless metadata. Standalone Basic values must decode as base64
 user:password. Unknown Bearer-shaped values are denied regardless of scheme case,
 token length or alphabet, including repeated spaces, tabs, line breaks and
