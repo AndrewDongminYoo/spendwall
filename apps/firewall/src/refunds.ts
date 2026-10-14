@@ -257,6 +257,18 @@ function validateLedger(value: unknown, clientIdHash: string): Ledger {
 }
 
 export class RefundExecutor {
+  get identity(): string {
+    return this.ledger.clientIdHash;
+  }
+  reconcile(executionId: string, value: unknown): Promise<RefundResult> {
+    if (this.closed)
+      return Promise.reject(new Error('Refund executor is closed.'));
+    const result = this.queue.then(() =>
+      this.executeOne(executionId, value, true),
+    );
+    this.queue = result.catch(() => {});
+    return result;
+  }
   private options: Options;
   private ledger: Ledger;
   private lock: FileHandle;
@@ -344,9 +356,16 @@ export class RefundExecutor {
     path: string,
     body?: RefundBody,
     executionId?: string,
+    notAfter?: number,
   ): Promise<{ status: number; data: unknown }> {
     for (let attempt = 0; attempt < 2; attempt++) {
       const token = await this.tokens.get();
+      if (
+        body &&
+        notAfter !== undefined &&
+        (this.options.now ?? Date.now)() >= notAfter
+      )
+        throw new Error('Refund recovery deadline reached.');
       const response = await (this.options.fetchImpl ?? fetch)(
         `${api}${path}`,
         {
@@ -376,10 +395,22 @@ export class RefundExecutor {
     throw new Error('PayPal authentication failed.');
   }
 
-  execute(executionId: string, value: unknown): Promise<RefundResult> {
+  execute(
+    executionId: string,
+    value: unknown,
+    options: { notAfter?: number } = {},
+  ): Promise<RefundResult> {
     if (this.closed)
       return Promise.reject(new Error('Refund executor is closed.'));
-    const result = this.queue.then(() => this.executeOne(executionId, value));
+    const deadline = options.notAfter;
+    if (
+      deadline !== undefined &&
+      (!Number.isSafeInteger(deadline) || deadline < 0)
+    )
+      return Promise.reject(new Error('Invalid refund recovery deadline.'));
+    const result = this.queue.then(() =>
+      this.executeOne(executionId, value, false, deadline),
+    );
     this.queue = result.catch(() => {});
     return result;
   }
@@ -387,6 +418,8 @@ export class RefundExecutor {
   private async executeOne(
     executionId: string,
     value: unknown,
+    queryOnly = false,
+    notAfter?: number,
   ): Promise<RefundResult> {
     if (this.persistenceFailed)
       throw new Error(
@@ -397,13 +430,15 @@ export class RefundExecutor {
     executionId = executionId.toLowerCase();
     const args = normalizeArgs(value);
     let entry = this.ledger.executions[executionId];
+    if (queryOnly && !entry?.result)
+      throw new Error('Known refund required for read-only reconciliation.');
     const now = (this.options.now ?? Date.now)();
     if (entry) {
       if (canonical(entry.args) !== canonical(args))
         throw new Error('Execution ID is bound to different refund arguments.');
-      if (entry.status === 'completed' && entry.result)
+      if (!queryOnly && entry.status === 'completed' && entry.result)
         return structuredClone(entry.result);
-      if (entry.status === 'failed')
+      if (entry.status === 'failed' && !entry.result)
         throw new Error(
           'Refund execution failed; reconcile before creating another operation.',
         );
@@ -458,6 +493,7 @@ export class RefundExecutor {
             `/v2/payments/captures/${args.capture_id}/refund`,
             entry.body,
             executionId,
+            notAfter,
           );
     } catch {
       throw new Error(unknownMessage);

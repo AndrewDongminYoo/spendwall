@@ -60,6 +60,7 @@ try {
         '--test-concurrency=1',
         'tests/audit-postgres.test.mjs',
         'tests/velocity-postgres.test.mjs',
+        'tests/approvals-postgres.test.mjs',
       ],
       {
         stdio: 'inherit',
