@@ -72,6 +72,50 @@ call sites must handle failures before authorizing a side effect and append a
 separate outcome event, including uncertain upstream outcomes. Do not silently
 drop a failed audit append or claim the current proxy is integrated.
 
+## Velocity reservations
+
+The server-side [velocity contract](specs/2026-10-14-velocity-aggregation.md) requires the owner to apply `migrations/002-velocity.sql` after `001-audit.sql`.
+The extension preserves the original payment redactor and existing v1 event hashes.
+It adds a strict `velocity` object inside `resolved_ctx`; it does not add unhashed columns or rewrite historical rows.
+The optional `AuditEvent.velocity` input carries validated server metadata separately from arbitrary arguments and context.
+Raw context cannot inject this object through the TypeScript API.
+
+```ts
+import { VelocityPolicy } from './velocity/index.ts';
+
+const velocity = new VelocityPolicy(pool, { identityKey: serverIdentityKey });
+const result = await velocity.evaluateAndReserve(policy, {
+  requestId: serverRequestId,
+  context: resolution.context,
+  resolvedCtx: resolution.resolvedCtx,
+});
+```
+
+The request UUID must remain stable across network retries.
+Supply the trusted identities and payment facts from the server, and configure a stable unpredictable 32-byte HMAC key as 64 hexadecimal characters.
+Never accept these values from agent arguments.
+Configure the supplied pool with a bounded connection timeout appropriate for the server.
+Missing or malformed key configuration rejects construction with a constant error.
+The service replaces caller-supplied `agg` with audit-backed values, serializes reservations by merchant, and commits the decision and reservation together.
+An identical binding and policy version returns the original decision and receipt with `replayed: true`; changed bindings deny without another reservation.
+This API does not execute payments, and a replay must not authorize another payment execution.
+
+Pending reservations remain charged until a matching denial or confirmed successful execution.
+The stored `agent_id` is a domain-separated HMAC label, and `matched_rules` contains canonical `rules.v1` labels packing base-36 rule positions within the immutable policy version.
+This supports the context resolver's agent identifiers and arbitrary policy rule names without weakening the audit label contract.
+Results and exact retries return the original rule names.
+Every velocity history row must use bounded canonical rule references, and lifecycle rows must preserve the initial reference array exactly.
+Replay additionally checks positions against the supplied immutable policy; historical policy contents are not retrieved by this API.
+Lifecycle writers must copy the stored request metadata, audit agent label, and rule references, together with the original arguments, policy version, and approval UUID.
+Confirmed execution becomes one accepted contribution at execution time, rather than being added on top of the pending contribution.
+Accepted reservations use `(now - window, now]` for the 24-hour USD sum, one-hour agent count, and seven-day customer count.
+The customer count spans agents within the same trusted merchant.
+Raw merchant/customer IDs and emails are replaced with domain-separated HMAC references.
+Key rotation is unsupported; a continuity-tag mismatch fails closed rather than hiding prior usage.
+Unscoped legacy allowed/pending refund rows, invalid lifecycle history, missing migration, and a history larger than the 10,000-row safety budget also deny.
+The bounded prototype requires a separate operational follow-up before that database history budget is reached.
+No approval writer, live payment execution, or proxy wiring is included in #8.
+
 ## Sensitive data and hashes
 
 The module accepts inert JSON, rejects unsupported values/accessors/cycles,
@@ -133,7 +177,8 @@ random port, a test-only database and synthetic data; it removes that container
 when finished. It does not reuse the Compose volume or a configured app URL.
 Docker must be available; missing Docker fails rather than pretending to pass.
 `pnpm test` runs the general suite and this disposable runner, so the existing
-CI test step also exercises PostgreSQL. Direct `node --test` skips the database
+CI test step also exercises PostgreSQL. The runner executes audit and velocity files serially against its disposable database.
+Direct `node --test` skips the database
 suite unless a dedicated local `AUDIT_TEST_DATABASE_URL` is provided; the runner
 is the normal way to execute it. Do not supply an existing/production database:
 the tests drop their audit schema.
