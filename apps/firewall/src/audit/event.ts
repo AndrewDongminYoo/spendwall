@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { parseVelocityMetadata } from './velocity.ts';
+import type { VelocityMetadata } from './velocity.ts';
 
 export type Json =
   null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -16,6 +18,7 @@ export type AuditEvent = {
   upstreamStatus?: number;
   upstreamResultRef?: string;
   latencyMs: number;
+  velocity?: VelocityMetadata;
 };
 
 function invalid(): never {
@@ -118,7 +121,7 @@ function money(value: Json): Json | undefined {
 }
 
 // Traverse only fixed payment containers; never persist arbitrary wrapper names.
-function redact(value: Json): Json {
+function redact(value: Json): { [key: string]: Json } {
   const safe: { [key: string]: Json } = {};
   if (value === null || typeof value !== 'object' || Array.isArray(value))
     return safe;
@@ -226,12 +229,15 @@ export function prepareEvent(input: AuditEvent) {
     invalid();
   const approval = uuid(input.approvalId);
   if (input.eventKind !== 'tool_call' && !approval) invalid();
+  const safeContext = redact(context);
+  if (input.velocity !== undefined)
+    safeContext.velocity = parseVelocityMetadata(input.velocity);
   return {
     agent_id: label(input.agentId),
     tool: label(input.tool),
     args_redacted: redact(args),
     args_hash: createHash('sha256').update(original).digest('hex'),
-    resolved_ctx: redact(context),
+    resolved_ctx: safeContext,
     decision: input.decision,
     matched_rules: input.matchedRules.map(label),
     policy_version: input.policyVersion,

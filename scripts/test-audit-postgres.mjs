@@ -55,7 +55,12 @@ try {
   process.exitCode = await new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
-      ['--test', 'tests/audit-postgres.test.mjs'],
+      [
+        '--test',
+        '--test-concurrency=1',
+        'tests/audit-postgres.test.mjs',
+        'tests/velocity-postgres.test.mjs',
+      ],
       {
         stdio: 'inherit',
         env: { ...process.env, AUDIT_TEST_DATABASE_URL: url },
