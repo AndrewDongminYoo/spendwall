@@ -54,6 +54,7 @@ Preserve CEL short-circuiting: `true || (1 / 0 > 0)` does not attempt division a
 `has(customer.optional)` is a presence check, so a missing final optional property produces false rather than an access error.
 Missing required envelope fields are always rejected before CEL, including when a condition is simply true.
 Limit each rule evaluation to 10,000 runtime node visits; this is a deterministic operation bound, not a wall-clock timeout.
+Reject policy calls to the private `spendwall_observe` macro anywhere in the user AST, including unreachable branches and quantifier bodies, so policy text cannot create another evaluation budget.
 Retain the original source-text, user-AST depth, and AST-size limits from #6, excluding the private observation wrapper.
 
 ## Demo amount normalization

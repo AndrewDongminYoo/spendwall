@@ -23,7 +23,7 @@ class Outcome {
   }
 }
 
-function checkAstDepth(ast: ASTNode): void {
+function validateUserAst(ast: ASTNode): void {
   const pending: { value: unknown; depth: number }[] = [
     { value: ast, depth: 0 },
   ];
@@ -38,6 +38,12 @@ function checkAstDepth(ast: ASTNode): void {
       'args' in value
     ) {
       if (depth > 64) throw new Error('Excessive CEL AST depth.');
+      if (
+        value.op === 'call' &&
+        Array.isArray(value.args) &&
+        value.args[0] === 'spendwall_observe'
+      )
+        throw new Error('Policy cannot call the internal CEL observer.');
       if (value.op !== 'value' && value.op !== 'id')
         pending.push({ value: value.args, depth: depth + 1 });
     }
@@ -100,7 +106,7 @@ const cel = new Environment({
   ({ args }: { args: ASTNode[] }) => {
     if (args.length !== 1) throw new Error('Invalid internal CEL wrapper.');
     const ast = args[0]!;
-    checkAstDepth(ast);
+    validateUserAst(ast);
     return {
       args,
       async: false,

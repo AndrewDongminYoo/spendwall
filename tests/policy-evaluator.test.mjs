@@ -431,6 +431,24 @@ test('does not let malformed source escape the private CEL wrapper', () => {
   );
 });
 
+for (const when of [
+  'spendwall_observe(true).value',
+  'true || spendwall_observe(true).value',
+  '[spendwall_observe(true).value][0]',
+  'args.items.all(x, spendwall_observe(x > 0).value)',
+]) {
+  test(`rejects policy calls to the private observer: ${when}`, () => {
+    assert.throws(() => policy([{ ...allow, when }]), /\$\.rules\[0\]\.when/);
+  });
+}
+
+test('permits the private observer name as ordinary string data', () => {
+  const loaded = policy([
+    { ...allow, when: '"spendwall_observe" == "spendwall_observe"' },
+  ]);
+  assert.equal(evaluatePolicy(loaded, context()).decision, 'allow');
+});
+
 test('does not expose observer state or change source policy hashes', () => {
   const loaded = policy();
   const before = JSON.stringify(loaded);
