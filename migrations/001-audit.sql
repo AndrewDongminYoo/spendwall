@@ -7,7 +7,7 @@ BEGIN
     CREATE ROLE spendwall_audit_app NOLOGIN;
   END IF;
   IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'spendwall_audit_app'
-             AND (rolsuper OR rolcreaterole OR rolcreatedb OR rolbypassrls OR rolcanlogin))
+             AND (rolsuper OR rolcreaterole OR rolcreatedb OR rolbypassrls OR rolcanlogin OR rolreplication))
      OR EXISTS (SELECT FROM pg_auth_members WHERE member = 'spendwall_audit_app'::regrole) THEN
     RAISE EXCEPTION 'Audit app group must be an unprivileged NOLOGIN role';
   END IF;

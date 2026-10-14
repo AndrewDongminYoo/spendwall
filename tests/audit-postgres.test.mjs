@@ -448,6 +448,30 @@ test('Postgres audit boundary', { skip: !url }, async (t) => {
   );
 
   await t.test(
+    'migration rejects a replication-capable app group',
+    async (t) => {
+      const { owner } = await fixture(t);
+      const client = await owner.connect();
+      try {
+        await client.query('ALTER ROLE spendwall_audit_app REPLICATION');
+        await client.query('DROP SCHEMA audit CASCADE');
+        const migration = await readFile(
+          new URL('../migrations/001-audit.sql', import.meta.url),
+          'utf8',
+        );
+        await assert.rejects(
+          client.query(migration),
+          /unprivileged NOLOGIN role/,
+        );
+      } finally {
+        await client.query('ROLLBACK');
+        await client.query('ALTER ROLE spendwall_audit_app NOREPLICATION');
+        client.release();
+      }
+    },
+  );
+
+  await t.test(
     'migration rejects an app group with inherited role memberships',
     async (t) => {
       const { owner } = await fixture(t);
