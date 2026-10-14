@@ -84,13 +84,22 @@ strings are also checked. Credential-bearing fields are rejected regardless of
 whether their values were issued locally: access/refresh/ID tokens, client
 secrets, API keys, password/secret/token, and Authorization/Proxy-Authorization.
 The guard recognizes underscore, hyphen and camel-case spellings in object keys
-and quoted textual JSON/header syntax. Valid JSON-looking string payloads are
-also decoded and checked recursively under the same depth, node and byte budgets,
-including every original JSON string literal before duplicate-key values can
-be discarded. Unicode-escaped keys/values, overwritten duplicate-key values and
-nested JSON string encodings cannot hide a supported credential field or token.
-Invalid JSON remains subject to the raw text/header/known-secret checks. It never interprets a secret-labelled
-value as harmless metadata. Standalone Basic values must decode as base64
+and quoted textual JSON/header syntax. Every original complete quoted JSON string literal
+is decoded and checked before whole-text parsing, including literals in prefixed
+text, malformed/truncated JSON, or overwritten duplicate-key values. Valid
+JSON-looking payloads are also checked recursively under the same shared depth,
+node and byte budgets. Unicode-escaped keys/values and nested JSON string
+encodings cannot hide a supported credential field or token. Malformed
+JSON-looking payloads or invalid complete quoted JSON escapes are conservatively denied;
+ordinary prose with valid quoted strings remains supported. This can over-block
+incomplete benign JSON and prose with non-JSON backslash escapes. No
+secret-labelled value is interpreted as harmless metadata.
+
+An unresolved P1 keeps this PR Draft: prefixed text with an unclosed quoted
+literal skips literal decoding and whole-JSON parsing. For example, the synthetic
+managed-token fragment `Result: "pri\u0076ate-paypal-token` is currently accepted;
+an equivalent escaped Bearer fragment also passes. The bounded review loop has
+stopped with this exact pattern requiring a further repair. Standalone Basic values must decode as base64
 user:password. Unknown Bearer-shaped values are denied regardless of scheme case,
 token length or alphabet, including repeated spaces, tabs, line breaks and
 Unicode whitespace. No context guess permits an ambiguous Bearer value.

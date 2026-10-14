@@ -88,14 +88,7 @@ export function createTokenManager(options: TokenOptions = {}) {
         if (++nodes > 4096 || depth > 32) return true;
         if (typeof entry === 'string') {
           if (sensitiveText(entry)) return true;
-          if (!/^[\s\p{White_Space}]*[{\["]/u.test(entry)) return false;
-          let decoded: unknown;
-          try {
-            decoded = JSON.parse(entry);
-          } catch {
-            return false;
-          }
-          // JSON.parse drops duplicate-key values; inspect original literals too.
+          // Inspect original literals before whole-text parsing can fail or drop duplicates.
           for (const literal of entry.matchAll(/"(?:[^"\\]|\\.)*"/gu)) {
             const text: unknown = JSON.parse(literal[0]);
             if (
@@ -107,6 +100,13 @@ export function createTokenManager(options: TokenOptions = {}) {
               inspect(text, depth + 1)
             )
               return true;
+          }
+          if (!/^[\s\p{White_Space}]*[{\["]/u.test(entry)) return false;
+          let decoded: unknown;
+          try {
+            decoded = JSON.parse(entry);
+          } catch {
+            return true;
           }
           return inspect(decoded, depth + 1);
         }

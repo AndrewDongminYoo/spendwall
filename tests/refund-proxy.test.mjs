@@ -689,6 +689,15 @@ test('nested or textual Authorization headers and tokens never reach downstream 
         content: [{ type: 'text', text }],
       }));
     }),
+    ...[
+      String.raw`{"access\u005ftoken":"synthetic-unfamiliar-credential",`,
+      String.raw`{"data":"pri\u0076ate-paypal-token",`,
+      String.raw`{"data":"BEA\u0052ER synthetic-unfamiliar-credential",`,
+      String.raw`Result: {"access\u005ftoken":"synthetic-unfamiliar-credential"}`,
+      String.raw`Result: "pri\u0076ate-paypal-token"`,
+      String.raw`Result: "BEA\u0052ER synthetic-unfamiliar-credential"`,
+      '{"ordinary":',
+    ].map((text) => ({ content: [{ type: 'text', text }] })),
     ...['access_token', 'refresh_token', 'client_secret'].flatMap((field) => {
       const escaped = JSON.stringify({
         [field]: 'synthetic-unfamiliar-credential',
@@ -903,6 +912,7 @@ test('ordinary Basic prose and benign JSON metadata remain supported', async (t)
   for (const text of [
     'Basic Plan',
     'basic information',
+    'He said "hello".',
     JSON.stringify({ token_type: 'Bearer', expires_in: 120, count: 2 }),
   ])
     await t.test(text, async (t) => {
