@@ -5,14 +5,16 @@
   "scripts": {
     "lint": "prettier --check .",
     "typecheck": "pnpm -r typecheck",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --test tests/*.test.mjs && pnpm test:audit:postgres",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
     "hooks:install": "trunk git-hooks sync",
     "mcp:dump": "node scripts/dump-paypal-mcp-tools.mjs",
     "seed": "node scripts/seed.mjs",
     "proxy": "node apps/firewall/src/index.ts",
     "proxy:check": "node scripts/proxy-smoke.mjs",
-    "proxy:refund": "node scripts/proxy-smoke.mjs --refund"
+    "proxy:refund": "node scripts/proxy-smoke.mjs --refund",
+    "audit:verify": "node scripts/audit-verify.mjs",
+    "test:audit:postgres": "node scripts/test-audit-postgres.mjs"
   },
   "keywords": [],
   "author": "",
@@ -32,6 +34,7 @@
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
+    "pg": "8.23.1",
     "prettier": "3.9.10",
     "typescript": "7.0.2"
   }
