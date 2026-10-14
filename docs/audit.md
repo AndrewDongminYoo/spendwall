@@ -25,6 +25,7 @@ Use distinct application logins for separate deployments and a different trusted
 The database name is part of this role assignment; renaming or restoring into a different database requires reviewing and replacing its audit-role grants.
 Do not grant the application ownership, superuser, role administration, or membership in privileged roles.
 The migration rejects an existing app group with elevated attributes or any inherited role membership.
+An existing group must also have no members before migration; application membership is granted only afterward, so an unrelated role administrator cannot preassign a login to the predictable group name.
 No login, password or external credential is created by the migration.
 
 The group has SELECT and append-function EXECUTE only. UPDATE, DELETE, INSERT,

@@ -42,7 +42,19 @@ async function fixture(t) {
     'Use the dedicated disposable database',
   );
   const owner = new pg.Pool({ connectionString: url });
-  t.after(() => owner.end());
+  let app;
+  let appRole;
+  t.after(async () => {
+    await app?.end();
+    try {
+      if (appRole)
+        await owner.query(
+          `REVOKE ${pg.escapeIdentifier(appRole)} FROM audit_test_login`,
+        );
+    } finally {
+      await owner.end();
+    }
+  });
   await owner.query('DROP SCHEMA IF EXISTS audit CASCADE');
   await owner.query(
     await readFile(
@@ -55,16 +67,14 @@ async function fixture(t) {
       CREATE ROLE audit_test_login LOGIN PASSWORD 'audit-test-only';
     END IF;
   END $$`);
-  const appRole = (await owner.query('SELECT audit.app_role() AS name')).rows[0]
-    .name;
+  appRole = (await owner.query('SELECT audit.app_role() AS name')).rows[0].name;
   await owner.query(
     `GRANT ${pg.escapeIdentifier(appRole)} TO audit_test_login`,
   );
-  const app = new pg.Pool({
+  app = new pg.Pool({
     connectionString: appUrl(),
     max: 12,
   });
-  t.after(() => app.end());
   return { owner, app, appRole, log: new AuditLog(app) };
 }
 
@@ -504,11 +514,42 @@ test('Postgres audit boundary', { skip: !url }, async (t) => {
   );
 
   await t.test(
+    'migration rejects pre-existing members of the database audit group',
+    async (t) => {
+      const { owner, appRole } = await fixture(t);
+      const client = await owner.connect();
+      const group = pg.escapeIdentifier(appRole);
+      try {
+        await client.query(`REVOKE ${group} FROM audit_test_login`);
+        await client.query('CREATE ROLE audit_test_unexpected NOLOGIN');
+        await client.query(`GRANT ${group} TO audit_test_unexpected`);
+        await client.query('DROP SCHEMA audit CASCADE');
+        const migration = await readFile(
+          new URL('../migrations/001-audit.sql', import.meta.url),
+          'utf8',
+        );
+        await assert.rejects(
+          client.query(migration),
+          /Audit app group must have no existing members/,
+        );
+      } finally {
+        await client.query('ROLLBACK');
+        await client.query(`REVOKE ${group} FROM audit_test_unexpected`);
+        await client.query('DROP ROLE audit_test_unexpected');
+        client.release();
+      }
+    },
+  );
+
+  await t.test(
     'migration rejects a replication-capable app group',
     async (t) => {
       const { owner, appRole } = await fixture(t);
       const client = await owner.connect();
       try {
+        await client.query(
+          `REVOKE ${pg.escapeIdentifier(appRole)} FROM audit_test_login`,
+        );
         await client.query(
           `ALTER ROLE ${pg.escapeIdentifier(appRole)} REPLICATION`,
         );
@@ -537,6 +578,9 @@ test('Postgres audit boundary', { skip: !url }, async (t) => {
       const { owner, appRole } = await fixture(t);
       const client = await owner.connect();
       try {
+        await client.query(
+          `REVOKE ${pg.escapeIdentifier(appRole)} FROM audit_test_login`,
+        );
         await client.query('CREATE ROLE audit_test_privileged NOLOGIN');
         await client.query(
           `GRANT audit_test_privileged TO ${pg.escapeIdentifier(appRole)}`,
