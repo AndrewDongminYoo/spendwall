@@ -49,6 +49,40 @@ export function parseRuleReferences(refs: readonly string[]): number[] {
   return positions;
 }
 
+// Cache immutable chunks within one history fold, never caller-owned arrays.
+export function createRuleReferenceValidator() {
+  const chunks = new Map<
+    string,
+    { first: number; last: number; firstTokenLength: number }
+  >();
+  return (refs: readonly string[]): void => {
+    if (!Array.isArray(refs) || refs.length > 128) invalid();
+    let previous = -1;
+    let previousWidth = 128;
+    for (const ref of refs) {
+      if (typeof ref !== 'string') invalid();
+      let chunk = chunks.get(ref);
+      if (!chunk) {
+        const positions = parseRuleReferences([ref]);
+        chunk = {
+          first: positions[0]!,
+          last: positions.at(-1)!,
+          firstTokenLength: positions[0]!.toString(36).length + 1,
+        };
+        if (chunks.size < 256) chunks.set(ref, chunk);
+      }
+      // Full-array ordering and greedy packing still apply on every read.
+      if (
+        chunk.first <= previous ||
+        previousWidth + chunk.firstTokenLength <= 128
+      )
+        invalid();
+      previous = chunk.last;
+      previousWidth = ref.length;
+    }
+  };
+}
+
 // Positions refer to the immutable policy content identified by policyVersion.
 export function encodeRuleReferences(
   rules: readonly Rule[],

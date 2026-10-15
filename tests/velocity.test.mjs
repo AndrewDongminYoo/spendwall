@@ -5,6 +5,8 @@ import { foldHistory } from '../apps/firewall/src/velocity/aggregate.ts';
 import {
   encodeRuleReferences,
   decodeRuleReferences,
+  parseRuleReferences,
+  createRuleReferenceValidator,
 } from '../apps/firewall/src/velocity/references.ts';
 
 const hour = 3_600_000;
@@ -333,4 +335,51 @@ test('audit reference chunks admit exact capacity and reject one-position overfl
     () => encodeRuleReferences(rules, ['unknown']),
     /rule references/i,
   );
+});
+
+test('cached reference validation preserves canonical boundaries and reads changed arrays', () => {
+  const rules = Array.from({ length: 5000 }, (_, i) => ({ id: String(i) }));
+  const refs = encodeRuleReferences(
+    rules,
+    rules.slice(0, 1500).map((r) => r.id),
+  );
+  const validate = createRuleReferenceValidator();
+  validate(refs);
+  validate([...refs]);
+  const cases = [
+    [],
+    ...refs.map((ref) => [ref]),
+    [...refs].reverse(),
+    [refs[0], refs[0]],
+    ['rules.v1:0', 'rules.v1:1'],
+    ['rules.v1:00'],
+    ['rules.v1:1:0'],
+    ['rules.v1:9007199254740992'],
+    ['rules.v1'],
+    ['rules.v1:!'],
+    [null],
+    new Array(1),
+    Array(129).fill(refs[0]),
+  ];
+  for (let i = 0; i < 500; i++)
+    cases.push(
+      encodeRuleReferences(
+        rules,
+        rules.slice(i, i + 200).map((r) => r.id),
+      ),
+    );
+  for (const candidate of cases) {
+    let accepted = true;
+    try {
+      parseRuleReferences(candidate);
+    } catch {
+      accepted = false;
+    }
+    if (accepted) assert.doesNotThrow(() => validate(candidate));
+    else assert.throws(() => validate(candidate), /rule references/i);
+  }
+  const mutable = [...refs];
+  validate(mutable);
+  mutable[1] = mutable[0];
+  assert.throws(() => validate(mutable), /rule references/i);
 });

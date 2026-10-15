@@ -1,7 +1,7 @@
 import { parseVelocityMetadata } from '../audit/velocity.ts';
 import type { VelocityMetadata } from '../audit/velocity.ts';
 import type { PolicyDecision } from '../../../../packages/policy/src/index.ts';
-import { parseRuleReferences } from './references.ts';
+import { createRuleReferenceValidator } from './references.ts';
 
 export type HistoryRow = {
   id: string;
@@ -57,6 +57,7 @@ export function foldHistory(rows: readonly HistoryRow[], scope: VelocityScope) {
     )
       invalid();
     const requests = new Map<string, Reservation>();
+    const validateReferences = createRuleReferenceValidator();
     let previousId = 0n;
     for (const row of rows) {
       const id = BigInt(row.id);
@@ -66,7 +67,7 @@ export function foldHistory(rows: readonly HistoryRow[], scope: VelocityScope) {
       if (row.decision === 'deny' && row.resolved_ctx.velocity === undefined)
         continue;
       const metadata = parseVelocityMetadata(row.resolved_ctx.velocity);
-      parseRuleReferences(row.matched_rules);
+      validateReferences(row.matched_rules);
       if (
         !/^agent:[a-f0-9]{64}$/.test(row.agent_id) ||
         metadata.key_id !== scope.keyId ||
