@@ -54,7 +54,7 @@ The solid path is the synthetic demo composition in `apps/agent-demo`.
 The dashboard reads its separately configured database; dotted connections require application configuration.
 
 ```mermaid
-flowchart LR
+flowchart TD
   T[Untrusted support ticket] --> A[Recorded agent calls or optional Claude]
   A --> M[Scoped MCP refund and status tools]
   M --> C[Trusted context resolver]
