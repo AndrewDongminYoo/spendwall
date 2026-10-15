@@ -318,3 +318,48 @@ footer {
     flex-wrap: wrap;
   }
 }
+.audit-agent {
+  margin: 24px 0;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 0;
+}
+.agent-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.audit-agent h2 {
+  margin: 0;
+}
+.audit-agent > p,
+.query-caption {
+  color: var(--muted);
+  line-height: 1.6;
+}
+.prompt-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 20px 0;
+}
+.prompt-list button {
+  white-space: normal;
+  text-align: left;
+}
+.query-caption {
+  margin: 20px 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 799px) {
+  .audit-agent {
+    padding: 16px;
+  }
+  .audit-agent .connection-fields {
+    flex-direction: column;
+  }
+}

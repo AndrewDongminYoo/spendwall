@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Report } from './studio.tsx';
+import { AuditAgent } from './audit-agent.tsx';
 import type { Stats } from './studio.tsx';
 import type { DashboardData } from '../../firewall/src/dashboard/data.ts';
 import './style.css';
@@ -173,6 +174,11 @@ function App() {
                 refresh.
               </p>
             )}
+            <AuditAgent
+              key={stats.as_of}
+              token={token}
+              mode={stats.query_mode}
+            />
             <Report stats={stats} narrow={narrow} />
             <details className="audit">
               <summary>Audit history · {audit.length} tracked requests</summary>

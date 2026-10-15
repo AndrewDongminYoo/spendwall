@@ -39,7 +39,11 @@ export function request(
     resolvedCtx: {},
   };
 }
-export async function dashboardFixture(url, staticDirectory) {
+export async function dashboardFixture(
+  url,
+  staticDirectory,
+  queryOptions = {},
+) {
   const target = new URL(url);
   assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(target.hostname));
   assert.equal(target.pathname, '/spendwall_audit_test');
@@ -118,6 +122,7 @@ export async function dashboardFixture(url, staticDirectory) {
         { id: 'returns', name: 'Returns bot', budgetCents: 10000 },
       ],
       ...(staticDirectory ? { staticDirectory } : {}),
+      ...queryOptions,
     });
     const addPending = async (value = '60.00', agent = 'support') => {
       const input = request(value, agent),

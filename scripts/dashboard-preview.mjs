@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import { auditPrompts } from '../apps/firewall/src/dashboard/query-contract.ts';
 import {
   dashboardFixture,
   policy,
@@ -75,6 +76,14 @@ try {
   fixture = await dashboardFixture(
     url,
     fileURLToPath(new URL('../apps/dashboard/dist', import.meta.url)),
+    {
+      queryMode: 'synthetic',
+      classify: async (question) => ({
+        intent:
+          auditPrompts.find((entry) => entry.prompt === question)?.intent ??
+          'unsupported',
+      }),
+    },
   );
   if (args[0] !== '--empty') {
     await fixture.addPending('60.00');

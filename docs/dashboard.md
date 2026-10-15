@@ -4,7 +4,8 @@
 
 The dashboard is a separate, read-only loopback server.
 It serves the production React/AG Studio build and authenticated `/audit` and `/stats` routes from one origin.
-No approval decisions, policy updates, AI requests, or PayPal requests are available through it.
+No approval decisions, policy updates, or PayPal requests are available through it.
+The optional audit agent uses Claude only to select a supported read-only query.
 
 Use the pinned Node and pnpm versions, then build and start an isolated preview:
 
@@ -65,6 +66,35 @@ An overflowing 10,000-row merchant history, more than 100 agents, malformed life
 Each API request reads its own consistent snapshot; the two endpoints are not an atomic pair.
 Refresh clears the previous displayed data before loading and clears it on failure.
 The page shows the stats snapshot time.
+
+## Audit assistant
+
+The AG Studio Agent Framework runs a custom agent that sends one complete question to the authenticated `POST /query` route.
+The server selects one of three deterministic projections from validated merchant history; the model cannot supply SQL, widgets, or payment actions.
+Each successful question replaces the single result widget.
+Refresh, disconnect, cancellation, and failed queries clear the previous result.
+
+- The weekly refund view includes original tracked attempts strictly above USD 100 from Monday 00:00 UTC through the query snapshot.
+- The denial view groups original denials in the last 24 hours by canonical rule position and policy version.
+- The support trend samples reservation balances hourly for 24 hours, including older pending amounts, releases, and the 24-hour window after acceptance or successful execution.
+  Its reference line is the current configured monitoring budget, not a historical or enforced policy limit.
+  Agent ID `support-bot` takes priority; otherwise exactly one configured display name must normalize to `supportbot` after lowercasing and removing spaces and hyphens.
+  Missing or ambiguous identity and absent budget return unavailable.
+
+Enable Claude by adding `claude` with `apiKey` and an explicit structured-output-capable `model` to the private server configuration.
+Reuse the same credential provisioning approach as the approval summary adapter.
+There is no automatic credential lookup or default paid model.
+Only the current question and fixed intent descriptions leave the server; audit records and prior conversations are excluded.
+Do not enter credentials or customer details in questions.
+Each question can make one provider request, without retries, with a ten-second provider deadline and a 16 KiB response limit.
+Only one query runs at a time; a query holds no database connection while waiting for the provider.
+Bodies are limited to 8 KiB and questions to 2,000 characters, with a five-second body deadline.
+
+The local preview labels its agent as synthetic and recognizes only the three supplied prompt buttons.
+It exercises the actual Studio runner, HTTP endpoint, SQL, and widgets without making model calls.
+Free-form Claude interpretation and repeatability with a configured live model require separate authorized verification; synthetic results do not establish model accuracy.
+Unsupported questions receive no result rather than a guessed answer.
+The browser keeps only its current conversation in memory.
 
 ## AG Studio and licenses
 

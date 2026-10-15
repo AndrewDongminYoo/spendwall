@@ -10,6 +10,9 @@ import { identifier } from '../context/json.ts';
 import { dashboardData } from './data.ts';
 import type { ApprovalRow } from './data.ts';
 import type { HistoryRow } from '../velocity/aggregate.ts';
+import { auditQuery } from './query.ts';
+import { parseIntent } from './query-contract.ts';
+import type { QueryClassifier } from './query-contract.ts';
 
 export type DashboardOptions = {
   pool: Pick<Pool, 'connect'>;
@@ -19,6 +22,8 @@ export type DashboardOptions = {
   agents?: readonly { id: string; name: string; budgetCents?: number }[];
   staticDirectory?: string;
   port?: number;
+  classify?: QueryClassifier;
+  queryMode?: 'claude' | 'synthetic';
 };
 class DashboardModule {}
 Module({})(DashboardModule);
@@ -30,6 +35,43 @@ function reply(res: ServerResponse, code: number, body: unknown) {
     'x-content-type-options': 'nosniff',
   });
   res.end(JSON.stringify(body));
+}
+
+async function question(req: IncomingMessage): Promise<string> {
+  if (
+    !/^application\/json(?:\s*;|$)/i.test(req.headers['content-type'] ?? '') ||
+    req.headers['content-encoding'] !== undefined
+  )
+    throw new Error();
+  const timer = setTimeout(() => req.destroy(), 5000);
+  try {
+    const chunks: Buffer[] = [];
+    let bytes = 0;
+    for await (const part of req.iterator({ destroyOnReturn: false })) {
+      const chunk = Buffer.from(part);
+      bytes += chunk.length;
+      if (bytes > 8192) {
+        req.resume();
+        throw new Error();
+      }
+      chunks.push(chunk);
+    }
+    const value: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      Array.isArray(value) ||
+      Object.keys(value).length !== 1 ||
+      !('question' in value) ||
+      typeof value.question !== 'string' ||
+      !value.question.trim() ||
+      value.question.length > 2000
+    )
+      throw new Error();
+    return value.question.trim();
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function startDashboardServer(options: DashboardOptions) {
@@ -78,13 +120,18 @@ export async function startDashboardServer(options: DashboardOptions) {
   )
     throw new Error('Invalid dashboard configuration.');
   const tokenHash = hash(options.token);
+  const exactSupport = options.agents?.find((a) => a.id === 'support-bot');
+  const supportRef = exactSupport
+    ? `agent:${reference('agent', exactSupport.id)}`
+    : undefined;
   const app = await NestFactory.create(DashboardModule, {
     logger: false,
     bodyParser: false,
     abortOnError: false,
   });
   let origin = '',
-    active = 0;
+    active = 0,
+    querying = false;
   app.use((req: IncomingMessage, res: ServerResponse) => {
     void (async () => {
       if (
@@ -95,7 +142,8 @@ export async function startDashboardServer(options: DashboardOptions) {
         return;
       }
       const url = new URL(req.url ?? '/', origin);
-      if (req.method !== 'GET') {
+      const isQuery = url.pathname === '/query';
+      if (req.method !== (isQuery ? 'POST' : 'GET')) {
         reply(res, 405, { error: 'Read-only dashboard.' });
         return;
       }
@@ -103,7 +151,7 @@ export async function startDashboardServer(options: DashboardOptions) {
         reply(res, 400, { error: 'Invalid request.' });
         return;
       }
-      if (url.pathname !== '/audit' && url.pathname !== '/stats') {
+      if (!isQuery && url.pathname !== '/audit' && url.pathname !== '/stats') {
         const asset = /^\/assets\/[A-Za-z0-9_-]+\.(js|css|woff2)$/.exec(
           url.pathname,
         );
@@ -145,13 +193,58 @@ export async function startDashboardServer(options: DashboardOptions) {
         reply(res, 401, { error: 'Dashboard authentication required.' });
         return;
       }
-      if (active >= 4) {
+      if (active >= 4 || (isQuery && querying)) {
         reply(res, 503, { error: 'Dashboard busy.' });
         return;
       }
       active++;
+      if (isQuery) querying = true;
       let client;
+      const controller = new AbortController();
+      const cancel = () => controller.abort();
+      res.once('close', cancel);
       try {
+        let intent;
+        if (isQuery) {
+          let text;
+          try {
+            text = await question(req);
+          } catch {
+            reply(res, 400, { error: 'Invalid query.' });
+            return;
+          }
+          if (!options.classify) {
+            reply(res, 503, { error: 'Audit agent is not configured.' });
+            return;
+          }
+          const timer = setTimeout(cancel, 10000);
+          try {
+            controller.signal.throwIfAborted();
+            const stopped = new Promise<never>((_, reject) =>
+              controller.signal.addEventListener(
+                'abort',
+                () => reject(new Error('Query cancelled.')),
+                { once: true },
+              ),
+            );
+            intent = parseIntent(
+              await Promise.race([
+                options.classify(text, controller.signal),
+                stopped,
+              ]),
+            );
+          } finally {
+            clearTimeout(timer);
+          }
+          if (intent === 'unsupported') {
+            reply(res, 422, {
+              error:
+                'Use one complete question matching the three supported audit queries.',
+            });
+            return;
+          }
+          controller.signal.throwIfAborted();
+        }
         client = await options.pool.connect();
         await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
         await client.query("SET LOCAL statement_timeout = '5s'");
@@ -174,13 +267,28 @@ export async function startDashboardServer(options: DashboardOptions) {
             'SELECT (extract(epoch FROM clock_timestamp()::timestamptz(3))*1000)::float8 AS now',
           )
         ).rows[0]!.now;
-        const result = dashboardData(rows, {
+        const projectionOptions = {
           now,
           merchantRef,
           keyId,
           agents,
           approvals,
-        });
+        };
+        if (isQuery && intent) {
+          const result = auditQuery(intent, rows, {
+            ...projectionOptions,
+            ...(supportRef ? { supportRef } : {}),
+          });
+          controller.signal.throwIfAborted();
+          // Finish the snapshot before acknowledging a query; an immediate next
+          // question must not race the previous response's transaction cleanup.
+          await client.query('ROLLBACK');
+          client.release();
+          client = undefined;
+          reply(res, 200, result);
+          return;
+        }
+        const result = dashboardData(rows, projectionOptions);
         reply(
           res,
           200,
@@ -190,11 +298,18 @@ export async function startDashboardServer(options: DashboardOptions) {
                 coverage: result.coverage,
                 items: result.audit,
               }
-            : (({ audit: _audit, ...stats }) => stats)(result),
+            : (({ audit: _audit, ...stats }) => ({
+                ...stats,
+                query_mode: options.classify
+                  ? (options.queryMode ?? 'claude')
+                  : 'disabled',
+              }))(result),
         );
       } catch {
         reply(res, 503, { error: 'Dashboard data unavailable.' });
       } finally {
+        res.removeListener('close', cancel);
+        controller.abort();
         if (client) {
           let discard = false;
           try {
@@ -205,6 +320,7 @@ export async function startDashboardServer(options: DashboardOptions) {
           client.release(discard);
         }
         active--;
+        if (isQuery) querying = false;
       }
     })().catch(() => {
       if (!res.headersSent)
