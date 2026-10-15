@@ -1,5 +1,8 @@
 # Spendwall
 
+Run the four synthetic support-agent scenarios with `pnpm demo`.
+See the [agent demo guide](apps/agent-demo/README.md) for Docker prerequisites, scenario names, and optional Claude execution.
+
 A deterministic payment policy firewall between AI agents and PayPal.
 The planned merchant-support workflow controls refunds through tool permissions, trusted payment context, spending limits, human approval, and an audit trail.
 

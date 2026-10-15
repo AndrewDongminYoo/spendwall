@@ -15,7 +15,8 @@
     "proxy:refund": "node scripts/proxy-smoke.mjs --refund",
     "audit:verify": "node scripts/audit-verify.mjs",
     "test:audit:postgres": "node scripts/test-audit-postgres.mjs",
-    "test:approval-api": "node scripts/test-audit-postgres.mjs --approval-api"
+    "test:approval-api": "node scripts/test-audit-postgres.mjs --approval-api",
+    "demo": "node apps/agent-demo/src/index.ts"
   },
   "keywords": [],
   "author": "",

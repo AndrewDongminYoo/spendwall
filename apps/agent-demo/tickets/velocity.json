@@ -1,0 +1,21 @@
+{
+  "id": "velocity",
+  "customerId": "demo-customer",
+  "body": "Please refund these three small orders one after another.",
+  "captures": [
+    "DEMO_CAPTURE_00003",
+    "DEMO_CAPTURE_00004",
+    "DEMO_CAPTURE_00005"
+  ],
+  "recordedCalls": [
+    {
+      "capture_id": "DEMO_CAPTURE_00003"
+    },
+    {
+      "capture_id": "DEMO_CAPTURE_00004"
+    },
+    {
+      "capture_id": "DEMO_CAPTURE_00005"
+    }
+  ]
+}

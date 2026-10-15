@@ -1,0 +1,26 @@
+{
+  "merchantId": "demo-merchant",
+  "customerId": "demo-customer",
+  "captures": {
+    "DEMO_CAPTURE_00001": {
+      "value": "10.00",
+      "currency_code": "USD"
+    },
+    "DEMO_CAPTURE_00002": {
+      "value": "60.00",
+      "currency_code": "USD"
+    },
+    "DEMO_CAPTURE_00003": {
+      "value": "10.00",
+      "currency_code": "USD"
+    },
+    "DEMO_CAPTURE_00004": {
+      "value": "10.00",
+      "currency_code": "USD"
+    },
+    "DEMO_CAPTURE_00005": {
+      "value": "10.00",
+      "currency_code": "USD"
+    }
+  }
+}

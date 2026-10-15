@@ -1,0 +1,16 @@
+agents:
+  demo-support:
+    tools:
+      allow: [create_refund]
+      deny: []
+rules:
+  - id: small_refund
+    when: amount.usd <= 20
+    then: allow
+  - id: human_approval
+    when: amount.usd > 20
+    then: require_approval
+  - id: velocity_limit
+    when: agg.refund_count_1h >= 2
+    then: deny
+default: deny
