@@ -156,7 +156,7 @@ function report(narrow: boolean): AgReportState<Registry> {
           field('rules.policy_version'),
         ],
       },
-      format: title('Blocked rules · policy-bound references'),
+      format: title('Rule matches on denied requests'),
     },
   };
   const layout = Object.fromEntries(
@@ -239,7 +239,7 @@ function sources(stats: Stats): AgDataSourcesDefinition<Registry> {
             name: 'Policy version',
             format: 'textFormat',
           },
-          { id: 'count', name: 'Blocked', format: 'integerFormat' },
+          { id: 'count', name: 'Count', format: 'integerFormat' },
         ],
         data: stats.rules,
       },

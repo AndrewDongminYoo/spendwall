@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { randomUUID } from 'node:crypto';
 import { dashboardData } from '../apps/firewall/src/dashboard/data.ts';
 import { startDashboardServer } from '../apps/firewall/src/dashboard/server.ts';
+import { encodeRuleReferences } from '../apps/firewall/src/velocity/references.ts';
 
 const now = 1_800_000_000_000;
 const merchantRef = 'a'.repeat(64),
@@ -43,6 +44,89 @@ const options = () => ({
   keyId,
   agents: [{ ref: agent, name: 'Support', budgetCents: 10000 }],
   approvals: [],
+});
+
+test('dashboard counts each compact rule position separately within its policy version', () => {
+  const rules = Array.from({ length: 200 }, (_, i) => ({ id: `rule-${i}` }));
+  const refs = encodeRuleReferences(
+    rules,
+    rules.map((r) => r.id),
+  );
+  assert.ok(refs.length > 1);
+  const data = dashboardData(
+    [
+      row(1, 'deny', { matched_rules: refs }),
+      row(2, 'deny', { matched_rules: ['rules.v1:0:1'] }),
+      row(3, 'deny', {
+        matched_rules: ['rules.v1:0'],
+        policy_version: '4'.repeat(64),
+      }),
+    ],
+    options(),
+  );
+  assert.equal(data.rules.length, 201);
+  assert.equal(
+    data.rules.find(
+      (r) => r.rule === 'rules.v1:0' && r.policy_version === 'f'.repeat(64),
+    ).count,
+    2,
+  );
+  assert.equal(data.rules.find((r) => r.rule === 'rules.v1:1').count, 2);
+  assert.equal(
+    data.rules.find(
+      (r) => r.rule === 'rules.v1:0' && r.policy_version === '4'.repeat(64),
+    ).count,
+    1,
+  );
+  assert.equal(
+    data.rules.find((r) => r.rule === `rules.v1:${(199).toString(36)}`).count,
+    1,
+  );
+});
+
+test('dashboard does not infer the reason for a denial without rule references', () => {
+  const data = dashboardData([row(1, 'deny')], options());
+  assert.deepEqual(data.rules, [
+    { rule: 'unreferenced-denial', policy_version: 'f'.repeat(64), count: 1 },
+  ]);
+});
+
+test('dashboard totals fractional-dollar executions in cents for each hourly bucket', () => {
+  const cfg = options();
+  const rows = [10, 20].flatMap((cents, i) => {
+    const initial = row(i * 4 + 1, 'require_approval');
+    initial.resolved_ctx.velocity.usd_cents = cents;
+    const execution = randomUUID();
+    cfg.approvals.push({
+      approval_id: initial.approval_id,
+      reservation_id: initial.id,
+      approval_state: 'approved',
+      execution_state: 'succeeded',
+      execution_id: execution,
+      expires_ms: now + 1000,
+    });
+    return [
+      initial,
+      { ...initial, id: String(i * 4 + 2), event_kind: 'approval_created' },
+      {
+        ...initial,
+        id: String(i * 4 + 3),
+        event_kind: 'approval_decided',
+        decision: 'allow',
+      },
+      {
+        ...initial,
+        id: String(i * 4 + 4),
+        event_kind: 'approval_executed',
+        decision: 'allow',
+        upstream_status: 201,
+        upstream_result_ref: execution,
+      },
+    ];
+  });
+  const value = dashboardData(rows, cfg);
+  assert.equal(value.confirmed_usd, 0.3);
+  assert.equal(value.hourly.find((r) => r.usd > 0).usd, 0.3);
 });
 
 test('dashboard counts original decisions, keeps pending reservation and never calls allow money paid', () => {

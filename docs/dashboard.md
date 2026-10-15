@@ -54,6 +54,9 @@ This prototype is not a public hosting configuration.
   The optional agent budget is a monitoring reference set in configuration, not an inferred or enforced CEL limit.
 - Pending approvals exclude expired and processed requests without mutating their state.
 - Rule references retain their policy version and positional encoding.
+  Compact references are split into individual positions before counting matches on denied requests.
+  Counts can overlap when one request matches multiple rules.
+  A matched rule is not necessarily the sole cause of denial; entries without references use the neutral `unreferenced-denial` label.
   Historical names cannot be recovered safely from a different policy.
 - Coverage includes refund events with the existing merchant-bound velocity metadata.
   Unscoped legacy events and unsupported tools are not presented as complete payment history.

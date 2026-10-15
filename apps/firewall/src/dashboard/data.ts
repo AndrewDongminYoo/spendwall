@@ -1,5 +1,6 @@
 import type { HistoryRow } from '../velocity/aggregate.ts';
 import { foldHistory } from '../velocity/aggregate.ts';
+import { parseRuleReferences } from '../velocity/references.ts';
 
 export type DashboardAgent = {
   ref: string;
@@ -164,7 +165,7 @@ export function dashboardData(rows: HistoryRow[], options: Options) {
     hour: new Date(
       Math.floor(options.now / 3_600_000) * 3_600_000 - (24 - i) * 3_600_000,
     ).toISOString(),
-    usd: 0,
+    cents: 0,
   }));
   let confirmedCents = 0;
   for (const r of calls) {
@@ -188,16 +189,17 @@ export function dashboardData(rows: HistoryRow[], options: Options) {
       Math.floor(r.acceptedAt / 3_600_000) * 3_600_000,
     ).toISOString();
     const bucket = hourly.find((b) => b.hour === hour);
-    if (bucket) bucket.usd += r.metadata.usd_cents / 100;
+    if (bucket) bucket.cents += r.metadata.usd_cents;
   }
   const rules = new Map<
     string,
     { rule: string; policy_version: string; count: number }
   >();
   for (const r of recent.filter((r) => r.initial.decision === 'deny')) {
-    for (const ref of r.initial.matched_rules.length
-      ? r.initial.matched_rules
-      : ['default-deny']) {
+    const refs = parseRuleReferences(r.initial.matched_rules).map(
+      (position) => `rules.v1:${position.toString(36)}`,
+    );
+    for (const ref of refs.length ? refs : ['unreferenced-denial']) {
       const key = `${r.initial.policy_version}/${ref}`;
       const entry = rules.get(key) ?? {
         rule: ref,
@@ -215,7 +217,7 @@ export function dashboardData(rows: HistoryRow[], options: Options) {
     confirmed_usd: confirmedCents / 100,
     decisions,
     agents,
-    hourly,
+    hourly: hourly.map(({ hour, cents }) => ({ hour, usd: cents / 100 })),
     rules: [...rules.values()],
     pending,
     audit: calls
