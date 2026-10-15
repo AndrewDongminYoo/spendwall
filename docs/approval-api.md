@@ -98,6 +98,56 @@ Pending pages can omit approvals that expire while the page is read; follow `nex
 Use ordinary curl requests against the application URL after provisioning a device.
 The executable verification below performs registration, lookup, mismatch and final decision with actual curl subprocesses, without exposing a public test-creation endpoint.
 
+## Optional advisory summaries
+
+`POST /approvals/:id/summary` accepts exactly an empty JSON object and requires the same owned approver JWT as detail.
+It returns either `{status: "unavailable", advisory: true}` or an available result with `label`, two or three `sentences`, and `risk_flags`.
+The successful label is `AI-generated reference only; not authorization`.
+Render these strings as plain text below the original payment facts and matched rules; never use them as decision inputs or authorization.
+Risk flags (`instruction_like_content`, `conflicting_payment_claims`, `pressure_to_approve`) are unverified model observations, not policy decisions.
+Structural validation cannot guarantee that generated prose follows instructions or states correct facts.
+Even text that claims to authorize a payment remains untrusted reference material; clients must retain the fixed server label and original authoritative facts, and must not feed generated text into decisions.
+
+Generation is disabled unless the trusted application supplies `summary` options:
+
+```ts
+import { claudeSummary } from './apps/firewall/src/approver/claude-summary.ts';
+
+const summary = {
+  loadText: async (approvalId, signal) => {
+    // Load only this approval's redacted, bounded support text from your application.
+    // Return {agentReason, ticketExcerpt}; never load another tenant's ticket.
+    return supportTextForApproval(approvalId, signal);
+  },
+  generate: claudeSummary({ apiKey: configuredApiKey, model: configuredModel }),
+};
+// Pass summary to startApproverServer alongside the existing required options.
+```
+
+There is no new ticket store or agent reason field in sealed approval data.
+The application must retain the approval-to-ticket mapping and remove credentials or unnecessary personal data before its loader returns text.
+The summary module takes only capture, normalized amount/currency, and identity IDs from validated approval details.
+It never forwards the raw trusted context, provider result, argument hash, or executor credentials.
+It limits the agent reason to 500 characters and ticket excerpt to 2,000 characters, encoding both as untrusted JSON data in a user message separate from system instructions.
+These bounds are not secret redaction and do not prove prompt-injection resistance.
+
+The adapter uses the [Claude Messages API](https://platform.claude.com/docs/en/api/messages/create) with [structured JSON output](https://platform.claude.com/docs/en/build-with-claude/structured-outputs), no tools, no redirects, no automatic retries, and at most 600 output tokens.
+Supply an explicit model that supports structured output and an API key through trusted configuration; no environment file is loaded automatically.
+Enabling this optional adapter can incur provider charges and sends the allowlisted context and redacted excerpt to Anthropic.
+Local tests substitute the provider and incur no model charges.
+
+The complete loader/model operation has a three-second deadline, configurable from 1 to 10,000 milliseconds through `timeoutMs`.
+Malformed, refused, truncated, oversized, failed, or timed-out responses return unavailable.
+Generation has at most four active operations and 100 cached approval attempts per server instance, including failures; concurrent repeated requests share one attempt.
+Timed-out operations that ignore cancellation continue to occupy their active slot until they settle.
+A full cache returns unavailable for new approvals until restart; this prototype limit is not a persistent or distributed spending quota.
+Only pending approvals generate summaries, and the server rechecks authentication and approval status before returning generated content.
+Server shutdown aborts generation.
+
+Summary requests do not participate in approval transactions, change hashes, update policy, or invoke payments.
+Existing list, detail, decision, and notification routes never wait for a summary.
+An unavailable summary must leave the client able to review original facts and submit the original bound decision.
+
 ## Notification delivery
 
 Approval creation enqueues deliveries for matching devices already registered at that transaction.
