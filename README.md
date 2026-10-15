@@ -1,76 +1,125 @@
 # Spendwall
 
-Run the four synthetic support-agent scenarios with `pnpm demo`.
-See the [agent demo guide](apps/agent-demo/README.md) for Docker prerequisites, scenario names, and optional Claude execution.
+A deterministic payment policy firewall that checks an AI support agent's refund requests before execution.
 
-A deterministic payment policy firewall between AI agents and PayPal.
-The planned merchant-support workflow controls refunds through tool permissions, trusted payment context, spending limits, human approval, and an audit trail.
+An injected ticket or an agent loop should not become permission to move money.
+Spendwall combines trusted payment context, policy evaluation, spending reservations, bound human approval and an audit trail.
+**There is no LLM in the policy decision path.**
 
-This repository currently contains the development scaffold for [issue #1](https://github.com/AndrewDongminYoo/spendwall/issues/1).
-Payment execution and application interfaces are not implemented yet.
-See the [roadmap](https://github.com/AndrewDongminYoo/spendwall/issues/29).
+The local demo runs real firewall modules with recorded agent calls and synthetic payment responses.
+Separate sandbox adapters have recorded live evidence; they are not an end-to-end production payment service.
+Start with the [judge guide](docs/judge-guide.md) and [threat model](docs/threat-model.md).
 
-## Prerequisites
+## Quickstart
 
-- Node.js 24.21.0, as pinned in `.node-version`.
-- pnpm 11.24.0, as pinned in `package.json`.
-- [Trunk CLI](https://docs.trunk.io/code-quality/get-started/install).
-- Docker with Compose v2 for local Postgres.
-
-## Setup
+Install Node.js **24.21.0**, pnpm **11.24.0**, Git and Docker with its daemon running.
+These versions are pinned in `.node-version` and `package.json`.
+No PayPal or Claude credentials are needed for this path.
 
 ```sh
+git clone https://github.com/AndrewDongminYoo/spendwall.git
+cd spendwall
 pnpm install --frozen-lockfile
+pnpm demo
+```
+
+Expect four `PASS` lines: `small` with one synthetic payment, `approval` with one, `injection` with zero, and `velocity` with two.
+Approval is explicitly scripted in this mode; it does not represent mobile or biometric approval.
+The runner starts and removes its own disposable PostgreSQL container.
+It does not use the Compose database or captures created by `pnpm seed`.
+The [judge guide](docs/judge-guide.md) explains prerequisites, timing evidence, cleanup and separate sandbox verification.
+
+## See the audit dashboard
+
+```sh
+pnpm --filter @spendwall/dashboard build
+pnpm dashboard:preview
+```
+
+Open the loopback URL printed by the preview and enter its disposable test token.
+Use the three prompt buttons to inspect large refund attempts, denial groups and support-bot reservations.
+Stop with Ctrl+C to remove that preview's database.
+The preview has its own synthetic fixtures; it does not display the preceding `pnpm demo` run.
+
+![Recorded local dashboard showing three audit views with synthetic classification and payment data](docs/assets/dashboard-demo.gif)
+
+Actual local browser recording; synthetic classification, synthetic payment outcomes, real HTTP/SQL and Studio widgets.
+[Static frame](docs/assets/dashboard-demo.png) · [Dashboard setup and query limits](docs/dashboard.md).
+Local evaluation retains AG Studio's evaluation warnings and watermarks.
+Trial issuance remains deferred; there is no hosted demo URL yet.
+
+## Architecture and trust boundaries
+
+The solid path is the synthetic demo composition in `apps/agent-demo`.
+The dashboard reads its separately configured database; dotted connections require application configuration.
+
+```mermaid
+flowchart LR
+  T[Untrusted support ticket] --> A[Recorded agent calls or optional Claude]
+  A --> M[Scoped MCP refund and status tools]
+  M --> C[Trusted context resolver]
+  C --> P[Deterministic policy and velocity reservation]
+  P -->|deny| X[No payment execution]
+  P -->|approval required| H[Bound human approval]
+  P -->|allow| E[Idempotent refund executor]
+  H -->|approved and revalidated| E
+  P --> D[(PostgreSQL audit and reservations)]
+  H --> D
+  E --> S[Synthetic payment adapter in demo]
+  D -. configured read access .-> R[Read-only dashboard and bounded audit queries]
+```
+
+`pnpm proxy` is the separate W0 sandbox integration, with recorded MCP/SSE and REST refund evidence.
+It does **not** wire in this policy/approval composition and must not be exposed as a protected public gateway.
+See [proxy boundaries](docs/proxy.md), [approvals](docs/approvals.md) and [approval API](docs/approval-api.md).
+The Flutter approver remains planned in [#15](https://github.com/AndrewDongminYoo/spendwall/issues/15).
+
+## Where AI is used
+
+| Surface            | Implemented behavior                                                                | Default and limit                                                                                    |
+| ------------------ | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Support agent      | Optional Claude Agent SDK asks scoped firewall tools to act                         | Default demo replays recorded calls; `--live` opts into a paid model while payments remain synthetic |
+| Approval summary   | Optional Claude generates advisory text from bounded, redacted context              | Disabled without configuration; never authorizes a payment                                           |
+| Audit queries      | Optional Claude selects one of three intents; server computes data and widget shape | Preview uses a labelled synthetic classifier; no model-generated SQL or payment tools                |
+| Policy compilation | Planned natural-language YAML proposal, diff and dry-run in #21                     | Not implemented; no AI-generated policy is applied                                                   |
+
+Codex and Claude Code assisted development, documentation and review; checked-in policies and deterministic code enforce decisions.
+Model output, ticket text and generated summaries remain untrusted.
+See the [agent guide](apps/agent-demo/README.md), [summary boundary](docs/approval-api.md#optional-advisory-summaries) and [audit assistant contract](docs/dashboard.md#audit-assistant) for configuration and data disclosure.
+
+## Development and verification
+
+For contribution, install the [Trunk CLI](https://docs.trunk.io/code-quality/get-started/install), then run:
+
+```sh
 trunk install
 pnpm hooks:install
 pnpm check
+pnpm --filter @spendwall/dashboard build
 trunk check --all --no-fix
-```
-
-Trunk manages Git hooks and installs the pinned Gitleaks version.
-The pre-commit action scans staged changes with redacted output and blocks commits when the scan fails.
-The pre-push action runs Trunk checks.
-Automatic formatting on commit is disabled.
-Hooks are local controls; CI repeats the repository checks independently.
-
-`pnpm lint` checks formatting, `pnpm typecheck` checks each TypeScript package, and `pnpm test` exercises real Git commits in temporary repositories with Trunk hooks installed.
-The app entry points are intentionally empty, so type checking does not yet establish application behavior.
-
-## Local database
-
-The Compose file starts only Postgres, bound to `127.0.0.1`.
-For a disposable local development database, the committed example provides non-production settings:
-
-```sh
 docker compose --env-file .env.example config --quiet
-docker compose --env-file .env.example up -d --wait postgres
-docker compose --env-file .env.example down
 ```
 
-The named database volume survives `down`.
-Provide a private environment file with your own database password when needed.
-Never reuse the example password outside local development.
-PayPal credentials are unnecessary for this scaffold and must stay out of Git when integration work begins.
+Formatting and type checks do not prove payment behavior.
+Tests exercise local HTTP/MCP, persisted PostgreSQL state, denial, concurrency, expiry and retry boundaries with synthetic providers.
+Live connectivity and mobile delivery require separate verification.
+Trunk manages staged secret scanning and pre-push checks; CI repeats the declared gates.
+Keep credentials and private runtime state out of Git.
 
-## Repository layout
+| Path                  | Purpose                                                                               |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| `packages/policy`     | Policy loading, CEL evaluation and integer-money normalization                        |
+| `apps/firewall`       | Sandbox proxy, trusted context, audit/velocity, approval and dashboard server modules |
+| `apps/agent-demo`     | Executable synthetic composition with optional Claude agent                           |
+| `apps/dashboard`      | React and AG Studio read-only dashboard                                               |
+| `apps/approver`       | Reserved Flutter app directory, excluded from pnpm                                    |
+| `migrations`, `tests` | PostgreSQL contracts and behavior verification                                        |
+| `docs`                | Operating guides, threat model, specs and plans                                       |
 
-The [human approval API](docs/approval-api.md) provides device enrollment, short-lived JWTs, owned approval list/detail/decision endpoints and queued FCM data delivery.
-Run `pnpm test:approval-api` for the disposable PostgreSQL and actual-curl fixture with synthetic payment and push providers.
-Enrollment credentials are provisioned once by the server operator; expired sessions require a new enrollment credential in this demo.
-This API is a separate loopback server component and does not add human authorization to the W0 MCP binary.
-It has no device attestation, production login or live mobile-delivery verification.
+## Project origin and license
 
-| Path              | Purpose                                                |
-| ----------------- | ------------------------------------------------------ |
-| `packages/policy` | Pure TypeScript policy engine, planned for W1          |
-| `apps/firewall`   | NestJS firewall, planned                               |
-| `apps/agent-demo` | Merchant-support agent, planned                        |
-| `apps/dashboard`  | React and AG Studio dashboard, planned                 |
-| `apps/approver`   | Future independent Flutter project, excluded from pnpm |
-| `scripts`         | Repository tooling                                     |
-| `tests`           | Security-hook integration tests                        |
-| `docs`            | Specifications, plans, and project notes               |
+Spendwall was newly started for the PayPal AI Hackathon during its submission period.
+The repository's [first commit](https://github.com/AndrewDongminYoo/spendwall/commit/abbc46c) is dated October 13, 2026; the [official rules](https://paypalaihackathon.devpost.com/rules) list October 1–November 12, 2026 as the submission period.
+Third-party packages retain their own licenses; the AG Studio evaluation is not a deployment license.
 
-## License
-
-[MIT](LICENSE).
+[MIT](LICENSE) · [Roadmap](https://github.com/AndrewDongminYoo/spendwall/issues/29).

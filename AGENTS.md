@@ -5,15 +5,16 @@
 Spendwall is a payment policy firewall for merchant-support AI agents.
 Keep policy decisions deterministic and default to denial when trustworthy payment context is unavailable.
 Never put PayPal credentials in the agent or commit real credentials.
-The current repository contains a scaffold, not a working payment service.
+The repository contains tested payment-control modules, a synthetic support-agent demo and a local read-only dashboard.
+The W0 sandbox proxy is a separate integration without the demo's policy/approval composition; do not describe it as a production payment service.
 
 ## Structure
 
-- `packages/policy`: framework-independent TypeScript policy code.
-- `apps/firewall`: future NestJS integration boundary.
-- `apps/agent-demo`: future Claude Agent SDK demo.
-- `apps/dashboard`: future React dashboard.
-- `apps/approver`: separate Flutter project outside the pnpm workspace.
+- `packages/policy`: framework-independent TypeScript policy loading and evaluation.
+- `apps/firewall`: proxy, context, audit, velocity, approval and dashboard server modules.
+- `apps/agent-demo`: synthetic support-agent composition with optional Claude execution.
+- `apps/dashboard`: React and AG Studio read-only dashboard.
+- `apps/approver`: reserved Flutter app directory outside the pnpm workspace; no platforms generated.
 - `docs/specs`, `docs/plans`, and `docs/notes`: durable project documentation.
 
 ## Checks
