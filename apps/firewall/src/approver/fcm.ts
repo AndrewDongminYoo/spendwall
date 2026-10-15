@@ -9,10 +9,14 @@ type Options = {
 };
 export class FcmFailure extends Error {
   readonly retryable: boolean;
-  constructor(retryable = true) {
+  readonly retryAfterSeconds: number;
+  constructor(retryable = true, retryAfterSeconds = 0) {
     super('Notification unavailable.');
     this.name = 'FcmFailure';
     this.retryable = retryable;
+    this.retryAfterSeconds = Number.isFinite(retryAfterSeconds)
+      ? Math.min(86400, Math.max(0, Math.ceil(retryAfterSeconds)))
+      : 0;
   }
 }
 export class FcmSender {
@@ -37,6 +41,7 @@ export class FcmSender {
   }
   async send(token: string, id: string): Promise<void> {
     const abort = new AbortController();
+    let retryAfterSeconds = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       deliveryToken(token);
@@ -65,8 +70,15 @@ export class FcmSender {
             }),
           },
         );
-        if (response.status !== 200)
-          throw new FcmFailure(![400, 401, 403, 404].includes(response.status));
+        const after = response.headers.get('retry-after') ?? '';
+        const seconds = /^\d{1,8}$/.test(after)
+          ? Number(after)
+          : (Date.parse(after) - Date.now()) / 1000;
+        const delay = Math.max(
+          response.status === 429 ? 60 : 0,
+          Number.isFinite(seconds) ? seconds : 0,
+        );
+        retryAfterSeconds = delay;
         const reader = response.body?.getReader();
         if (!reader) throw new FcmFailure();
         let size = 0;
@@ -83,6 +95,24 @@ export class FcmSender {
           await reader.cancel().catch(() => {});
         }
         const result = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        if (response.status !== 200) {
+          const error = result?.error;
+          const unregistered =
+            response.status === 404 &&
+            error?.status === 'NOT_FOUND' &&
+            Array.isArray(error.details) &&
+            error.details.some(
+              (detail: unknown) =>
+                detail !== null &&
+                typeof detail === 'object' &&
+                '@type' in detail &&
+                detail['@type'] ===
+                  'type.googleapis.com/google.firebase.fcm.v1.FcmError' &&
+                'errorCode' in detail &&
+                detail.errorCode === 'UNREGISTERED',
+            );
+          throw new FcmFailure(!unregistered, delay);
+        }
         if (
           !result ||
           typeof result.name !== 'string' ||
@@ -103,7 +133,13 @@ export class FcmSender {
         }),
       ]);
     } catch (error) {
-      throw error instanceof FcmFailure ? error : new FcmFailure();
+      throw new FcmFailure(
+        error instanceof FcmFailure ? error.retryable : true,
+        Math.max(
+          retryAfterSeconds,
+          error instanceof FcmFailure ? error.retryAfterSeconds : 0,
+        ),
+      );
     } finally {
       if (timer) clearTimeout(timer);
       abort.abort();

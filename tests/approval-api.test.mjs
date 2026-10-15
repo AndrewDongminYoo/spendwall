@@ -135,3 +135,67 @@ test('FCM provider errors and redirects use a constant safe failure', async () =
     });
   }
 });
+
+test('ambiguous FCM errors retry and only explicit unregistered devices terminate', async () => {
+  for (const [status, body, retryable] of [
+    [400, { error: { status: 'INVALID_ARGUMENT' } }, true],
+    [401, { error: { status: 'UNAUTHENTICATED' } }, true],
+    [403, { error: { status: 'PERMISSION_DENIED' } }, true],
+    [404, { error: { status: 'NOT_FOUND' } }, true],
+    [
+      404,
+      {
+        error: {
+          status: 'NOT_FOUND',
+          details: [
+            {
+              '@type': 'type.googleapis.com/google.firebase.fcm.v1.FcmError',
+              errorCode: 'UNREGISTERED',
+            },
+          ],
+        },
+      },
+      false,
+    ],
+  ]) {
+    const sender = new FcmSender({
+      projectId: 'synthetic-project',
+      getAccessToken: async () => 'synthetic-token',
+      fetchImpl: async () => Response.json(body, { status }),
+    });
+    await assert.rejects(
+      sender.send('synthetic-device-token', id),
+      (error) =>
+        error.message === 'Notification unavailable.' &&
+        error.retryable === retryable,
+    );
+  }
+});
+test('FCM rate limits and Retry-After propagate a minimum delivery delay', async () => {
+  for (const [status, headers, minimum] of [
+    [429, {}, 60],
+    [503, { 'retry-after': '120' }, 120],
+  ]) {
+    const sender = new FcmSender({
+      projectId: 'synthetic-project',
+      getAccessToken: async () => 'synthetic-token',
+      fetchImpl: async () => Response.json({ error: {} }, { status, headers }),
+    });
+    await assert.rejects(
+      sender.send('synthetic-device-token', id),
+      (error) => error.retryable && error.retryAfterSeconds >= minimum,
+    );
+  }
+});
+
+test('malformed rate-limit responses retain their retry delay', async () => {
+  const sender = new FcmSender({
+    projectId: 'synthetic-project',
+    getAccessToken: async () => 'synthetic-token',
+    fetchImpl: async () => new Response('not JSON', { status: 429 }),
+  });
+  await assert.rejects(
+    sender.send('synthetic-device-token', id),
+    (error) => error.retryable && error.retryAfterSeconds >= 60,
+  );
+});

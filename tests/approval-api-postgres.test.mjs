@@ -78,6 +78,7 @@ async function fixture(t) {
   });
   const dir = await mkdtemp(join(tmpdir(), 'spendwall-approval-api-'));
   const seen = { posts: [], notifications: [], refreshes: 0 };
+  let pushResponse;
   let pushFails = false,
     currentChanged = false,
     approvalTime;
@@ -159,6 +160,7 @@ async function fixture(t) {
         '0',
       );
       await beforePush(seen.notifications.length);
+      if (pushResponse) return pushResponse.clone();
       return pushFails
         ? Response.json({ error: { status: 'UNAVAILABLE' } }, { status: 503 })
         : Response.json({ name: 'projects/synthetic-project/messages/one' });
@@ -263,6 +265,7 @@ async function fixture(t) {
     register,
     pending,
     setPushFails: (v) => (pushFails = v),
+    setPushResponse: (v) => (pushResponse = v),
     setChanged: (v) => (currentChanged = v),
     setTime: (v) => (approvalTime = v),
     setGrants: (v) => (grants = v),
@@ -926,6 +929,61 @@ test(
             ),
         );
         assert.equal((await f.register()).status, 401);
+      },
+    );
+    await t.test(
+      'authentication failure stays queued and a fresh worker retries successfully',
+      async (t) => {
+        const f = await fixture(t);
+        await f.register();
+        await f.pending();
+        f.setPushResponse(
+          Response.json(
+            { error: { status: 'UNAUTHENTICATED' } },
+            { status: 401 },
+          ),
+        );
+        await f.app.drainNotifications();
+        assert.equal(
+          (await f.pool.query('SELECT state FROM approvals.deliveries')).rows[0]
+            .state,
+          'ready',
+        );
+        f.setPushResponse(undefined);
+        await f.owner.query(
+          "UPDATE approvals.deliveries SET next_attempt_at=clock_timestamp()-interval '1 second'",
+        );
+        await f.worker().drain();
+        const row = (
+          await f.pool.query('SELECT state,attempts FROM approvals.deliveries')
+        ).rows[0];
+        assert.deepEqual(row, { state: 'sent', attempts: 2 });
+        assert.equal(f.seen.notifications.length, 2);
+        assert.equal(f.seen.posts.length, 0);
+      },
+    );
+    await t.test(
+      'provider retry delay is persisted in the delivery queue',
+      async (t) => {
+        const f = await fixture(t);
+        await f.register();
+        await f.pending();
+        f.setPushResponse(
+          Response.json(
+            { error: { status: 'UNAVAILABLE' } },
+            { status: 503, headers: { 'retry-after': '120' } },
+          ),
+        );
+        await f.app.drainNotifications();
+        const row = (
+          await f.pool.query(
+            "SELECT state,next_attempt_at>=clock_timestamp()+interval '119 seconds' AS delayed FROM approvals.deliveries",
+          )
+        ).rows[0];
+        assert.deepEqual(row, { state: 'ready', delayed: true });
+        await f.worker().drain();
+        assert.equal(f.seen.notifications.length, 1);
+        assert.equal(f.seen.posts.length, 0);
       },
     );
     await t.test(

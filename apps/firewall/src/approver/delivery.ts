@@ -82,7 +82,11 @@ export class ApprovalDelivery {
       client.release(broken);
     }
   }
-  private async record(row: Delivery, state: 'ready' | 'sent' | 'skipped') {
+  private async record(
+    row: Delivery,
+    state: 'ready' | 'sent' | 'skipped',
+    retryAfterSeconds: number,
+  ) {
     const client = await this.pool.connect();
     try {
       await client.query(
@@ -92,7 +96,10 @@ export class ApprovalDelivery {
           row.id,
           row.claim_id,
           state,
-          Math.min(60, 2 ** Math.min(row.attempts, 6)),
+          Math.max(
+            retryAfterSeconds,
+            Math.min(60, 2 ** Math.min(row.attempts, 6)),
+          ),
         ],
       );
     } finally {
@@ -104,6 +111,7 @@ export class ApprovalDelivery {
       const row = await this.claim();
       if (!row) return;
       let next: 'ready' | 'sent' | 'skipped' = 'ready';
+      let retryAfterSeconds = 0;
       try {
         const device = await this.devices.deliveryDevice(
           row.device_ref,
@@ -138,9 +146,12 @@ export class ApprovalDelivery {
           next = 'sent';
         }
       } catch (error) {
-        if (error instanceof FcmFailure && !error.retryable) next = 'skipped';
+        if (error instanceof FcmFailure) {
+          if (!error.retryable) next = 'skipped';
+          retryAfterSeconds = error.retryAfterSeconds;
+        }
       }
-      await this.record(row, next);
+      await this.record(row, next, retryAfterSeconds);
     }
   }
 }

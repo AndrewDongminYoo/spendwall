@@ -110,7 +110,9 @@ FCM HTTP v1 uses [Google ADC and short-lived OAuth authorization](https://fireba
 Keep Google credentials private and configure ADC outside the repository.
 The message contains only `{approval_id}` in its data payload plus the target registration token.
 No amount, customer identity, JWT or provider secret is sent in the data.
-Token acquisition and HTTP delivery are bounded; transient failures retry with backoff until expiry, and permanent provider failures are skipped.
+Token acquisition and HTTP delivery are bounded; ambiguous provider/authentication failures retry with backoff until expiry.
+Only an explicit FCM `UNREGISTERED` device error terminates provider retries.
+The queue preserves `Retry-After` and a minimum one-minute delay for HTTP 429, following the [FCM error contract](https://firebase.google.com/docs/cloud-messaging/error-codes).
 Only the matching claim UUID can record an outcome, so an abandoned worker cannot overwrite a newer claim.
 
 Delivery is advisory and at least once across crashes.
