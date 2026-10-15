@@ -16,7 +16,9 @@
     "audit:verify": "node scripts/audit-verify.mjs",
     "test:audit:postgres": "node scripts/test-audit-postgres.mjs",
     "test:approval-api": "node scripts/test-audit-postgres.mjs --approval-api",
-    "demo": "node apps/agent-demo/src/index.ts"
+    "demo": "node apps/agent-demo/src/index.ts",
+    "dashboard": "node scripts/dashboard.mjs",
+    "dashboard:preview": "node scripts/dashboard-preview.mjs"
   },
   "keywords": [],
   "author": "",
