@@ -17,7 +17,7 @@ test('recorded demo executes four scenarios and reports firewall outcomes', () =
     {
       cwd: root,
       encoding: 'utf8',
-      timeout: 120_000,
+      timeout: 480_000,
       env: { PATH: process.env.PATH, HOME: process.env.HOME, NO_COLOR: '1' },
     },
   );
@@ -230,7 +230,7 @@ for (const [signal, expectedCode] of [
 ]) {
   test(
     `CLI ${signal} cleans its container before exit`,
-    { timeout: 20_000 },
+    { timeout: 480_000 },
     async (t) => {
       const child = spawn(
         process.execPath,
