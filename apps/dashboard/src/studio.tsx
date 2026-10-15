@@ -9,7 +9,9 @@ import type {
 } from 'ag-studio';
 import type { DashboardData } from '../../firewall/src/dashboard/data.ts';
 
-export type Stats = Omit<DashboardData, 'audit'>;
+export type Stats = Omit<DashboardData, 'audit'> & {
+  query_mode: 'claude' | 'synthetic' | 'disabled';
+};
 type BudgetDefinition = AgBaseWidgetDefinition<'spendwall-budget'>;
 interface Registry extends Omit<AgDefaultRegistry, 'widgets'> {
   widgets: readonly (AgDefaultWidgetDefinition | BudgetDefinition)[];
@@ -69,7 +71,7 @@ const widgets = createWidgets<Registry>({
     },
   ],
 });
-const theme = studioTheme.withParams({
+export const theme = studioTheme.withParams({
   fontFamily: 'var(--font)',
   fontSize: 14,
   textColor: 'var(--ink)',
