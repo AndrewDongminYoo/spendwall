@@ -3,7 +3,7 @@ import { stdin, stdout } from 'node:process';
 import { withDemoDatabase } from './database.ts';
 import { createDemo, readTicket, scenarios } from './firewall.ts';
 import type { Scenario } from './firewall.ts';
-import { replay } from './runner.ts';
+import { replay, reviewPending } from './runner.ts';
 import { runLive } from './agent.ts';
 
 const args = process.argv.slice(2);
@@ -70,26 +70,26 @@ if (
               undefined,
               cancellation.signal,
             );
-            for (const id of demo.pendingIds()) {
-              cancellation.signal.throwIfAborted();
-              let approved = false;
-              if (stdin.isTTY) {
+            await reviewPending(
+              demo,
+              async (prompt) => {
+                if (!stdin.isTTY) return false;
                 const terminal = createInterface({
                   input: stdin,
                   output: stdout,
                 });
                 try {
-                  approved =
-                    (await terminal.question(
-                      `Approve synthetic refund ${id}? Type approve: `,
-                      { signal: cancellation.signal },
-                    )) === 'approve';
+                  return (
+                    (await terminal.question(prompt, {
+                      signal: cancellation.signal,
+                    })) === 'approve'
+                  );
                 } finally {
                   terminal.close();
                 }
-              }
-              await demo.humanDecision(id, approved ? 'approve' : 'deny');
-            }
+              },
+              cancellation.signal,
+            );
             console.log(
               `${scenario}: LIVE OBSERVATION payments=${demo.payments.length}`,
             );

@@ -205,11 +205,24 @@ export async function createDemo(
       payments: payment.writes,
       pendingIds: () => [...pending],
       // The runner holds this capability. It is never exposed as an agent tool.
-      async humanDecision(id: string, decision: 'approve' | 'deny') {
+      async humanDetails(id: string) {
+        if (!pending.has(id)) throw new Error('Unknown demo approval.');
+        return approvals.details({ agentId, approvalId: id });
+      },
+      async humanDecision(
+        id: string,
+        decision: 'approve' | 'deny',
+        argsHash?: string,
+      ) {
         if (!pending.has(id)) throw new Error('Unknown demo approval.');
         const details = await approvals.details({ agentId, approvalId: id });
         const view = await approvals.decide(
-          { agentId, approvalId: id, decision, argsHash: details.args_hash },
+          {
+            agentId,
+            approvalId: id,
+            decision,
+            argsHash: argsHash ?? details.args_hash,
+          },
           async ({ input }) => {
             const capture = String(input.context.args.capture_id);
             if (!ticket.captures.includes(capture))

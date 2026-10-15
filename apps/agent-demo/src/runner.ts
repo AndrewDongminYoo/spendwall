@@ -14,6 +14,27 @@ export async function connectRecorded(demo: Demo) {
   return client;
 }
 
+export async function reviewPending(
+  demo: Demo,
+  confirm: (prompt: string) => Promise<boolean>,
+  signal?: AbortSignal,
+) {
+  for (const id of demo.pendingIds()) {
+    signal?.throwIfAborted();
+    const details = await demo.humanDetails(id);
+    const context = details.input.context;
+    const approved = await confirm(
+      `\nSynthetic refund approval: ${id}\nCapture: ${context.args.capture_id}\nAmount: ${context.amount.currency} ${context.amount.value}\nCustomer: ${context.customer.id}\nMerchant: ${context.merchant.id}\nExpires: ${details.expires_at}\nType approve to authorize this refund: `,
+    );
+    signal?.throwIfAborted();
+    await demo.humanDecision(
+      id,
+      approved ? 'approve' : 'deny',
+      details.args_hash,
+    );
+  }
+}
+
 export async function replay(demo: Demo, signal?: AbortSignal) {
   const client = await connectRecorded(demo);
   try {

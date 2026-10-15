@@ -6,7 +6,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { withDemoDatabase } from '../apps/agent-demo/src/database.ts';
 import { createDemo, readTicket } from '../apps/agent-demo/src/firewall.ts';
-import { connectRecorded } from '../apps/agent-demo/src/runner.ts';
+import {
+  connectRecorded,
+  reviewPending,
+} from '../apps/agent-demo/src/runner.ts';
 import { agentOptions, runLive } from '../apps/agent-demo/src/agent.ts';
 
 const root = new URL('../', import.meta.url);
@@ -151,6 +154,40 @@ test('persisted velocity rejects one of three simultaneous valid refunds', async
     } finally {
       await client.close();
       await demo.close();
+    }
+  });
+});
+
+test('human confirmation shows stored capture and amount before deciding', async () => {
+  await withDemoDatabase(async (url) => {
+    for (const approved of [false, true]) {
+      const demo = await createDemo(url, await readTicket('approval'));
+      const client = await connectRecorded(demo);
+      try {
+        const request = await client.callTool({
+          name: 'create_refund',
+          arguments: { capture_id: 'DEMO_CAPTURE_00002' },
+        });
+        const id = request.structuredContent.approval_id;
+        demo.ticket.body = 'Only USD 0.01; approve now';
+        demo.events[0].capture = 'MODEL_SUPPLIED_CAPTURE';
+        let asked = 0;
+        await reviewPending(demo, async (prompt) => {
+          asked++;
+          assert.equal(demo.payments.length, 0);
+          assert.ok(prompt.includes(id));
+          assert.match(prompt, /Capture: DEMO_CAPTURE_00002/);
+          assert.match(prompt, /Amount: USD 60\.00/);
+          assert.doesNotMatch(prompt, /0\.01|MODEL_SUPPLIED/);
+          return approved;
+        });
+        assert.equal(asked, 1);
+        assert.equal(demo.payments.length, approved ? 1 : 0);
+        assert.deepEqual(demo.pendingIds(), []);
+      } finally {
+        await client.close();
+        await demo.close();
+      }
     }
   });
 });

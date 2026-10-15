@@ -47,6 +47,8 @@ Only the API key and runtime path are forwarded.
 The payment provider remains synthetic even in live mode.
 
 If a live request waits for approval, the runner asks the terminal operator to type `approve` after the model turn ends.
+The prompt shows the stored approval's capture, amount, customer, merchant, and expiry before accepting a decision.
+The decision uses the argument hash from that displayed approval.
 Any other response, including noninteractive input, denies it.
 Live output says `LIVE OBSERVATION`, not `PASS`: the model may refuse the injection or choose different valid actions.
 The recorded adversarial calls establish firewall enforcement for those inputs; they do not establish universal prompt-injection resistance.
