@@ -195,18 +195,37 @@ export function dashboardData(rows: HistoryRow[], options: Options) {
     string,
     { rule: string; policy_version: string; count: number }
   >();
-  for (const r of recent.filter((r) => r.initial.decision === 'deny')) {
-    const refs = parseRuleReferences(r.initial.matched_rules).map(
-      (position) => `rules.v1:${position.toString(36)}`,
-    );
-    for (const ref of refs.length ? refs : ['unreferenced-denial']) {
-      const key = `${r.initial.policy_version}/${ref}`;
-      const entry = rules.get(key) ?? {
-        rule: ref,
-        policy_version: r.initial.policy_version,
+  const ruleChunks = new Map<
+    string,
+    { policyVersion: string; reference: string | null; count: number }
+  >();
+  for (const r of recent) {
+    if (r.initial.decision !== 'deny') continue;
+    for (const reference of r.initial.matched_rules.length
+      ? r.initial.matched_rules
+      : [null]) {
+      const key = JSON.stringify([r.initial.policy_version, reference]);
+      const entry = ruleChunks.get(key) ?? {
+        policyVersion: r.initial.policy_version,
+        reference,
         count: 0,
       };
       entry.count++;
+      ruleChunks.set(key, entry);
+    }
+  }
+  for (const set of ruleChunks.values()) {
+    const refs = parseRuleReferences(set.reference ? [set.reference] : []).map(
+      (position) => `rules.v1:${position.toString(36)}`,
+    );
+    for (const ref of refs.length ? refs : ['unreferenced-denial']) {
+      const key = `${set.policyVersion}/${ref}`;
+      const entry = rules.get(key) ?? {
+        rule: ref,
+        policy_version: set.policyVersion,
+        count: 0,
+      };
+      entry.count += set.count;
       rules.set(key, entry);
     }
   }

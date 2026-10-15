@@ -84,6 +84,56 @@ test('dashboard counts each compact rule position separately within its policy v
   );
 });
 
+test('dashboard groups repeated large rule sets within the refresh budget', () => {
+  const rules = Array.from({ length: 1500 }, (_, i) => ({ id: `r${i}` }));
+  const refs = encodeRuleReferences(
+    rules,
+    rules.map((r) => r.id),
+  );
+  const rows = Array.from({ length: 10000 }, (_, i) =>
+    row(i + 1, 'deny', { matched_rules: refs }),
+  );
+  const started = performance.now();
+  const data = dashboardData(rows, options());
+  const elapsed = performance.now() - started;
+  assert.equal(data.rules.length, 1500);
+  for (const rule of data.rules) assert.equal(rule.count, 10000);
+  assert.ok(
+    elapsed < 4000,
+    `Dense rule projection took ${elapsed.toFixed(0)}ms; two endpoint reads must fit the 10s refresh timeout`,
+  );
+});
+
+test('dashboard aggregates shared chunks across distinct dense rule sets', () => {
+  const rules = Array.from({ length: 1500 }, (_, i) => ({ id: `r${i}` }));
+  const expected = new Map();
+  const rows = Array.from({ length: 10000 }, (_, i) => {
+    const matched = rules.filter(
+      (_, position) => position < 1485 || (i & (1 << (position - 1485))) !== 0,
+    );
+    for (const rule of matched)
+      expected.set(rule.id, (expected.get(rule.id) ?? 0) + 1);
+    return row(i + 1, 'deny', {
+      matched_rules: encodeRuleReferences(
+        rules,
+        matched.map((r) => r.id),
+      ),
+    });
+  });
+  const started = performance.now();
+  const data = dashboardData(rows, options());
+  const elapsed = performance.now() - started;
+  assert.equal(data.rules.length, expected.size);
+  for (const rule of data.rules) {
+    const position = Number.parseInt(rule.rule.slice('rules.v1:'.length), 36);
+    assert.equal(rule.count, expected.get(`r${position}`));
+  }
+  assert.ok(
+    elapsed < 4000,
+    `Distinct dense rule projection took ${elapsed.toFixed(0)}ms`,
+  );
+});
+
 test('dashboard does not infer the reason for a denial without rule references', () => {
   const data = dashboardData([row(1, 'deny')], options());
   assert.deepEqual(data.rules, [
