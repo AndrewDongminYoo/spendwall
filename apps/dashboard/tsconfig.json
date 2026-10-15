@@ -1,4 +1,11 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["src/**/*.ts"]
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "allowImportingTsExtensions": true,
+    "types": ["vite/client", "node"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }
