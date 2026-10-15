@@ -1,5 +1,6 @@
-import { spawnSync } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { promisify } from 'node:util';
 import pg from 'pg';
 
 // Only this function creates a database target. No environment URL is accepted.
@@ -22,8 +23,28 @@ export async function withDemoDatabase<T>(
   let started = false;
   try {
     signal?.throwIfAborted();
+    const image = 'postgres:17-alpine';
+    const cached = spawnSync('docker', ['image', 'inspect', image], {
+      stdio: 'ignore',
+      timeout: 30_000,
+    });
+    if (cached.status !== 0) {
+      try {
+        await promisify(execFile)('docker', ['pull', image], {
+          timeout: 300_000,
+          ...(signal ? { signal } : {}),
+        });
+      } catch {
+        signal?.throwIfAborted();
+        throw new Error(
+          'Demo Docker image pull failed. Check Docker and retry the download.',
+        );
+      }
+    }
+    signal?.throwIfAborted();
     docker(
       'run',
+      '--pull=never',
       '--rm',
       '-d',
       '--name',
@@ -38,7 +59,7 @@ export async function withDemoDatabase<T>(
       'POSTGRES_DB=spendwall_demo',
       '-p',
       '127.0.0.1::5432',
-      'postgres:17-alpine',
+      image,
     );
     started = true;
     const port = docker('port', name, '5432/tcp').split(':').at(-1);

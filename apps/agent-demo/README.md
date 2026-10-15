@@ -15,7 +15,7 @@ It uses the real context resolver, policy evaluator, PostgreSQL velocity reserva
 All payment HTTP responses come from a synthetic adapter that has no network fallback.
 No PayPal credentials or `.env` files are read.
 Each invocation owns a disposable `postgres:17-alpine` container and temporary refund ledgers.
-Docker may download that image if it is not cached.
+If the image is not cached, a separate cancellable download has a five-minute deadline before container startup.
 
 | Scenario    | Expected result                                                                                         |
 | ----------- | ------------------------------------------------------------------------------------------------------- |

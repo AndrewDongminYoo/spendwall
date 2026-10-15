@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { spawn, spawnSync } from 'node:child_process';
-import { access } from 'node:fs/promises';
+import { access, chmod, mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { withDemoDatabase } from '../apps/agent-demo/src/database.ts';
 import { createDemo, readTicket } from '../apps/agent-demo/src/firewall.ts';
 import { connectRecorded } from '../apps/agent-demo/src/runner.ts';
@@ -284,3 +286,52 @@ for (const [signal, expectedCode] of [
     },
   );
 }
+
+test(
+  'cold image provisioning can exceed the container command deadline',
+  { timeout: 90_000 },
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'spendwall-cold-docker-'));
+    const realDocker = spawnSync('which', ['docker'], { encoding: 'utf8' });
+    assert.equal(realDocker.status, 0);
+    try {
+      const wrapper = join(directory, 'docker');
+      // Simulate a cold, slow download without deleting the host's cached image.
+      await writeFile(
+        wrapper,
+        `#!/bin/sh
+if [ "$1" = image ] && [ "$2" = inspect ]; then exit 1; fi
+if [ "$1" = pull ]; then
+  sleep 31
+  touch "$SPENDWALL_COLD_READY"
+  exit 0
+fi
+if [ "$1" = run ] && [ ! -f "$SPENDWALL_COLD_READY" ]; then
+  sleep 31
+fi
+exec "$SPENDWALL_REAL_DOCKER" "$@"
+`,
+      );
+      await chmod(wrapper, 0o700);
+      const result = spawnSync(
+        process.execPath,
+        ['apps/agent-demo/src/index.ts', 'small'],
+        {
+          cwd: root,
+          encoding: 'utf8',
+          timeout: 60_000,
+          env: {
+            ...process.env,
+            PATH: `${directory}:${process.env.PATH}`,
+            SPENDWALL_REAL_DOCKER: realDocker.stdout.trim(),
+            SPENDWALL_COLD_READY: join(directory, 'ready'),
+          },
+        },
+      );
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /small: PASS payments=1/);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
