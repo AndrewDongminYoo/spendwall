@@ -50,7 +50,18 @@ test('dashboard counts original decisions, keeps pending reservation and never c
   const pending = row(2, 'require_approval', { ts_ms: now - 25 * 3600000 });
   const created = { ...pending, id: '3', event_kind: 'approval_created' };
   const denied = row(4, 'deny');
-  const value = dashboardData([allowed, pending, created, denied], options());
+  const cfg = options();
+  cfg.approvals = [
+    {
+      approval_id: pending.approval_id,
+      reservation_id: pending.id,
+      approval_state: 'pending',
+      execution_state: null,
+      execution_id: null,
+      expires_ms: now - 1000,
+    },
+  ];
+  const value = dashboardData([allowed, pending, created, denied], cfg);
   assert.deepEqual(value.decisions, [
     { decision: 'allow', count: 1 },
     { decision: 'require_approval', count: 0 },
@@ -105,9 +116,9 @@ test('dashboard only counts successful bound approval executions as confirmed mo
   );
   cfg.approvals[0].execution_id = executed.upstream_result_ref;
   cfg.approvals[0].execution_state = 'unknown';
-  assert.equal(
-    dashboardData([initial, created, decided, executed], cfg).confirmed_usd,
-    0,
+  assert.throws(
+    () => dashboardData([initial, created, decided, executed], cfg),
+    /unavailable/,
   );
 });
 
@@ -140,9 +151,91 @@ test('dashboard excludes foreign merchant data and expired/processed approvals',
   cfg.approvals[0].expires_ms = now + 1;
   cfg.approvals[0].approval_state = 'denied';
   assert.equal(
-    dashboardData([pending, foreign, created], cfg).pending.length,
+    dashboardData(
+      [
+        pending,
+        foreign,
+        created,
+        {
+          ...pending,
+          id: '4',
+          event_kind: 'approval_decided',
+          decision: 'deny',
+        },
+      ],
+      cfg,
+    ).pending.length,
     0,
   );
+});
+
+test('dashboard reconciles stored approval states with their audit transitions', () => {
+  const initial = row(1, 'require_approval');
+  const created = { ...initial, id: '2', event_kind: 'approval_created' };
+  const allow = {
+    ...initial,
+    id: '3',
+    event_kind: 'approval_decided',
+    decision: 'allow',
+  };
+  const deny = { ...allow, decision: 'deny' };
+  const unconfirmed = {
+    ...initial,
+    id: '4',
+    event_kind: 'approval_executed',
+    decision: 'deny',
+  };
+  const execution = randomUUID();
+  const cfg = options();
+  const record = {
+    approval_id: initial.approval_id,
+    reservation_id: initial.id,
+    approval_state: 'pending',
+    execution_state: null,
+    execution_id: null,
+    expires_ms: now + 1000,
+  };
+  // A reservation can commit before the approval row is created.
+  assert.equal(dashboardData([initial], cfg).agents[0].reserved_usd, 60);
+  assert.throws(() => dashboardData([initial, created], cfg), /unavailable/);
+  for (const state of ['pending', 'denied', 'expired', 'approved']) {
+    record.approval_state = state;
+    record.execution_state = state === 'approved' ? 'in_flight' : null;
+    record.execution_id = state === 'approved' ? execution : null;
+    cfg.approvals = [record];
+    for (const [event, expected] of [
+      [undefined, 'pending'],
+      [deny, 'denied'],
+      [allow, 'approved'],
+    ]) {
+      const rows = [initial, created, ...(event ? [event] : [])];
+      const matches =
+        state === expected || (state === 'expired' && expected === 'denied');
+      if (matches) {
+        const value = dashboardData(rows, cfg);
+        assert.equal(
+          value.agents[0].reserved_usd,
+          state === 'denied' || state === 'expired' ? 0 : 60,
+        );
+      } else
+        assert.throws(
+          () => dashboardData(rows, cfg),
+          /unavailable/,
+          `${state} / ${expected}`,
+        );
+    }
+  }
+  for (const state of ['in_flight', 'unknown', 'failed']) {
+    record.execution_state = state;
+    const value = dashboardData([initial, created, allow, unconfirmed], cfg);
+    assert.equal(value.confirmed_usd, 0);
+    assert.equal(value.agents[0].reserved_usd, 60);
+    if (state !== 'in_flight')
+      assert.throws(
+        () => dashboardData([initial, created, allow], cfg),
+        /unavailable/,
+      );
+  }
 });
 
 test('dashboard rejects approval records without a matching creation event', () => {
@@ -185,6 +278,12 @@ test('dashboard rejects approval records without a matching creation event', () 
       ),
     /unavailable/,
   );
+});
+
+test('dashboard rejects duplicate approval identities across distinct reservations', () => {
+  const first = row(1, 'require_approval');
+  const second = row(2, 'require_approval', { approval_id: first.approval_id });
+  assert.throws(() => dashboardData([first, second], options()), /unavailable/);
 });
 
 test('dashboard rejects the identity key reused as a differently cased token', async () => {

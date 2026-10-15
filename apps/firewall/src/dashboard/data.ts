@@ -36,29 +36,67 @@ export function dashboardData(rows: HistoryRow[], options: Options) {
     options.agents.find((a) => a.ref === ref)?.name ?? ref;
   const approvals = new Map(options.approvals.map((a) => [a.approval_id, a]));
   const calls = [...requests.values()];
-  const byApproval = new Map(calls.map((r) => [r.initial.approval_id, r]));
-  const successfulExecutions = new Map(
+  const approvalCalls = calls.filter((r) => r.initial.approval_id !== null);
+  const byApproval = new Map(
+    approvalCalls.map((r) => [r.initial.approval_id, r]),
+  );
+  if (
+    byApproval.size !== approvalCalls.length ||
+    approvals.size !== options.approvals.length
+  )
+    throw new Error('Dashboard unavailable.');
+  for (const r of approvalCalls) {
+    if ((r.created || r.decided) && !approvals.has(r.initial.approval_id!))
+      throw new Error('Dashboard unavailable.');
+  }
+  const executions = new Map(
     rows
       .filter(
         (r) =>
           r.event_kind === 'approval_executed' &&
-          r.upstream_status !== null &&
-          r.upstream_status >= 200 &&
-          r.upstream_status < 300 &&
           (r.resolved_ctx.velocity as { merchant_ref?: unknown } | undefined)
             ?.merchant_ref === options.merchantRef,
       )
-      .map((r) => [r.approval_id, r.upstream_result_ref]),
+      .map((r) => [r.approval_id, r]),
   );
   for (const approval of options.approvals) {
     const request = byApproval.get(approval.approval_id);
     if (!request?.created || request.initial.id !== approval.reservation_id)
       throw new Error('Dashboard unavailable.');
+    const stateMatches =
+      approval.approval_state === 'pending'
+        ? !request.decided &&
+          !request.approved &&
+          request.pending &&
+          !request.released
+        : approval.approval_state === 'denied' ||
+            approval.approval_state === 'expired'
+          ? request.decided &&
+            !request.approved &&
+            !request.pending &&
+            request.released
+          : approval.approval_state === 'approved' &&
+            request.decided &&
+            request.approved &&
+            !request.released &&
+            request.pending === (approval.execution_state !== 'succeeded');
+    const execution = executions.get(approval.approval_id);
+    if (
+      !stateMatches ||
+      (approval.approval_state !== 'approved'
+        ? approval.execution_state !== null || approval.execution_id !== null
+        : !approval.execution_id ||
+          !['in_flight', 'unknown', 'failed', 'succeeded'].includes(
+            approval.execution_state ?? '',
+          ) ||
+          (['unknown', 'failed'].includes(approval.execution_state!) &&
+            execution?.decision !== 'deny'))
+    )
+      throw new Error('Dashboard unavailable.');
     if (
       approval.execution_state === 'succeeded' &&
       (!approval.execution_id ||
-        successfulExecutions.get(approval.approval_id) !==
-          approval.execution_id)
+        execution?.upstream_result_ref !== approval.execution_id)
     )
       throw new Error('Dashboard unavailable.');
   }
