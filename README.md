@@ -51,6 +51,12 @@ PayPal credentials are unnecessary for this scaffold and must stay out of Git wh
 
 ## Repository layout
 
+The [human approval API](docs/approval-api.md) provides device enrollment, short-lived JWTs, owned approval list/detail/decision endpoints and queued FCM data delivery.
+Run `pnpm test:approval-api` for the disposable PostgreSQL and actual-curl fixture with synthetic payment and push providers.
+Enrollment credentials are provisioned once by the server operator; expired sessions require a new enrollment credential in this demo.
+This API is a separate loopback server component and does not add human authorization to the W0 MCP binary.
+It has no device attestation, production login or live mobile-delivery verification.
+
 | Path              | Purpose                                                |
 | ----------------- | ------------------------------------------------------ |
 | `packages/policy` | Pure TypeScript policy engine, planned for W1          |
