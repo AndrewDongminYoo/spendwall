@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { randomUUID } from 'node:crypto';
 import {
   dashboardFixture,
   policy,
@@ -68,6 +69,43 @@ test('Postgres dashboard read boundary', { skip: !url }, async (t) => {
       );
       assert.equal(fixture.executions, 1);
       assert.equal((await verifyAudit(fixture.app)).ok, true);
+    },
+  );
+  await t.test(
+    'mismatched stored execution identity makes confirmed money unavailable',
+    async () => {
+      const original = (
+        await fixture.owner.query(
+          'SELECT execution_id FROM approvals.requests WHERE approval_id=$1',
+          [paid.id],
+        )
+      ).rows[0].execution_id;
+      // Only the disposable database owner can manufacture this corrupt state.
+      await fixture.owner.query(
+        'ALTER TABLE approvals.requests DISABLE TRIGGER immutable_approval',
+      );
+      try {
+        await fixture.owner.query(
+          'UPDATE approvals.requests SET execution_id=$2 WHERE approval_id=$1',
+          [paid.id, randomUUID()],
+        );
+        const response = await get('/stats');
+        assert.equal(response.status, 503);
+        assert.deepEqual(await response.json(), {
+          error: 'Dashboard data unavailable.',
+        });
+      } finally {
+        try {
+          await fixture.owner.query(
+            'UPDATE approvals.requests SET execution_id=$2 WHERE approval_id=$1',
+            [paid.id, original],
+          );
+        } finally {
+          await fixture.owner.query(
+            'ALTER TABLE approvals.requests ENABLE TRIGGER immutable_approval',
+          );
+        }
+      }
     },
   );
   await t.test(

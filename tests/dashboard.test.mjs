@@ -86,6 +86,7 @@ test('dashboard only counts successful bound approval executions as confirmed mo
       reservation_id: '1',
       approval_state: 'approved',
       execution_state: 'succeeded',
+      execution_id: executed.upstream_result_ref,
       expires_ms: now + 10000,
     },
   ];
@@ -97,6 +98,12 @@ test('dashboard only counts successful bound approval executions as confirmed mo
   );
   assert.equal(data.pending.length, 0);
   assert.equal(data.audit.length, 1);
+  cfg.approvals[0].execution_id = randomUUID();
+  assert.throws(
+    () => dashboardData([initial, created, decided, executed], cfg),
+    /unavailable/,
+  );
+  cfg.approvals[0].execution_id = executed.upstream_result_ref;
   cfg.approvals[0].execution_state = 'unknown';
   assert.equal(
     dashboardData([initial, created, decided, executed], cfg).confirmed_usd,
@@ -116,6 +123,7 @@ test('dashboard excludes foreign merchant data and expired/processed approvals',
       reservation_id: '1',
       approval_state: 'pending',
       execution_state: null,
+      execution_id: null,
       expires_ms: now + 1,
     },
   ];
@@ -146,6 +154,7 @@ test('dashboard rejects approval records without a matching creation event', () 
       reservation_id: '1',
       approval_state: 'pending',
       execution_state: null,
+      execution_id: null,
       expires_ms: now + 1000,
     },
   ];
@@ -217,6 +226,29 @@ test('dashboard fails on invalid or excessive history and discloses no raw metad
     'key_id',
   ])
     assert.ok(!data.includes(secret));
+});
+
+test('dashboard projects the supported 100-agent and 10000-row limit within the refresh budget', () => {
+  const cfg = options();
+  cfg.agents = Array.from({ length: 100 }, (_, i) => ({
+    ref: `agent:${i.toString(16).padStart(64, '0')}`,
+    name: `Agent ${i}`,
+  }));
+  const rows = Array.from({ length: 10000 }, (_, i) =>
+    row(i + 1, 'allow', { agent_id: cfg.agents[i % 100].ref }),
+  );
+  const started = performance.now();
+  const data = dashboardData(rows, cfg);
+  const elapsed = performance.now() - started;
+  assert.equal(data.agents.length, 100);
+  for (const agent of data.agents) {
+    assert.equal(agent.reserved_usd, 6000);
+    assert.equal(agent.attempts, 100);
+  }
+  assert.ok(
+    elapsed < 2000,
+    `Projection took ${elapsed.toFixed(0)}ms; two endpoint reads must fit the 10s refresh timeout`,
+  );
 });
 
 test('dashboard rejects unauthorized requests before opening a database connection', async (t) => {

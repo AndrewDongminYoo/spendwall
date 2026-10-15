@@ -160,7 +160,7 @@ export async function startDashboardServer(options: DashboardOptions) {
           [merchantRef],
         );
         const { rows: approvals } = await client.query<ApprovalRow>(
-          `SELECT a.approval_id, a.reservation_id::text, a.approval_state, a.execution_state, (extract(epoch FROM a.expires_at)*1000)::float8 AS expires_ms FROM approvals.requests a JOIN audit.audit_events e ON e.id=a.reservation_id WHERE e.resolved_ctx->'velocity'->>'merchant_ref'=$1 ORDER BY a.reservation_id LIMIT 10001`,
+          `SELECT a.approval_id, a.reservation_id::text, a.approval_state, a.execution_state, a.execution_id::text, (extract(epoch FROM a.expires_at)*1000)::float8 AS expires_ms FROM approvals.requests a JOIN audit.audit_events e ON e.id=a.reservation_id WHERE e.resolved_ctx->'velocity'->>'merchant_ref'=$1 ORDER BY a.reservation_id LIMIT 10001`,
           [merchantRef],
         );
         if (approvals.length > 10000) throw new Error();

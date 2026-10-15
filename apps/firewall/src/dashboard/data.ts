@@ -11,6 +11,7 @@ export type ApprovalRow = {
   reservation_id: string;
   approval_state: string;
   execution_state: string | null;
+  execution_id: string | null;
   expires_ms: number;
 };
 type Options = {
@@ -35,11 +36,30 @@ export function dashboardData(rows: HistoryRow[], options: Options) {
     options.agents.find((a) => a.ref === ref)?.name ?? ref;
   const approvals = new Map(options.approvals.map((a) => [a.approval_id, a]));
   const calls = [...requests.values()];
+  const byApproval = new Map(calls.map((r) => [r.initial.approval_id, r]));
+  const successfulExecutions = new Map(
+    rows
+      .filter(
+        (r) =>
+          r.event_kind === 'approval_executed' &&
+          r.upstream_status !== null &&
+          r.upstream_status >= 200 &&
+          r.upstream_status < 300 &&
+          (r.resolved_ctx.velocity as { merchant_ref?: unknown } | undefined)
+            ?.merchant_ref === options.merchantRef,
+      )
+      .map((r) => [r.approval_id, r.upstream_result_ref]),
+  );
   for (const approval of options.approvals) {
-    const request = calls.find(
-      (r) => r.initial.approval_id === approval.approval_id,
-    );
+    const request = byApproval.get(approval.approval_id);
     if (!request?.created || request.initial.id !== approval.reservation_id)
+      throw new Error('Dashboard unavailable.');
+    if (
+      approval.execution_state === 'succeeded' &&
+      (!approval.execution_id ||
+        successfulExecutions.get(approval.approval_id) !==
+          approval.execution_id)
+    )
       throw new Error('Dashboard unavailable.');
   }
   const recent = calls.filter((r) => r.initial.ts_ms > options.now - day);
@@ -54,11 +74,25 @@ export function dashboardData(rows: HistoryRow[], options: Options) {
     ...calls.map((r) => r.initial.agent_id),
   ]);
   if (refs.size > 100) throw new Error('Dashboard unavailable.');
+  const reservations = new Map<string, bigint>();
+  for (const r of calls) {
+    if (
+      r.released ||
+      (!r.pending &&
+        (r.acceptedAt === null || r.acceptedAt <= options.now - day))
+    )
+      continue;
+    const cents =
+      (reservations.get(r.initial.agent_id) ?? 0n) +
+      BigInt(r.metadata.usd_cents);
+    if (cents > BigInt(Number.MAX_SAFE_INTEGER))
+      throw new Error('Dashboard unavailable.');
+    reservations.set(r.initial.agent_id, cents);
+  }
   const agents = [...refs].map((ref) => {
     const own = recent.filter((r) => r.initial.agent_id === ref);
     const denied = own.filter((r) => r.initial.decision === 'deny').length;
-    const reserved = foldHistory(rows, { ...scope, agentId: ref }).agg
-      .refund_usd_24h;
+    const reserved = Number(reservations.get(ref) ?? 0n) / 100;
     const budget = options.agents.find((a) => a.ref === ref)?.budgetCents;
     return {
       agent: name(ref),
