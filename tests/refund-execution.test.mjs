@@ -36,6 +36,67 @@ const refund = {
   ],
 };
 
+test('read-only reconciliation never creates a new provider execution', async (t) => {
+  const f = await fixture(t);
+  const executor = await RefundExecutor.open(f);
+  f.after(() => executor.close());
+  await assert.rejects(executor.reconcile(executionId, args));
+  assert.equal(f.seen.posts.length, 0);
+  assert.equal(f.seen.captureGets, 0);
+});
+
+test('a recovery deadline reached during lookup prevents refund POST', async (t) => {
+  let clock = 100_000;
+  const f = await fixture(t, { now: () => clock });
+  const original = f.fetchImpl;
+  f.fetchImpl = async (input, init) => {
+    const response = await original(input, init);
+    if (new URL(input).pathname === `/v2/payments/captures/${captureId}`)
+      clock = 200_000;
+    return response;
+  };
+  const executor = await RefundExecutor.open(f);
+  f.after(() => executor.close());
+  await assert.rejects(
+    executor.execute(executionId, args, { notAfter: 200_000 }),
+  );
+  assert.equal(f.seen.posts.length, 0);
+});
+
+test('read-only reconciliation verifies a known refund through GET after the replay window', async (t) => {
+  let clock = 100_000;
+  const f = await fixture(t, { now: () => clock });
+  let executor = await RefundExecutor.open(f);
+  f.after(() => executor.close());
+  const result = await executor.execute(executionId, args);
+  await executor.close();
+  executor = await RefundExecutor.open(f);
+  clock += 25 * 60 * 60 * 1000;
+  assert.deepEqual(await executor.reconcile(executionId, args), result);
+  assert.deepEqual(f.seen.gets, [`/v2/payments/refunds/${refund.id}`]);
+  assert.equal(f.seen.posts.length, 1);
+});
+
+for (const status of ['FAILED', 'CANCELLED']) {
+  test(`read-only reconciliation recovers a durable ${status} result after restart`, async (t) => {
+    const result = { ...refund, status };
+    const f = await fixture(t, {
+      onPost(_req, res) {
+        res.end(JSON.stringify(result));
+      },
+      getRefund: result,
+    });
+    let executor = await RefundExecutor.open(f);
+    f.after(() => executor.close());
+    const first = await executor.execute(executionId, args);
+    await executor.close();
+    executor = await RefundExecutor.open(f);
+    assert.deepEqual(await executor.reconcile(executionId, args), first);
+    assert.deepEqual(f.seen.gets, [`/v2/payments/refunds/${refund.id}`]);
+    assert.equal(f.seen.posts.length, 1);
+  });
+}
+
 async function fixture(t, options = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'spendwall-refund-'));
   const ledgerPath = join(
