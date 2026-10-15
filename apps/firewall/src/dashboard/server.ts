@@ -155,6 +155,11 @@ export async function startDashboardServer(options: DashboardOptions) {
         client = await options.pool.connect();
         await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
         await client.query("SET LOCAL statement_timeout = '5s'");
+        const continuity = await client.query<{ mismatch: boolean }>(
+          `SELECT EXISTS (SELECT 1 FROM audit.audit_events WHERE tool='create_refund' AND resolved_ctx ? 'velocity' AND (jsonb_typeof(resolved_ctx->'velocity'->'key_id') IS DISTINCT FROM 'string' OR resolved_ctx->'velocity'->>'key_id' IS DISTINCT FROM $1)) AS mismatch`,
+          [keyId],
+        );
+        if (continuity.rows[0]?.mismatch !== false) throw new Error();
         const { rows } = await client.query<HistoryRow>(
           `SELECT e.id::text, row_hash, (extract(epoch FROM ts)*1000)::float8 AS ts_ms, agent_id, tool, args_hash, decision, event_kind, approval_id, upstream_status, upstream_result_ref, policy_version, matched_rules, resolved_ctx FROM audit.audit_events e WHERE tool='create_refund' AND resolved_ctx->'velocity'->>'merchant_ref'=$1 ORDER BY e.id LIMIT 10001`,
           [merchantRef],

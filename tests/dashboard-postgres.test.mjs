@@ -6,8 +6,10 @@ import {
   policy,
   request,
   token,
+  key,
 } from './helpers/dashboard-fixture.mjs';
 import { verifyAudit } from '../apps/firewall/src/audit/index.ts';
+import { startDashboardServer } from '../apps/firewall/src/dashboard/server.ts';
 
 const url = process.env.AUDIT_TEST_DATABASE_URL;
 test('Postgres dashboard read boundary', { skip: !url }, async (t) => {
@@ -15,6 +17,11 @@ test('Postgres dashboard read boundary', { skip: !url }, async (t) => {
   t.after(() => fixture.close());
   const get = (path, headers = { authorization: `Bearer ${token}` }) =>
     fetch(fixture.server.url + path, { headers });
+  await t.test('empty tracked history returns an empty snapshot', async () => {
+    const response = await get('/stats');
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).confirmed_usd, 0);
+  });
   const pending = await fixture.addPending();
   const paid = await fixture.addPending('25.00', 'returns');
   assert.equal((await fixture.approve(paid)).execution_state, 'succeeded');
@@ -23,6 +30,34 @@ test('Postgres dashboard read boundary', { skip: !url }, async (t) => {
   await fixture.velocity.evaluateAndReserve(
     policy('allow'),
     request('999.00', 'support', 'foreign-merchant'),
+  );
+  await t.test(
+    'identity continuity precedes merchant filtering on every read',
+    async () => {
+      for (const identityKey of [key, '6'.repeat(64)]) {
+        const server = await startDashboardServer({
+          pool: fixture.app,
+          identityKey,
+          merchantId: 'merchant-without-history',
+          token,
+        });
+        try {
+          for (const endpoint of ['/stats', '/audit']) {
+            const response = await fetch(server.url + endpoint, {
+              headers: { authorization: `Bearer ${token}` },
+            });
+            assert.equal(response.status, identityKey === key ? 200 : 503);
+            const body = await response.json();
+            if (identityKey !== key)
+              assert.deepEqual(body, { error: 'Dashboard data unavailable.' });
+            else if (endpoint === '/stats') assert.equal(body.confirmed_usd, 0);
+            else assert.deepEqual(body.items, []);
+          }
+        } finally {
+          await server.close();
+        }
+      }
+    },
   );
   await t.test(
     'HTTP stats and audit agree with actual lifecycle and exclude foreign scope',
