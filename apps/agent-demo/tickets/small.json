@@ -1,0 +1,11 @@
+{
+  "id": "small",
+  "customerId": "demo-customer",
+  "body": "Please refund the damaged item.",
+  "captures": ["DEMO_CAPTURE_00001"],
+  "recordedCalls": [
+    {
+      "capture_id": "DEMO_CAPTURE_00001"
+    }
+  ]
+}

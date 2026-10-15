@@ -1,0 +1,11 @@
+{
+  "id": "approval",
+  "customerId": "demo-customer",
+  "body": "Please refund my large order.",
+  "captures": ["DEMO_CAPTURE_00002"],
+  "recordedCalls": [
+    {
+      "capture_id": "DEMO_CAPTURE_00002"
+    }
+  ]
+}
