@@ -16,6 +16,8 @@ import type { RefundExecutor } from '../refunds.ts';
 import { DeviceAuthority, ApproverAuthError } from './identity.ts';
 import type { DeviceGrant } from './identity.ts';
 import { ApprovalDelivery } from './delivery.ts';
+import { ApprovalSummaries } from './summary.ts';
+import type { SummaryOptions } from './summary.ts';
 
 export type ApproverOptions = {
   pool: Pick<Pool, 'connect'>;
@@ -29,6 +31,7 @@ export type ApproverOptions = {
   port?: number;
   pollIntervalMs?: number;
   clock?: () => number | undefined;
+  summary?: SummaryOptions;
 };
 class ApproverModule {}
 Module({})(ApproverModule);
@@ -126,6 +129,9 @@ export async function startApproverServer(options: ApproverOptions) {
     throw new Error('Approver configuration unavailable.');
   const authority = new DeviceAuthority(options.pool, options),
     delivery = new ApprovalDelivery(options.pool, authority, options.notifier);
+  const summaries = options.summary
+    ? new ApprovalSummaries(options.summary)
+    : undefined;
   const service = new ApprovalService(options.pool, {
     identityKey: options.identityKey,
     merchantId: options.merchantId,
@@ -203,7 +209,9 @@ export async function startApproverServer(options: ApproverOptions) {
           });
           return;
         }
-        const path = /^\/approvals\/([^/]+)(\/decision)?$/.exec(url.pathname);
+        const path = /^\/approvals\/([^/]+)(\/(?:decision|summary))?$/.exec(
+          url.pathname,
+        );
         if (!path) reject(404, 'Approval not found.');
         let id: string;
         try {
@@ -212,6 +220,32 @@ export async function startApproverServer(options: ApproverOptions) {
           return reject(400, 'Invalid request.');
         }
         if (url.search) reject(400, 'Invalid request.');
+        if (path[2] === '/summary') {
+          if (req.method !== 'POST') reject(405, 'Method not allowed.');
+          const body = await json(req);
+          if (Object.keys(body).length !== 0) reject(400, 'Invalid request.');
+          const detail = await service.details({
+            agentId: principal.agentId,
+            approvalId: id,
+          });
+          const summary = summaries
+            ? await summaries.get(detail)
+            : { status: 'unavailable', advisory: true };
+          // Generation can outlive a device session or a human decision.
+          await authority.authenticate(bearer(req));
+          const current = await service.check({
+            agentId: principal.agentId,
+            approvalId: id,
+          });
+          reply(
+            res,
+            200,
+            current.status === 'pending'
+              ? summary
+              : { status: 'unavailable', advisory: true },
+          );
+          return;
+        }
         if (!path[2]) {
           if (req.method !== 'GET') reject(405, 'Method not allowed.');
           reply(
@@ -303,6 +337,7 @@ export async function startApproverServer(options: ApproverOptions) {
       shutdown ??= (async () => {
         closing = true;
         if (timer) clearInterval(timer);
+        summaries?.close();
         await delivery.close();
         await app.close();
       })();
