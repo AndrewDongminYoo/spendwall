@@ -151,12 +151,13 @@ async function fixture(t) {
     fetchImpl,
   };
   let executor = await RefundExecutor.open(options);
-  const create = (adapter = executor) =>
+  const create = (adapter = executor, extra = {}) =>
     new ApprovalService(app, {
       identityKey: key,
       merchantId: 'merchantA',
       executor: adapter,
       clock: () => fakeTime,
+      ...extra,
     });
   let service = create();
   t.after(async () => {
@@ -226,6 +227,160 @@ async function pending(f, input = request()) {
 }
 
 test('Postgres approval boundary', { skip: !url }, async (t) => {
+  await t.test(
+    'the SQL claim rejects expiry after the preliminary clock read',
+    async (t) => {
+      const f = await fixture(t),
+        { id, input } = await pending(f);
+      // The owner creates a valid nearly-expired fixture without changing audit history.
+      const row = (
+        await f.owner.query(
+          `WITH old AS (DELETE FROM approvals.requests WHERE approval_id=$1 RETURNING *), boundary AS MATERIALIZED (SELECT date_trunc('milliseconds',clock_timestamp())+interval '1 second' AS expires)
+      INSERT INTO approvals.requests(approval_id,reservation_id,owner_ref,adapter_ref,binding_ref,request_sealed,created_at,expires_at)
+      SELECT approval_id,reservation_id,owner_ref,adapter_ref,binding_ref,request_sealed,boundary.expires-interval '15 minutes',boundary.expires FROM old,boundary RETURNING expires_at`,
+          [id],
+        )
+      ).rows[0];
+      let intercepted = false;
+      const pool = {
+        connect: async () => {
+          const client = await f.app.connect();
+          return {
+            query: async (sql, args) => {
+              if (sql.includes("SET approval_state='approved'")) {
+                intercepted = true;
+                while (
+                  (
+                    await f.owner.query(
+                      'SELECT clock_timestamp()>=$1::timestamptz AS expired',
+                      [row.expires_at],
+                    )
+                  ).rows[0].expired !== true
+                )
+                  await new Promise((r) => setTimeout(r, 10));
+              }
+              return client.query(sql, args);
+            },
+            release: (broken) => client.release(broken),
+          };
+        },
+      };
+      const service = new ApprovalService(pool, {
+        identityKey: key,
+        merchantId: 'merchantA',
+        executor: f.executor,
+      });
+      const result = await service.approve(id, policy, input);
+      assert.equal(intercepted, true);
+      assert.equal(result.status, 'expired');
+      assert.equal(f.seen.posts.length, 0);
+    },
+  );
+  await t.test(
+    'the claim deadline is read after authoritative device validation',
+    async (t) => {
+      const f = await fixture(t),
+        { id, input } = await pending(f);
+      const row = (
+        await f.app.query(
+          'SELECT p.expires_at,e.args_hash FROM approvals.requests p JOIN audit.audit_events e ON e.id=p.reservation_id',
+        )
+      ).rows[0];
+      const result = await f.service.decide(
+        {
+          approvalId: id,
+          agentId: 'support',
+          decision: 'approve',
+          argsHash: row.args_hash,
+        },
+        async () => ({ policy, input }),
+        async (client) => {
+          assert.equal(
+            (await client.query('SELECT count(*) FROM approvals.requests'))
+              .rows[0].count,
+            '1',
+          );
+          f.setTime(row.expires_at.getTime());
+          return true;
+        },
+      );
+      assert.equal(result.status, 'expired');
+      assert.equal(f.seen.posts.length, 0);
+    },
+  );
+  await t.test(
+    'a mismatched decision hash rejects before expiry, audit or execution',
+    async (t) => {
+      const f = await fixture(t),
+        { id, input } = await pending(f);
+      const expires = (
+        await f.app.query('SELECT expires_at FROM approvals.requests')
+      ).rows[0].expires_at.getTime();
+      f.setTime(expires);
+      const guard = { argsHash: '0'.repeat(64) };
+      await assert.rejects(f.service.approve(id, policy, input, guard), {
+        name: 'ApprovalConflictError',
+      });
+      await assert.rejects(f.service.deny(id, 'support', guard), {
+        name: 'ApprovalConflictError',
+      });
+      assert.equal(
+        (await f.app.query('SELECT approval_state FROM approvals.requests'))
+          .rows[0].approval_state,
+        'pending',
+      );
+      assert.equal((await verifyAudit(f.app)).count, 2);
+      assert.equal(f.seen.posts.length, 0);
+      f.setTime(undefined);
+      const hash = (
+        await f.app.query(
+          "SELECT args_hash FROM audit.audit_events WHERE event_kind='tool_call'",
+        )
+      ).rows[0].args_hash;
+      assert.equal(
+        (await f.service.approve(id, policy, input, { argsHash: hash }))
+          .execution_state,
+        'succeeded',
+      );
+    },
+  );
+  await t.test(
+    'approval creation rolls back with its transactional delivery hook',
+    async (t) => {
+      const f = await fixture(t),
+        input = request();
+      let observed;
+      const failing = f.create(f.executor, {
+        onCreated: async (client, event) => {
+          observed = event.approvalId;
+          assert.equal(
+            (await client.query('SELECT count(*) FROM approvals.requests'))
+              .rows[0].count,
+            '1',
+          );
+          assert.equal(
+            (await client.query('SELECT count(*) FROM audit.audit_events'))
+              .rows[0].count,
+            '2',
+          );
+          throw new Error('synthetic enqueue failure');
+        },
+      });
+      await assert.rejects(
+        failing.request(policy, input),
+        /Approval unavailable/,
+      );
+      assert.equal(
+        (await f.app.query('SELECT count(*) FROM approvals.requests')).rows[0]
+          .count,
+        '0',
+      );
+      assert.equal((await verifyAudit(f.app)).count, 1);
+      const repaired = await f.service.request(policy, input);
+      assert.equal(repaired.approval_id, observed);
+      assert.equal(f.seen.posts.length, 0);
+    },
+  );
   for (const subject of ['agent', 'customer', 'merchant'])
     await t.test(
       `changed policy-visible ${subject} attributes cannot execute`,
