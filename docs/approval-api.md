@@ -47,6 +47,8 @@ The server rechecks device authority and original TTL before committing the exec
 The claim UPDATE itself checks PostgreSQL time against the original expiry, so a delay after the preliminary check cannot authorize an expired request.
 Do not implement production refresh by copying the stored snapshot, as the synthetic fixture does.
 No live payment-context or production integration is established by that fixture.
+After applying migration `007`, trusted compositions can set `reconciliation: true` to record completed provider refund receipts atomically with approval completion.
+See [webhook reconciliation](webhooks.md#record-execution-evidence) for storage, failure handling and coverage limits.
 
 ## Provisioning and JWTs
 

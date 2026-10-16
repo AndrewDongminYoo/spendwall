@@ -44,16 +44,20 @@ The policy workshop also supplies a synthetic draft, a YAML diff and seven-day r
 Confirming a draft downloads YAML; it does not change the running policy.
 Stop with Ctrl+C to remove that preview's database.
 The preview has its own synthetic fixtures; it does not display the preceding `pnpm demo` run.
+Its reconciliation panel shows matched, waiting, unmediated and mismatched refund observations from synthetic fixtures.
 
 ![Recorded local dashboard showing three audit views with synthetic classification and payment data](docs/assets/dashboard-demo.gif)
 
-Actual local browser recording; synthetic classification, synthetic payment outcomes, real HTTP/SQL and Studio widgets.
+Earlier local audit-assistant recording; synthetic classification, synthetic payment outcomes, real HTTP/SQL and Studio widgets.
+Run the current preview to inspect the added reconciliation panel.
 [Static frame](docs/assets/dashboard-demo.png) · [Dashboard setup and query limits](docs/dashboard.md).
 Local evaluation retains AG Studio's evaluation warnings and watermarks.
 Trial issuance remains deferred; there is no hosted demo URL yet.
 
 The [hosting preparation guide](docs/hosting.md) provides a container and Render template for an authenticated, read-only API.
 The hosted entrypoint does not serve AG Studio assets; public UI deployment and the 48-hour operational check remain pending.
+The separate [local webhook receiver](docs/webhooks.md) verifies observed sandbox refunds and compares them with recorded firewall completions.
+Real webhook delivery and direct-dashboard refund acceptance remain pending; an unmatched observation does not prove complete bypass detection.
 
 ## Architecture and trust boundaries
 

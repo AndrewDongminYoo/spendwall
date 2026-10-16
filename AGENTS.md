@@ -8,11 +8,12 @@ Never put PayPal credentials in the agent or commit real credentials.
 The repository contains tested payment-control modules, a synthetic support-agent demo and a local read-only dashboard.
 The W0 sandbox proxy is a separate integration without the demo's policy/approval composition; do not describe it as a production payment service.
 The hosted dashboard preparation entrypoint is API-only; public UI licensing, deployment and 48-hour operation remain unverified.
+The optional loopback sandbox webhook receiver verifies observed refunds and compares them with opt-in execution receipts; live delivery and direct-dashboard refund acceptance remain unverified.
 
 ## Structure
 
 - `packages/policy`: framework-independent TypeScript policy loading and evaluation.
-- `apps/firewall`: proxy, context, audit, velocity, approval and dashboard server modules.
+- `apps/firewall`: proxy, context, audit, velocity, approval, webhook reconciliation and dashboard server modules.
 - `apps/agent-demo`: synthetic support-agent composition with optional Claude execution.
 - `apps/dashboard`: React and AG Studio read-only dashboard.
 - `apps/approver`: independent iOS/Android Flutter approval app outside the pnpm workspace; use its pinned SDK and app-local checks.
