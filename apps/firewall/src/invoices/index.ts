@@ -108,7 +108,15 @@ export class InvoicePolicy {
         !['create_invoice', 'send_invoice'].includes(String(submitted.tool))
       )
         return deny('invoice_unavailable');
+      object(submitted.args);
       const trusted = object(snapshot(trustedContext));
+      client = await this.pool.connect();
+      await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+      await client.query("SET LOCAL statement_timeout = '10s'");
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('spendwall/invoice-policy/v1',0))",
+      );
+      // Resolve only after the queue wait, so expired pre-lock facts cannot authorize a reservation.
       const resolution = await this.resolver.resolve(
         { tool: submitted.tool, args: submitted.args },
         { ...trusted, agg: {} },
@@ -158,12 +166,6 @@ export class InvoicePolicy {
         latencyMs: 0,
       };
       const prepared = prepareEvent(auditInput);
-      client = await this.pool.connect();
-      await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
-      await client.query("SET LOCAL statement_timeout = '10s'");
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended('spendwall/invoice-policy/v1',0))",
-      );
       const { rows } =
         await client.query<Stored>(`SELECT d.*, d.day::text AS day, d.audit_id::text AS audit_id, e.matched_rules,
         COALESCE(e.row_hash=d.audit_hash AND e.agent_id=d.agent_id AND e.tool=d.tool AND e.args_hash=d.args_hash

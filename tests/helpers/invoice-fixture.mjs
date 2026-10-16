@@ -36,10 +36,12 @@ export function resolver({
   value = '25.00',
   email = 'buyer@example.invalid',
   merchant = 'merchantA',
+  now,
 } = {}) {
   return new ContextResolver({
     merchant: { id: merchant, email: 'merchant@example.invalid' },
     tokens: { get: async () => 'synthetic-token', isSensitive: () => false },
+    ...(now ? { now } : {}),
     fetchImpl: async (url, options) => {
       if (
         options.method !== 'GET' ||
@@ -48,7 +50,8 @@ export function resolver({
         )
       )
         throw new Error('Unexpected provider operation');
-      const args = draft(value, email).args;
+      const currentValue = typeof value === 'function' ? value() : value;
+      const args = draft(currentValue, email).args;
       return Response.json({
         id: String(url).split('/').at(-1),
         status: 'DRAFT',
@@ -57,9 +60,11 @@ export function resolver({
         primary_recipients: args.primary_recipients,
         items: args.items,
         amount: {
-          value,
+          value: currentValue,
           currency_code: 'USD',
-          breakdown: { item_total: { value, currency_code: 'USD' } },
+          breakdown: {
+            item_total: { value: currentValue, currency_code: 'USD' },
+          },
         },
       });
     },

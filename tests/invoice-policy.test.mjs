@@ -27,14 +27,14 @@ test('invalid input and unavailable storage cannot authorize invoice operations'
     { ...draft(), requestId: 'invalid' },
     { ...draft(), tool: 'create_refund' },
     { ...draft(), amount: { usd: 0 } },
-    { ...draft(), args: {} },
+    { ...draft(), args: null },
   ]) {
     const result = await service.evaluateAndReserve(policy, input, trusted());
     assert.equal(result.decision, 'deny');
     assert.equal(result.dispatchAllowed, false);
     assert.equal(result.receipt, undefined);
   }
-  assert.equal(connections, 0, 'invalid requests must fail before storage');
+  assert.equal(connections, 0, 'malformed envelopes must fail before storage');
   const valid = await service.evaluateAndReserve(policy, draft(), trusted());
   assert.equal(valid.reason, 'invoice_unavailable');
   assert.equal(valid.dispatchAllowed, false);

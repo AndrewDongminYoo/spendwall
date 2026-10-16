@@ -56,6 +56,7 @@ History dated after the database's current UTC date also fails closed, so a back
 The existing audit redactor stores safe amount fields and hashes arguments.
 
 Evaluation, audit append and reservation insertion share a transaction and a database-wide advisory lock.
+Provider context is resolved after acquiring that lock, so a queued request cannot evaluate facts whose lease expired during the wait.
 The module verifies that the exact reservation was stored before committing an allowance.
 The current implementation reads at most 10,001 history entries and denies when more than 10,000 exist; it is a bounded local baseline, not an unbounded production ledger.
 Existing invoice allowances without matching reservation records also fail closed, so a prior integration cannot silently reset the count.

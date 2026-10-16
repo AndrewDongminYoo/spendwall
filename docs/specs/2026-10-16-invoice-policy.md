@@ -8,7 +8,7 @@ Provide a synthetic console composition that does not send provider requests.
 
 ## Contract
 
-- Resolve raw tool arguments with `ContextResolver` and trusted server customer/agent identity before evaluation.
+- Resolve raw tool arguments with `ContextResolver` and trusted server customer/agent identity after acquiring the reservation lock and before evaluation.
 - Derive `customer.email_domain` from the verified recipient email; discard caller aggregates and derive `agg.invoice_send_count_day` from committed reservations.
 - Apply the example USD amount cap and exact domain allowlist to both invoice tools; deny unsupported currency in the example policy.
 - Count allowed `send_invoice` reservations per merchant and stable customer ID across agents and policy versions in the database UTC calendar day.

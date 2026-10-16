@@ -137,6 +137,55 @@ test(
         assert.equal(held.decision, 'deny');
       },
     );
+    await t.test(
+      'a queued send resolves changed provider facts after the lock wait',
+      async () => {
+        let clock = Date.now();
+        let value = '25.00';
+        const queued = new InvoicePolicy(f.app, {
+          identityKey: key,
+          resolver: resolver({ value: () => value, now: () => clock }),
+        });
+        const lock = await f.owner.connect();
+        await lock.query('BEGIN');
+        await lock.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended('spendwall/invoice-policy/v1',0))",
+        );
+        const pending = queued.evaluateAndReserve(
+          policy,
+          send(),
+          trusted(undefined, 'queued-customer'),
+        );
+        try {
+          let waiters = 0;
+          for (let i = 0; i < 100 && waiters < 1; i++) {
+            waiters = (
+              await f.owner.query(
+                "SELECT count(*)::int AS n FROM pg_locks WHERE locktype='advisory' AND NOT granted",
+              )
+            ).rows[0].n;
+            if (!waiters)
+              await new Promise((resolve) => setTimeout(resolve, 10));
+          }
+          assert.ok(
+            waiters >= 1,
+            'the invoice request must be queued at the database lock',
+          );
+          value = '100.01';
+          clock += 2001;
+        } finally {
+          await lock.query('ROLLBACK');
+          lock.release();
+        }
+        const result = await pending;
+        assert.equal(
+          result.dispatchAllowed,
+          false,
+          'expired pre-lock facts must not authorize an over-cap invoice',
+        );
+        assert.ok(result.matchedRules.includes('invoice_amount_cap'));
+      },
+    );
     let allowedInput, allowedResult;
     await t.test(
       'two database clients waiting on the reservation lock share one slot across agents',
