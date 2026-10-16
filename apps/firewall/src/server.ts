@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { fileURLToPath } from 'node:url';
@@ -23,7 +23,17 @@ import { createTokenManager } from './token.ts';
 import type { TokenOptions } from './token.ts';
 import { PayPalUpstream } from './upstream.ts';
 
+export type AgentPrincipal = Readonly<{
+  merchantId: string;
+  agentId: string;
+  tools: readonly string[];
+}>;
+export type AgentAuthentication = {
+  authenticate(token: string): Promise<AgentPrincipal | null>;
+};
+
 type Options = TokenOptions & {
+  agentAuth?: AgentAuthentication;
   proxyKey?: string;
   ledgerPath?: string;
   expectedTools?: Tool[];
@@ -43,7 +53,7 @@ function reject(res: ServerResponse, status: number, message: string) {
 export async function startProxy(options: Options = {}) {
   const env = options.env ?? process.env;
   const key = options.proxyKey ?? env.SPENDWALL_PROXY_KEY;
-  if (!key || !/^[A-Za-z0-9_-]{32,128}$/.test(key))
+  if (!options.agentAuth && (!key || !/^[A-Za-z0-9_-]{32,128}$/.test(key)))
     throw new Error('Set a 32–128 character SPENDWALL_PROXY_KEY locally.');
   const transport = options.transport ?? env.PAYPAL_MCP_TRANSPORT ?? 'http';
   if (transport !== 'http' && transport !== 'sse')
@@ -97,13 +107,34 @@ export async function startProxy(options: Options = {}) {
           reject(res, 403, 'Forbidden origin or host.');
           return;
         }
-        const provided = Buffer.from(req.headers.authorization ?? '');
-        const expectedKey = Buffer.from(`Bearer ${key}`);
-        if (
-          provided.length !== expectedKey.length ||
-          !timingSafeEqual(provided, expectedKey)
-        ) {
-          reject(res, 401, 'Local proxy authentication required.');
+        const authorization = req.headers.authorization ?? '';
+        const credential = /^Bearer ([A-Za-z0-9_-]{32,128})$/.exec(
+          authorization,
+        )?.[1];
+        const authenticate = async (): Promise<AgentPrincipal | null> => {
+          if (!credential) return null;
+          if (options.agentAuth)
+            return options.agentAuth.authenticate(credential);
+          const provided = Buffer.from(credential),
+            expectedKey = Buffer.from(key!);
+          return provided.length === expectedKey.length &&
+            timingSafeEqual(provided, expectedKey)
+            ? {
+                merchantId: 'local',
+                agentId: 'local',
+                tools: tools.map((tool) => tool.name),
+              }
+            : null;
+        };
+        let initial;
+        try {
+          initial = await authenticate();
+        } catch {
+          reject(res, 503, 'Authentication unavailable.');
+          return;
+        }
+        if (!initial) {
+          reject(res, 401, 'Proxy authentication required.');
           return;
         }
         if (req.method !== 'POST') {
@@ -139,11 +170,33 @@ export async function startProxy(options: Options = {}) {
           { capabilities: { tools: {} } },
         );
         active.add(server);
-        server.setRequestHandler(ListToolsRequestSchema, async () => ({
-          tools,
-        }));
+        server.setRequestHandler(ListToolsRequestSchema, async () => {
+          let principal;
+          try {
+            principal = await authenticate();
+          } catch {
+            throw new Error('Authentication unavailable.');
+          }
+          if (!principal) throw new Error('Proxy authentication required.');
+          return {
+            tools: tools.filter((tool) => principal.tools.includes(tool.name)),
+          };
+        });
         server.setRequestHandler(CallToolRequestSchema, async (request) => {
           const { name, arguments: args = {}, _meta } = request.params;
+          let principal;
+          try {
+            principal = await authenticate();
+          } catch {
+            /* Fail closed without exposing database errors. */
+          }
+          if (!principal || !principal.tools.includes(name))
+            return {
+              isError: true,
+              content: [
+                { type: 'text', text: 'Unknown tool or invalid arguments.' },
+              ],
+            };
           const check = validators.get(name);
           if (!check || !check(args).valid)
             return {
@@ -153,8 +206,8 @@ export async function startProxy(options: Options = {}) {
               ],
             };
           if (name === 'create_refund') {
-            const id = _meta?.['spendwall/execution-id'];
-            if (typeof id !== 'string')
+            const requestedId = _meta?.['spendwall/execution-id'];
+            if (typeof requestedId !== 'string')
               return {
                 isError: true,
                 content: [
@@ -164,16 +217,46 @@ export async function startProxy(options: Options = {}) {
                   },
                 ],
               };
+            let id = requestedId;
+            if (options.agentAuth) {
+              if (
+                !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+                  id,
+                )
+              )
+                return {
+                  isError: true,
+                  content: [{ type: 'text', text: 'Invalid execution ID.' }],
+                };
+              const bytes = createHash('sha256')
+                .update(
+                  JSON.stringify([
+                    'spendwall.agent-refund.v1',
+                    principal.merchantId,
+                    principal.agentId,
+                    id.toLowerCase(),
+                  ]),
+                )
+                .digest()
+                .subarray(0, 16);
+              bytes[6] = (bytes[6]! & 15) | 64;
+              bytes[8] = (bytes[8]! & 63) | 128;
+              const hex = bytes.toString('hex');
+              id = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+            }
             try {
               const result = await refunds.execute(id, args);
               if (tokens.isSensitive(result))
                 throw new Error('Unsafe refund result.');
+              const visible = options.agentAuth
+                ? { ...result, executionId: requestedId.toLowerCase() }
+                : result;
               return {
                 ...(['FAILED', 'CANCELLED'].includes(result.status)
                   ? { isError: true }
                   : {}),
-                content: [{ type: 'text', text: JSON.stringify(result) }],
-                structuredContent: result,
+                content: [{ type: 'text', text: JSON.stringify(visible) }],
+                structuredContent: visible,
               };
             } catch {
               return {

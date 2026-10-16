@@ -1,5 +1,8 @@
 # Run the sandbox refund proxy
 
+For database-backed agent keys and exact tool isolation, use the separate [agent-authenticated entrypoint](agent-auth.md).
+The shared-key W0 commands below retain their existing behavior; neither entrypoint composes policy or human approvals.
+
 ## Boundary
 
 This W0 proxy runs only on `127.0.0.1` and uses fixed PayPal sandbox endpoints.
