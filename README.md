@@ -59,6 +59,9 @@ The hosted entrypoint does not serve AG Studio assets; public UI deployment and 
 The separate [local webhook receiver](docs/webhooks.md) verifies observed sandbox refunds and compares them with recorded firewall completions.
 Real webhook delivery and direct-dashboard refund acceptance remain pending; an unmatched observation does not prove complete bypass detection.
 
+The [invoice policy baseline](docs/invoice-policy.md) checks amount caps and recipient domains, with atomic per-customer daily send reservations.
+Run `node scripts/invoice-demo.mjs` for a synthetic console example; it does not create or send provider invoices.
+
 ## Architecture and trust boundaries
 
 The solid path is the synthetic demo composition in `apps/agent-demo`.

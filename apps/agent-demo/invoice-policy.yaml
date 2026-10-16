@@ -1,0 +1,23 @@
+agents:
+  support:
+    tools:
+      allow: [create_invoice, send_invoice]
+      deny: []
+  returns:
+    tools:
+      allow: [create_invoice, send_invoice]
+      deny: []
+rules:
+  - id: invoice_allowed
+    when: tool in ["create_invoice", "send_invoice"]
+    then: allow
+  - id: invoice_amount_cap
+    when: amount.currency != "USD" || amount.usd > 100
+    then: deny
+  - id: invoice_recipient_domain
+    when: customer.email_domain != "example.invalid"
+    then: deny
+  - id: invoice_daily_limit
+    when: tool == "send_invoice" && agg.invoice_send_count_day >= 1
+    then: deny
+default: deny
