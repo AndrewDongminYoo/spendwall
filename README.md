@@ -101,7 +101,8 @@ Real push, physical-device biometrics and integrated sandbox acceptance remain p
 | Audit queries      | Optional Claude selects one of three intents; server computes data and widget shape       | Preview uses a labelled synthetic classifier; no model-generated SQL or payment tools                                                |
 | Policy compilation | Optional Claude proposes validated YAML for diff review and exact historical reevaluation | Disabled without configuration; encrypted replay is opt-in, missing inputs stay unavailable, and confirmation only downloads a draft |
 
-Codex and Claude Code assisted development, documentation and review; checked-in policies and deterministic code enforce decisions.
+Codex assisted development, tests, documentation and review; it was the only AI development tool used.
+Checked-in policies and deterministic code enforce decisions.
 Model output, ticket text and generated summaries remain untrusted.
 See the [agent guide](apps/agent-demo/README.md), [summary boundary](docs/approval-api.md#optional-advisory-summaries) and [audit assistant contract](docs/dashboard.md#audit-assistant) for configuration and data disclosure.
 The [policy workshop contract](docs/dashboard.md#policy-workshop-optional) explains encrypted retention, partial coverage and confirmed draft export.
