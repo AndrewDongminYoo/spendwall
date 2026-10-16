@@ -84,6 +84,19 @@ try {
     'none',
     image,
     'node',
+    '--input-type=module',
+    '-e',
+    "await import('./apps/firewall/src/dashboard/server.ts')",
+  );
+  docker(
+    'run',
+    '--rm',
+    '--pull',
+    'never',
+    '--network',
+    'none',
+    image,
+    'node',
     '-e',
     "const fs=require('node:fs');const assert=require('node:assert/strict');assert.notEqual(process.getuid(),0);assert.equal(fs.existsSync('/app/.spendwall'),false);assert.equal(fs.existsSync('/app/.git'),false);assert.ok(fs.readFileSync('/app/apps/dashboard/dist/index.html','utf8').includes('/assets/'));assert.equal(fs.existsSync('/app/tests'),false)",
   );
