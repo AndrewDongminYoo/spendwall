@@ -176,6 +176,7 @@ export async function startDashboardServer(options: DashboardOptions) {
   });
   let origin = '',
     active = 0,
+    checkingHealth = false,
     querying = false;
   app.use((req: IncomingMessage, res: ServerResponse) => {
     void (async () => {
@@ -213,10 +214,11 @@ export async function startDashboardServer(options: DashboardOptions) {
         return;
       }
       if (hostedOrigin && url.pathname === '/healthz') {
-        if (active >= 4) {
+        if (checkingHealth || active >= 4) {
           reply(res, 503, { ready: false });
           return;
         }
+        checkingHealth = true;
         active++;
         try {
           await checkHostedReader(options.pool);
@@ -225,6 +227,7 @@ export async function startDashboardServer(options: DashboardOptions) {
           reply(res, 503, { ready: false });
         } finally {
           active--;
+          checkingHealth = false;
         }
         return;
       }
