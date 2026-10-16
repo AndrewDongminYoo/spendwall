@@ -48,11 +48,18 @@ export async function dashboardFixture(
   assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(target.hostname));
   assert.equal(target.pathname, '/spendwall_audit_test');
   const owner = new pg.Pool({ connectionString: url });
-  let app, server, group, replayGroup;
+  let app, server, group, replayGroup, receiverGroup;
   const close = async () => {
     await server?.close();
     await app?.end();
     try {
+      if (receiverGroup) {
+        await owner.query('DROP SCHEMA reconciliation CASCADE');
+        await owner.query(
+          `DROP OWNED BY ${pg.escapeIdentifier(receiverGroup)}`,
+        );
+        await owner.query(`DROP ROLE ${pg.escapeIdentifier(receiverGroup)}`);
+      }
       if (replayGroup) {
         await owner.query('DROP SCHEMA IF EXISTS policy_replay CASCADE');
         await owner.query(`DROP OWNED BY ${pg.escapeIdentifier(replayGroup)}`);
@@ -81,6 +88,17 @@ export async function dashboardFixture(
         ),
       );
     group = (await owner.query('SELECT audit.app_role() AS name')).rows[0].name;
+    if (queryOptions.reconciliation) {
+      await owner.query(
+        await readFile(
+          new URL('../../migrations/007-reconciliation.sql', import.meta.url),
+          'utf8',
+        ),
+      );
+      receiverGroup = (
+        await owner.query('SELECT reconciliation.receiver_role() AS name')
+      ).rows[0].name;
+    }
     if (queryOptions.policyPreview) {
       await owner.query(
         await readFile(
@@ -129,6 +147,7 @@ export async function dashboardFixture(
       identityKey: key,
       merchantId: 'merchantA',
       executor,
+      ...(queryOptions.reconciliation ? { reconciliation: true } : {}),
       ...(queryOptions.policyPreview
         ? { replay: queryOptions.policyPreview.replay }
         : {}),

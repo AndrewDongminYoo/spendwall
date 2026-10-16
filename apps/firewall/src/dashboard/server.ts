@@ -17,8 +17,10 @@ import { auditQuery } from './query.ts';
 import { parseIntent } from './query-contract.ts';
 import type { QueryClassifier } from './query-contract.ts';
 import { checkHostedReader } from './hosted-reader.ts';
+import { Reconciliation } from '../webhooks/reconciliation.ts';
 
 export type DashboardOptions = {
+  reconciliation?: { adapterRef: string };
   hosted?: { publicOrigin: string };
   policyPreview?: PreviewOptions;
   pool: Pick<Pool, 'connect'>;
@@ -92,7 +94,8 @@ export async function startDashboardServer(options: DashboardOptions) {
         options.policyPreview !== undefined ||
         options.classify !== undefined ||
         options.queryMode !== undefined ||
-        options.staticDirectory !== undefined
+        options.staticDirectory !== undefined ||
+        options.reconciliation !== undefined
       )
         throw new Error();
       hostedOrigin = value;
@@ -107,6 +110,13 @@ export async function startDashboardServer(options: DashboardOptions) {
   )
     throw new Error('Invalid dashboard configuration.');
   identifier(options.merchantId);
+  const reconciliation = options.reconciliation
+    ? new Reconciliation({
+        identityKey: options.identityKey,
+        merchantId: options.merchantId,
+        adapterRef: options.reconciliation.adapterRef,
+      })
+    : undefined;
   const port = options.port ?? 0;
   if (
     !Number.isInteger(port) ||
@@ -411,6 +421,10 @@ export async function startDashboardServer(options: DashboardOptions) {
           return;
         }
         const result = dashboardData(rows, projectionOptions);
+        const reconciled =
+          url.pathname === '/stats' && reconciliation
+            ? await reconciliation.read(client)
+            : null;
         reply(
           res,
           200,
@@ -422,6 +436,7 @@ export async function startDashboardServer(options: DashboardOptions) {
               }
             : (({ audit: _audit, ...stats }) => ({
                 ...stats,
+                reconciliation: reconciled,
                 policy_preview_mode: preview
                   ? options.policyPreview!.generate
                     ? (options.policyPreview!.mode ?? 'claude')

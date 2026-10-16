@@ -522,10 +522,66 @@ footer {
 .policy-coverage p {
   margin-bottom: 6px;
 }
+.reconciliation {
+  margin: 24px 0;
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.reconciliation-heading,
+.reconciliation-row,
+.reconciliation-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.reconciliation-heading h2 {
+  margin: 6px 0 12px;
+  font-size: 25px;
+}
+.reconciliation-attention {
+  color: #973a27;
+  font-weight: 600;
+}
+.reconciliation-list {
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+.reconciliation-item {
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--muted);
+  border-radius: 6px;
+}
+.reconciliation-item p {
+  margin: 10px 0;
+}
+.reconciliation-unmediated,
+.reconciliation-mismatch {
+  border-left-color: #b94c32;
+  background: #fff8f3;
+}
+.reconciliation-matched {
+  border-left-color: #32755b;
+}
+.reconciliation-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
 .policy-preview .error {
   color: #a13028;
 }
 @media (max-width: 799px) {
+  .reconciliation {
+    padding: 20px 16px;
+  }
+  .reconciliation-heading h2 {
+    font-size: 23px;
+  }
   .policy-preview {
     padding: 20px 16px;
   }

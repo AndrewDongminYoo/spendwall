@@ -8,6 +8,7 @@ import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { loadPolicy } from '../../../packages/policy/src/index.ts';
 import { ContextResolver } from '../../firewall/src/context/index.ts';
 import { RefundExecutor } from '../../firewall/src/refunds.ts';
+import { Reconciliation } from '../../firewall/src/webhooks/reconciliation.ts';
 import { ApprovalService } from '../../firewall/src/approvals/index.ts';
 import { checkApproval } from '../../firewall/src/approvals/tool.ts';
 import { recordedPayments } from './payments.ts';
@@ -61,6 +62,7 @@ export async function createDemo(
       '001-audit.sql',
       '002-velocity.sql',
       '003-approvals.sql',
+      '007-reconciliation.sql',
     ])
       await owner.query(
         await readFile(
@@ -105,12 +107,20 @@ export async function createDemo(
     const policy = loadPolicy(
       await readFile(new URL('../policy.yaml', import.meta.url), 'utf8'),
     );
+    const identityKey = randomBytes(32).toString('hex');
+    const reconciliation = new Reconciliation({
+      identityKey,
+      merchantId: payment.merchantId,
+      adapterRef: refunds.identity,
+    });
     const approvals = new ApprovalService(app, {
-      identityKey: randomBytes(32).toString('hex'),
+      identityKey,
       merchantId: payment.merchantId,
       executor: refunds,
+      reconciliation: true,
     });
     const pending = new Set<string>();
+    const receiptRecoveries = new Map<string, () => Promise<void>>();
     const events: DecisionEvent[] = [];
     const record = (event: DecisionEvent) => {
       events.push(event);
@@ -167,6 +177,8 @@ export async function createDemo(
                 });
                 if (outcome.decision !== 'allow')
                   return result({ ...outcome, reason }, true);
+                const audit = outcome.receipt;
+                if (!audit) return denied('firewall_unavailable');
                 const completed = await refunds.execute(requestId, {
                   ...args,
                   amount: {
@@ -174,6 +186,24 @@ export async function createDemo(
                     currency_code: resolved.context.amount.currency,
                   },
                 });
+                if (completed.status === 'COMPLETED') {
+                  const recover = () =>
+                    reconciliation.record(app!, audit, completed);
+                  receiptRecoveries.set(completed.executionId, recover);
+                  try {
+                    await recover();
+                    receiptRecoveries.delete(completed.executionId);
+                  } catch {
+                    return result({
+                      decision: 'allow',
+                      reason,
+                      result: completed,
+                      reconciliation: 'unresolved',
+                      message:
+                        'Refund completed. Do not submit another refund; the operator must recover its reconciliation receipt using this execution ID.',
+                    });
+                  }
+                }
                 return result({ decision: 'allow', reason, result: completed });
               }
               if (outcome.status === 'pending_approval') {
@@ -204,6 +234,13 @@ export async function createDemo(
       events,
       payments: payment.writes,
       pendingIds: () => [...pending],
+      // Receipt-only recovery belongs to the runner, never an agent tool.
+      async recoverReconciliation(executionId: string) {
+        const recover = receiptRecoveries.get(executionId);
+        if (!recover) throw new Error('Unknown demo receipt recovery.');
+        await recover();
+        receiptRecoveries.delete(executionId);
+      },
       // The runner holds this capability. It is never exposed as an agent tool.
       async humanDetails(id: string) {
         if (!pending.has(id)) throw new Error('Unknown demo approval.');

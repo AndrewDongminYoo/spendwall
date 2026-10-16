@@ -20,6 +20,7 @@ import { ApprovalSummaries } from './summary.ts';
 import type { SummaryOptions } from './summary.ts';
 
 export type ApproverOptions = {
+  reconciliation?: boolean;
   pool: Pick<Pool, 'connect'>;
   merchantId: string;
   identityKey: string;
@@ -138,6 +139,7 @@ export async function startApproverServer(options: ApproverOptions) {
     merchantId: options.merchantId,
     executor: options.executor,
     onCreated: delivery.enqueue,
+    ...(options.reconciliation ? { reconciliation: true } : {}),
     ...(options.clock ? { clock: options.clock } : {}),
   });
   const app = await NestFactory.create(ApproverModule, {

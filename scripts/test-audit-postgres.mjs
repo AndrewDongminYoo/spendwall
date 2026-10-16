@@ -3,23 +3,32 @@ import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 
 const args = process.argv.slice(2);
-if (args.length > 1 || (args.length === 1 && args[0] !== '--approval-api')) {
-  console.error('Usage: node scripts/test-audit-postgres.mjs [--approval-api]');
+if (
+  args.length > 1 ||
+  (args.length === 1 &&
+    !['--approval-api', '--reconciliation'].includes(args[0]))
+) {
+  console.error(
+    'Usage: node scripts/test-audit-postgres.mjs [--approval-api|--reconciliation]',
+  );
   process.exit(2);
 }
 const testFiles =
   args[0] === '--approval-api'
     ? ['tests/approval-api-postgres.test.mjs']
-    : [
-        'tests/audit-postgres.test.mjs',
-        'tests/velocity-postgres.test.mjs',
-        'tests/approvals-postgres.test.mjs',
-        'tests/approval-api-postgres.test.mjs',
-        'tests/dashboard-postgres.test.mjs',
-        'tests/agent-auth-postgres.test.mjs',
-        'tests/policy-preview-postgres.test.mjs',
-        'tests/hosting-postgres.test.mjs',
-      ];
+    : args[0] === '--reconciliation'
+      ? ['tests/reconciliation-postgres.test.mjs']
+      : [
+          'tests/audit-postgres.test.mjs',
+          'tests/velocity-postgres.test.mjs',
+          'tests/approvals-postgres.test.mjs',
+          'tests/approval-api-postgres.test.mjs',
+          'tests/dashboard-postgres.test.mjs',
+          'tests/agent-auth-postgres.test.mjs',
+          'tests/policy-preview-postgres.test.mjs',
+          'tests/hosting-postgres.test.mjs',
+          'tests/reconciliation-postgres.test.mjs',
+        ];
 const name = `spendwall-audit-test-${randomUUID()}`;
 function docker(...args) {
   const result = spawnSync('docker', args, { encoding: 'utf8' });

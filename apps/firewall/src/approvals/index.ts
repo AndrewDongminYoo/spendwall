@@ -9,6 +9,7 @@ import { parseVelocityMetadata } from '../audit/velocity.ts';
 import { identifier, object } from '../context/json.ts';
 import { RefundExecutor, canonical } from '../refunds.ts';
 import type { RefundResult } from '../refunds.ts';
+import { Reconciliation } from '../webhooks/reconciliation.ts';
 import { VelocityPolicy } from '../velocity/index.ts';
 import {
   ApprovalKeys,
@@ -57,6 +58,7 @@ export type ApprovalView = Readonly<{
   result: RefundResult | null;
 }>;
 type Options = {
+  reconciliation?: boolean;
   replay?: PolicyReplay;
   identityKey: string;
   merchantId: string;
@@ -115,6 +117,7 @@ export class ApprovalService {
   private readonly adapter: string;
   private readonly clock: Options['clock'];
   private readonly onCreated: Options['onCreated'];
+  private readonly reconciliation: Reconciliation | undefined;
   constructor(pool: Pick<Pool, 'connect'>, options: Options) {
     this.pool = pool;
     this.keys = new ApprovalKeys(options.identityKey);
@@ -123,6 +126,13 @@ export class ApprovalService {
     this.adapter = options.executor.identity;
     this.clock = options.clock;
     this.onCreated = options.onCreated;
+    this.reconciliation = options.reconciliation
+      ? new Reconciliation({
+          identityKey: options.identityKey,
+          merchantId: this.merchant,
+          adapterRef: this.adapter,
+        })
+      : undefined;
     if (
       !/^[a-f0-9]{64}$/.test(this.adapter) ||
       (this.clock !== undefined && typeof this.clock !== 'function')
@@ -745,7 +755,7 @@ export class ApprovalService {
         'UPDATE approvals.requests SET execution_state=$2,result_sealed=$3 WHERE approval_id=$1',
         [id, state, sealedResult],
       );
-      await new AuditLog(client).append(
+      const receipt = await new AuditLog(client).append(
         this.event(
           row,
           data,
@@ -754,6 +764,8 @@ export class ApprovalService {
           state === 'succeeded',
         ),
       );
+      if (state === 'succeeded' && result)
+        await this.reconciliation?.record(client, receipt, result);
       row.execution_state = state;
       row.result_sealed = sealedResult;
       await client.query('COMMIT');
