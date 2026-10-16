@@ -92,7 +92,7 @@ export class ContextRest {
     const slot: Pending = { invalidated: false, promise: Promise.resolve() };
     const get = async (path: string): Promise<unknown> => {
       if (
-        !/^\/v2\/(?:payments\/captures|checkout\/orders|invoicing\/invoices)\/[A-Za-z0-9_-]{1,128}$/.test(
+        !/^(?:\/v2\/(?:payments\/captures|checkout\/orders|invoicing\/invoices)\/[A-Za-z0-9_-]{1,128}|\/v1\/customer\/disputes\/[A-Za-z0-9-]{1,255})$/.test(
           path,
         )
       )

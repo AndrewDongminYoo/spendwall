@@ -1,8 +1,8 @@
 # Context resolver
 
-The #9 boundary resolves monetary context before policy evaluation. It supports
-`create_refund`, `create_invoice`, `send_invoice`, and `get_invoice` from the #3
-catalog. Other tools return an explicit deny until their own resolvers exist.
+The #9 boundary resolves monetary context before policy evaluation.
+It supports `create_refund`, `create_invoice`, `send_invoice`, `get_invoice`, `accept_dispute_claim` and `get_dispute` from the #3 catalog.
+Other tools return an explicit deny until their own resolvers exist.
 Successful resolution supplies facts; it does not grant execution permission.
 
 ```ts
@@ -71,6 +71,12 @@ custom amounts and other unsupported pricing options fail closed. Zero reported
 tax is accepted only when its currency matches. There is no speculative pricing
 calculation for unsupported terms.
 
+## Disputes
+
+Dispute reads verify the merchant and the trusted customer's `seller_transaction_id` against one provider transaction.
+Acceptance requires full-refund capability and a known active state; successful resolution still does not authorize acceptance.
+Use the mandatory approval floor and deadline classifier in the [dispute policy boundary](dispute-policy.md), which documents the supported response subset and missing execution integration.
+
 ## Currency and policy contract
 
 The existing policy `normalizeAmount` function supplies the explicitly fictional
@@ -93,7 +99,7 @@ identities are never cached. Cache/in-flight maps are each limited to 128 keys.
 Expired/reversed/invalid clocks and refresh failures never fall back to stale
 facts. Failed reads are not negatively cached.
 
-Call `invalidateCapture(id)` or `invalidateInvoice(id)` when related state changes.
+Call `invalidateCapture(id)`, `invalidateInvoice(id)` or `invalidateDispute(id)` when related state changes.
 Every resolution rechecks a freshness/invalidation lease before returning, including cache hits.
 An invalidated in-flight read cannot return as a current resolution or repopulate
 the cache, and its cleanup cannot remove a newer in-flight lookup.

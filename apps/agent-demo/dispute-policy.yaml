@@ -1,0 +1,13 @@
+agents:
+  support:
+    tools:
+      allow: [accept_dispute_claim]
+      deny: []
+rules:
+  - id: dispute_always_approval
+    when: tool == "accept_dispute_claim"
+    then: require_approval
+  - id: dispute_currency
+    when: amount.currency != "USD"
+    then: deny
+default: deny

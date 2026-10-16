@@ -10,11 +10,12 @@ The W0 sandbox proxy is a separate integration without the demo's policy/approva
 The hosted dashboard preparation entrypoint is API-only; public UI licensing, deployment and 48-hour operation remain unverified.
 The optional loopback sandbox webhook receiver verifies observed refunds and compares them with opt-in execution receipts; live delivery and direct-dashboard refund acceptance remain unverified.
 The invoice policy module reserves allowed send attempts atomically; its synthetic console example does not create or send provider invoices.
+The dispute policy module returns review-only approval requirements and deadline data; it does not create approval records, accept claims or send notifications.
 
 ## Structure
 
 - `packages/policy`: framework-independent TypeScript policy loading and evaluation.
-- `apps/firewall`: proxy, context, audit, velocity, approval, webhook reconciliation, invoice policy and dashboard server modules.
+- `apps/firewall`: proxy, context, audit, velocity, approval, webhook reconciliation, invoice/dispute policy and dashboard server modules.
 - `apps/agent-demo`: synthetic support-agent composition with optional Claude execution.
 - `apps/dashboard`: React and AG Studio read-only dashboard.
 - `apps/approver`: independent iOS/Android Flutter approval app outside the pnpm workspace; use its pinned SDK and app-local checks.

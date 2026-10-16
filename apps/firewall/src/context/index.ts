@@ -13,6 +13,7 @@ import {
 } from './json.ts';
 import type { DenyReason, JsonObject } from './json.ts';
 import { createInvoice, readInvoice } from './invoice.ts';
+import { disputeIdentifier, readDispute } from './dispute.ts';
 import { normalizedAmount, policyAmount } from './money.ts';
 import { readRefund, refundAmount } from './refund.ts';
 import { ContextRest } from './rest.ts';
@@ -23,6 +24,8 @@ export const resolverRegistry = Object.freeze({
   create_invoice: 'money-in',
   send_invoice: 'money-in',
   get_invoice: 'read',
+  accept_dispute_claim: 'money-out',
+  get_dispute: 'read',
 });
 type ToolName = keyof typeof resolverRegistry;
 export type PolicyContext = {
@@ -80,6 +83,9 @@ export class ContextResolver {
   invalidateInvoice(id: string) {
     this.rest.invalidate(`invoice:${identifier(id, 1, 127)}`);
   }
+  invalidateDispute(id: string) {
+    this.rest.invalidate(`dispute:${disputeIdentifier(id)}`);
+  }
 
   async resolve(input: unknown, serverContext: unknown): Promise<Resolution> {
     try {
@@ -127,6 +133,40 @@ export class ContextResolver {
             refunded_minor: Number(facts.refunded.minor),
             remaining_minor: Number(facts.remaining.minor),
             status: facts.status,
+          },
+        };
+      } else if (tool === 'accept_dispute_claim' || tool === 'get_dispute') {
+        const id = disputeIdentifier(args.dispute_id);
+        const lease = await this.rest.facts(`dispute:${id}`, (get) =>
+          readDispute(
+            get,
+            id,
+            String(this.merchant.id),
+            String(this.merchant.email),
+          ),
+        );
+        const facts = lease.value;
+        assertCurrent = lease.assertCurrent;
+        if (
+          customer.seller_transaction_id !== facts.transactionId ||
+          (tool === 'accept_dispute_claim' && !facts.canAccept)
+        )
+          fail();
+        amount = facts.amount;
+        resolvedCtx = {
+          dispute: {
+            dispute_id: facts.id,
+            seller_transaction_id: facts.transactionId,
+            amount: policyAmount(facts.amount),
+            amount_minor: Number(facts.amount.minor),
+            gross_amount: policyAmount(facts.gross),
+            transaction_status: facts.transactionStatus,
+            status: facts.status,
+            life_cycle_stage: facts.stage,
+            can_accept: facts.canAccept,
+            ...(facts.dueAt === undefined
+              ? {}
+              : { seller_response_due_date: facts.dueAt }),
           },
         };
       } else {
