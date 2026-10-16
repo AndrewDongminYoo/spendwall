@@ -124,3 +124,89 @@ docker compose --env-file .env.example config --quiet
 `tests/dashboard-postgres.test.mjs` covers actual SQL, lifecycle writes from existing services, merchant separation, HTTP, and unchanged audit data.
 Browser verification must include populated/empty snapshots, invalid credentials, refresh failure, narrow layout, and the actual custom widget fill.
 Operator approval of the rendered candidate remains required before merge.
+
+## Policy workshop (optional)
+
+The workshop generates a policy draft, compares it with the configured base and reevaluates available historical inputs.
+It does not apply policies or execute payments.
+The final action downloads a validated YAML draft only after explicit human confirmation; activation remains a separate operator action.
+A changed base version invalidates the draft and requires reloading and review.
+Schema and CEL validation cannot establish that a generated policy matches the operator's intent.
+
+Add `policyPreview` to the private dashboard configuration:
+
+```json
+{
+  "policyPreview": {
+    "databaseUrl": "postgresql://replay-reader@localhost/spendwall",
+    "encryptionKey": "<independent 64-hex key from private configuration>",
+    "policyPath": "/absolute/current-policy.yaml",
+    "claude": {
+      "apiKey": "<private provider key>",
+      "model": "<explicit model supporting structured output>"
+    }
+  }
+}
+```
+
+This is an optional section alongside the existing dashboard fields.
+It does not replace the audit-query Claude configuration.
+The generator follows the [Claude structured-output contract](https://platform.claude.com/docs/en/build-with-claude/structured-outputs).
+Enabling it sends the operator instruction and current policy to Anthropic and can incur charges.
+Decrypted replay inputs are never model inputs.
+The model has no tools, redirects or automatic retries; only validated output can become a draft.
+One provider operation may run at a time, including an abandoned operation that has not settled.
+Generation is bounded to ten seconds and 4,096 output tokens.
+Proposals must fit 64 KiB and 2,000 lines; the comparison preserves the common prefix/suffix and marks the replacement region.
+
+### Encrypted replay and retention
+
+As the trusted owner, apply `migrations/006-policy-replay.sql` after `001` and `002`.
+Grant `policy_replay.reader_role()` to a separate runtime login for `policyPreview.databaseUrl`.
+This role can read replay ciphertext and audit rows and call the narrowly scoped expired-payload purge function.
+It cannot insert or update replay payloads, delete unexpired payloads, modify audit history or execute payments.
+The existing audit application role receives only the additional replay insert columns and expired-payload purge capability.
+
+Trusted evaluation composition must explicitly supply a recorder:
+
+```ts
+import { PolicyReplay } from './apps/firewall/src/policy-preview/replay.ts';
+
+const replay = new PolicyReplay(independentReplayKey);
+const velocity = new VelocityPolicy(pool, { identityKey, replay });
+// ApprovalService also accepts the same optional replay instance.
+```
+
+The default W0 proxy and existing service constructors remain unchanged unless this option is supplied.
+Use the same replay key in the recorder and preview reader, independently of the identity key, dashboard token and provider credentials.
+The store encrypts the complete policy-visible input and original policy using AES-256-GCM with a random nonce and audit-row/merchant binding.
+This is additional sensitive retention beyond the redacted audit log, explicitly approved for this feature.
+Only initial evaluations are captured, in the same transaction as the audit event; request retries do not add snapshots.
+When enabled recording fails, the evaluation fails closed and rolls back the audit transaction.
+No historical backfill is attempted.
+
+Replay access expires after seven days.
+The dashboard launcher purges expired payloads at startup and every minute while running; recording also purges expired payloads in its transaction.
+Each call deletes at most 1,000 expired rows through an expiry index and skips rows locked by another cleanup.
+The worker commits each batch separately.
+The worker is owned by that launcher and stops with it; no machine scheduler is installed.
+Physical deletion can lag by the worker interval, an expired-record backlog or process downtime, and resumes when the launcher or recorder next runs.
+Audit events remain append-only and are not deleted by this retention worker.
+Database backups, key rotation and deployment-wide lifecycle management remain operator responsibilities.
+Changing or losing the replay key makes old ciphertext unavailable; never replace missing historical inputs with guesses.
+
+### Reading coverage
+
+The seven-day preview uses original tool calls and their exact recorded inputs and aggregates.
+It is not a simulation of changed historical payment sequences or a prediction of future spending.
+Original policy version and decision are checked before the candidate is evaluated.
+Counts distinguish changed, unchanged and unavailable calls, with partial coverage whenever a scoped call lacks a valid snapshot.
+Old rows without snapshots, expired data and failed authentication of ciphertext are unavailable, not unchanged.
+Unscoped identity history, malformed scoped history, a continuity-key mismatch, database failure or more than 10,000 recent merchant calls or 8 MiB of merchant ciphertext makes the preview unavailable.
+Valid foreign-merchant records do not consume the merchant replay budget.
+Only safe counts, versions and the snapshot time are returned to the browser; no decrypted payment context is returned.
+
+`pnpm dashboard:preview` supplies synthetic policy output and an owned disposable database, including one legacy call without a replay snapshot.
+No model, payment or license request is made by that preview.
+Use an instruction containing `invalid` to exercise rejected synthetic output.
+The desktop and narrow layouts show the same confirmation and coverage boundaries.

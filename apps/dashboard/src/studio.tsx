@@ -11,6 +11,7 @@ import type { DashboardData } from '../../firewall/src/dashboard/data.ts';
 
 export type Stats = Omit<DashboardData, 'audit'> & {
   query_mode: 'claude' | 'synthetic' | 'disabled';
+  policy_preview_mode?: 'claude' | 'synthetic' | 'disabled';
 };
 type BudgetDefinition = AgBaseWidgetDefinition<'spendwall-budget'>;
 interface Registry extends Omit<AgDefaultRegistry, 'widgets'> {

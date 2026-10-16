@@ -1,3 +1,5 @@
+import { VelocityPolicy } from '../apps/firewall/src/velocity/index.ts';
+import { PolicyReplay } from '../apps/firewall/src/policy-preview/replay.ts';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -77,6 +79,29 @@ try {
     url,
     fileURLToPath(new URL('../apps/dashboard/dist', import.meta.url)),
     {
+      policyPreview: {
+        replay: new PolicyReplay('9'.repeat(64)),
+        loadPolicy: async () => `agents:
+  support:
+    tools: {allow: [create_refund], deny: []}
+  returns:
+    tools: {allow: [create_refund], deny: []}
+rules:
+  - id: refund-review
+    when: "true"
+    then: allow
+default: deny
+`,
+        generate: async ({ baseYaml, instruction }) => ({
+          yaml: instruction.includes('invalid')
+            ? 'default: allow'
+            : baseYaml.replace(
+                'rules:\n',
+                'rules:\n  - id: customer-review\n    when: "agg.customer_refund_count_7d >= 2"\n    then: require_approval\n',
+              ),
+        }),
+        mode: 'synthetic',
+      },
       queryMode: 'synthetic',
       classify: async (question) => ({
         intent:
@@ -86,6 +111,9 @@ try {
     },
   );
   if (args[0] !== '--empty') {
+    await new VelocityPolicy(fixture.app, {
+      identityKey: '7'.repeat(64),
+    }).evaluateAndReserve(policy('deny'), request('10.00'));
     await fixture.addPending('60.00');
     await fixture.addPending('35.00', 'returns');
     const completed = await fixture.addPending('25.00');

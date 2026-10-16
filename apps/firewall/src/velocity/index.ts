@@ -1,3 +1,4 @@
+import type { PolicyReplay } from '../policy-preview/replay.ts';
 import { createHmac, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import {
@@ -38,11 +39,16 @@ function canonical(value: Json): string {
 
 export class VelocityPolicy {
   readonly #key: Buffer;
+  private readonly replay: PolicyReplay | undefined;
   private readonly pool: Pick<Pool, 'connect'>;
   private readonly clock: (() => number) | undefined;
   constructor(
     pool: Pick<Pool, 'connect'>,
-    options: { identityKey: string; clock?: () => number },
+    options: {
+      identityKey: string;
+      clock?: () => number;
+      replay?: PolicyReplay;
+    },
   ) {
     if (
       typeof options?.identityKey !== 'string' ||
@@ -51,6 +57,8 @@ export class VelocityPolicy {
     )
       throw new Error('Invalid velocity configuration.');
     this.#key = Buffer.from(options.identityKey, 'hex');
+    options.replay?.assertIndependent(options.identityKey);
+    this.replay = options.replay;
     this.pool = pool;
     this.clock = options.clock;
   }
@@ -192,7 +200,8 @@ export class VelocityPolicy {
         committed = true;
         return result;
       }
-      const decision = evaluatePolicy(policy, { ...context, agg: history.agg });
+      const evaluationContext = { ...context, agg: history.agg };
+      const decision = evaluatePolicy(policy, evaluationContext);
       const approvalId =
         decision.decision === 'require_approval' ? randomUUID() : undefined;
       const receipt = await new AuditLog(client).append({
@@ -205,6 +214,7 @@ export class VelocityPolicy {
           Math.max(0, Math.floor(performance.now() - started)),
         ),
       });
+      await this.replay?.record(client, receipt, evaluationContext, policy);
       // A server missing migration 002 would silently redact these references.
       // Check the actual stored row before committing an allowance/reservation.
       const stored = (
