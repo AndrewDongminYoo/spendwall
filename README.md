@@ -62,6 +62,9 @@ Real webhook delivery and direct-dashboard refund acceptance remain pending; an 
 The [invoice policy baseline](docs/invoice-policy.md) checks amount caps and recipient domains, with atomic per-customer daily send reservations.
 Run `node scripts/invoice-demo.mjs` for a synthetic console example; it does not create or send provider invoices.
 
+The [dispute policy baseline](docs/dispute-policy.md) resolves trusted claim facts, requires human approval for acceptance and classifies response deadlines.
+Run `node scripts/dispute-demo.mjs` for a synthetic example; it creates no approval and performs no provider write or notification delivery.
+
 ## Architecture and trust boundaries
 
 The solid path is the synthetic demo composition in `apps/agent-demo`.
