@@ -56,6 +56,7 @@ jobs:
           repository: flutter/flutter
           ref: abaf9c523780a608bd46686fd5e53740a07077f8 # 3.47.7
           path: .flutter-sdk
+          fetch-depth: 0
           persist-credentials: false
       - name: Add pinned Flutter to PATH
         run: echo "$GITHUB_WORKSPACE/.flutter-sdk/bin" >> "$GITHUB_PATH"
