@@ -92,7 +92,10 @@ The recorded SSE/REST observations in the proxy guide are dated evidence, not pr
 Optional `pnpm demo small --live` invokes a paid Claude model but still uses synthetic payments.
 Its interactive human approval differs from the default scripted fixture; see the [agent guide](../apps/agent-demo/README.md#optional-claude-run).
 Approval summaries and dashboard queries require their own explicit server-side configuration.
-No real credentials are required for the recorded rehearsal, and no live model or payment request was made for this guide.
+No real credentials are required for the recorded rehearsal.
+The subsequent [live Claude rehearsal](notes/2026-10-16-live-rehearsal.md) exercised four existing fixtures with synthetic payments, including noninteractive denial of the approval case.
+Its injection result differs from recorded replay and does not demonstrate the firewall's out-of-ticket denial path.
+No live payment request was made for either rehearsal.
 
 ## Rehearsal evidence
 
@@ -112,7 +115,7 @@ This is a bounded installation measurement, not a guarantee on other networks or
 
 - A hosted URL and read-only judge access depend on #20 and a valid deployment license.
 - The integrated live-sandbox judge flow is not delivered by the synthetic demo.
-- Live Claude interpretation, mobile push/biometric approval and the submission video require separate verification.
+- Broader live Claude coverage, mobile push/biometric approval and the submission video require separate verification.
 - The architecture diagram shows current composition, not completion of every item in the roadmap.
 
 The [official rules](https://paypalaihackathon.devpost.com/rules) allow complete runnable setup instructions instead of a hosted URL.
