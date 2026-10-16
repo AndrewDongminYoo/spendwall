@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createHmac } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import pg from 'pg';
@@ -355,6 +355,14 @@ test('Postgres encrypted policy preview', { skip: !url }, async (t) => {
         }),
       });
       assert.equal(response.status, 200);
+      for (const pool of [f.app, f.reader]) {
+        assert.equal(pool.waitingCount, 0);
+        assert.equal(
+          pool.totalCount,
+          pool.idleCount,
+          'startup challenge must release both clients',
+        );
+      }
       const result = await response.json();
       assert.deepEqual(
         [
@@ -367,6 +375,65 @@ test('Postgres encrypted policy preview', { skip: !url }, async (t) => {
         [2, 1, 1, 0, 1],
       );
       assert.deepEqual(await verifyAudit(f.app), before);
+    },
+  );
+  await t.test(
+    'startup rejects a separate empty replay database',
+    async (t) => {
+      const f = await fixture(t);
+      await f.velocity.evaluateAndReserve(policy('allow'), request());
+      const { startDashboardServer } =
+        await import('../apps/firewall/src/dashboard/server.ts');
+      const name = 'replay_other_' + randomUUID().replaceAll('-', '');
+      await f.owner.query(`CREATE DATABASE ${pg.escapeIdentifier(name)}`);
+      const target = new URL(url);
+      target.pathname = '/' + name;
+      const other = new pg.Pool({ connectionString: target.toString() });
+      const roles = [];
+      try {
+        for (const file of [
+          '001-audit.sql',
+          '002-velocity.sql',
+          '006-policy-replay.sql',
+        ])
+          await other.query(
+            await readFile(
+              new URL('../migrations/' + file, import.meta.url),
+              'utf8',
+            ),
+          );
+        roles.push(
+          (await other.query('SELECT audit.app_role() AS name')).rows[0].name,
+          (await other.query('SELECT policy_replay.reader_role() AS name'))
+            .rows[0].name,
+        );
+        // A schema-compatible wrong database previously returned trustworthy-looking zero history.
+        assert.equal(
+          (await f.replay.preview(other, scope, policy('deny'))).total,
+          0,
+        );
+        const before = await verifyAudit(f.app);
+        await assert.rejects(async () => {
+          const unexpected = await startDashboardServer({
+            pool: f.app,
+            identityKey: key,
+            merchantId: 'merchantA',
+            token: '8'.repeat(64),
+            policyPreview: {
+              pool: other,
+              replay: f.replay,
+              loadPolicy: async () => 'default: deny',
+            },
+          });
+          await unexpected.close();
+        }, /Replay database mismatch/);
+        assert.deepEqual(await verifyAudit(f.app), before);
+      } finally {
+        await other.end();
+        await f.owner.query(`DROP DATABASE ${pg.escapeIdentifier(name)}`);
+        for (const role of roles)
+          await f.owner.query(`DROP ROLE ${pg.escapeIdentifier(role)}`);
+      }
     },
   );
   await t.test(

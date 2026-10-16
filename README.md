@@ -38,6 +38,8 @@ pnpm dashboard:preview
 
 Open the loopback URL printed by the preview and enter its disposable test token.
 Use the three prompt buttons to inspect large refund attempts, denial groups and support-bot reservations.
+The policy workshop also supplies a synthetic draft, a YAML diff and seven-day replay counts from encrypted fixture inputs.
+Confirming a draft downloads YAML; it does not change the running policy.
 Stop with Ctrl+C to remove that preview's database.
 The preview has its own synthetic fixtures; it does not display the preceding `pnpm demo` run.
 
@@ -76,16 +78,17 @@ The Flutter approver remains planned in [#15](https://github.com/AndrewDongminYo
 
 ## Where AI is used
 
-| Surface            | Implemented behavior                                                                | Default and limit                                                                                    |
-| ------------------ | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Support agent      | Optional Claude Agent SDK asks scoped firewall tools to act                         | Default demo replays recorded calls; `--live` opts into a paid model while payments remain synthetic |
-| Approval summary   | Optional Claude generates advisory text from bounded, redacted context              | Disabled without configuration; never authorizes a payment                                           |
-| Audit queries      | Optional Claude selects one of three intents; server computes data and widget shape | Preview uses a labelled synthetic classifier; no model-generated SQL or payment tools                |
-| Policy compilation | Planned natural-language YAML proposal, diff and dry-run in #21                     | Not implemented; no AI-generated policy is applied                                                   |
+| Surface            | Implemented behavior                                                                      | Default and limit                                                                                                                    |
+| ------------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Support agent      | Optional Claude Agent SDK asks scoped firewall tools to act                               | Default demo replays recorded calls; `--live` opts into a paid model while payments remain synthetic                                 |
+| Approval summary   | Optional Claude generates advisory text from bounded, redacted context                    | Disabled without configuration; never authorizes a payment                                                                           |
+| Audit queries      | Optional Claude selects one of three intents; server computes data and widget shape       | Preview uses a labelled synthetic classifier; no model-generated SQL or payment tools                                                |
+| Policy compilation | Optional Claude proposes validated YAML for diff review and exact historical reevaluation | Disabled without configuration; encrypted replay is opt-in, missing inputs stay unavailable, and confirmation only downloads a draft |
 
 Codex and Claude Code assisted development, documentation and review; checked-in policies and deterministic code enforce decisions.
 Model output, ticket text and generated summaries remain untrusted.
 See the [agent guide](apps/agent-demo/README.md), [summary boundary](docs/approval-api.md#optional-advisory-summaries) and [audit assistant contract](docs/dashboard.md#audit-assistant) for configuration and data disclosure.
+The [policy workshop contract](docs/dashboard.md#policy-workshop-optional) explains encrypted retention, partial coverage and confirmed draft export.
 
 ## Development and verification
 

@@ -159,6 +159,10 @@ One provider operation may run at a time, including an abandoned operation that 
 Generation is bounded to ten seconds and 4,096 output tokens.
 Proposals must fit 64 KiB and 2,000 lines; the comparison preserves the common prefix/suffix and marks the replacement region.
 
+The replay reader must connect to the same live PostgreSQL database as the dashboard.
+Before listening, startup verifies separate pools through a transaction-scoped advisory-lock challenge; a separate database, clone, inaccessible connection or failed check prevents startup.
+All history queries use explicit schema names.
+
 ### Encrypted replay and retention
 
 As the trusted owner, apply `migrations/006-policy-replay.sql` after `001` and `002`.

@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { assertReplayDatabase } from '../policy-preview/database.ts';
 import { PolicyPreview, readPreviewBody } from '../policy-preview/service.ts';
 import type { PreviewOptions } from '../policy-preview/service.ts';
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
@@ -124,6 +125,8 @@ export async function startDashboardServer(options: DashboardOptions) {
     throw new Error('Invalid dashboard configuration.');
   options.policyPreview?.replay.assertIndependent(options.identityKey);
   options.policyPreview?.replay.assertIndependent(options.token);
+  if (options.policyPreview)
+    await assertReplayDatabase(options.pool, options.policyPreview.pool);
   const preview = options.policyPreview
     ? new PolicyPreview(options.policyPreview)
     : undefined;
