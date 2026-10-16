@@ -15,7 +15,7 @@ The hosted dashboard preparation entrypoint is API-only; public UI licensing, de
 - `apps/firewall`: proxy, context, audit, velocity, approval and dashboard server modules.
 - `apps/agent-demo`: synthetic support-agent composition with optional Claude execution.
 - `apps/dashboard`: React and AG Studio read-only dashboard.
-- `apps/approver`: reserved Flutter app directory outside the pnpm workspace; no platforms generated.
+- `apps/approver`: independent iOS/Android Flutter approval app outside the pnpm workspace; use its pinned SDK and app-local checks.
 - `docs/specs`, `docs/plans`, and `docs/notes`: durable project documentation.
 
 ## Checks
@@ -31,6 +31,9 @@ pnpm test
 trunk check --all --no-fix
 docker compose --env-file .env.example config --quiet
 ```
+
+For `apps/approver`, also run its documented Flutter analyze, format and test checks.
+Native builds and synthetic UI checks do not replace physical-device push, biometric and sandbox acceptance.
 
 Trunk manages pre-commit secret scanning and the pre-push quality check.
 Install hooks with `pnpm hooks:install`.

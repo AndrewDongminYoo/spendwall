@@ -79,7 +79,8 @@ flowchart TD
 `pnpm proxy` is the separate W0 sandbox integration, with recorded MCP/SSE and REST refund evidence.
 It does **not** wire in this policy/approval composition and must not be exposed as a protected public gateway.
 See [proxy boundaries](docs/proxy.md), [approvals](docs/approvals.md) and [approval API](docs/approval-api.md).
-The Flutter approver remains planned in [#15](https://github.com/AndrewDongminYoo/spendwall/issues/15).
+The [Flutter approver](apps/approver/README.md) implements the local approval flow for iOS and Android.
+Real push, physical-device biometrics and integrated sandbox acceptance remain pending in [#15](https://github.com/AndrewDongminYoo/spendwall/issues/15).
 
 ## Where AI is used
 
@@ -120,7 +121,7 @@ Keep credentials and private runtime state out of Git.
 | `apps/firewall`       | Sandbox proxy, trusted context, audit/velocity, approval and dashboard server modules |
 | `apps/agent-demo`     | Executable synthetic composition with optional Claude agent                           |
 | `apps/dashboard`      | React and AG Studio read-only dashboard                                               |
-| `apps/approver`       | Reserved Flutter app directory, excluded from pnpm                                    |
+| `apps/approver`       | Independent iOS/Android approval app, excluded from pnpm                              |
 | `migrations`, `tests` | PostgreSQL contracts and behavior verification                                        |
 | `docs`                | Operating guides, threat model, specs and plans                                       |
 

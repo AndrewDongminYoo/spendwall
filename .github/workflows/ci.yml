@@ -40,3 +40,27 @@ jobs:
       - run: docker compose --env-file .env.example config --quiet
       - run: docker build -t spendwall-hosting:ci .
       - run: node scripts/hosting-smoke.mjs spendwall-hosting:ci
+
+  approver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/approver
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: flutter/flutter
+          ref: abaf9c523780a608bd46686fd5e53740a07077f8 # 3.47.7
+          path: .flutter-sdk
+          persist-credentials: false
+      - name: Add pinned Flutter to PATH
+        run: echo "$GITHUB_WORKSPACE/.flutter-sdk/bin" >> "$GITHUB_PATH"
+      - run: flutter --version
+      - run: flutter pub get --enforce-lockfile
+      - run: dart format --output=none --set-exit-if-changed lib test integration_test test_driver
+      - run: flutter analyze
+      - run: flutter test
