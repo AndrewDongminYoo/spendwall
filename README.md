@@ -52,6 +52,9 @@ Actual local browser recording; synthetic classification, synthetic payment outc
 Local evaluation retains AG Studio's evaluation warnings and watermarks.
 Trial issuance remains deferred; there is no hosted demo URL yet.
 
+The [hosting preparation guide](docs/hosting.md) provides a container and Render template for an authenticated, read-only API.
+The hosted entrypoint does not serve AG Studio assets; public UI deployment and the 48-hour operational check remain pending.
+
 ## Architecture and trust boundaries
 
 The solid path is the synthetic demo composition in `apps/agent-demo`.

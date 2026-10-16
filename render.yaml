@@ -1,0 +1,28 @@
+# Preparation template only. Do not sync before account/cost/licence approval.
+services:
+  - type: web
+    name: spendwall-dashboard-api
+    runtime: docker
+    plan: 0.5c-512mb
+    region: singapore
+    autoDeployTrigger: 'off'
+    healthCheckPath: /healthz
+    envVars:
+      - key: PORT
+        value: '10000'
+      - key: SPENDWALL_PUBLIC_ORIGIN
+        sync: false
+      - key: SPENDWALL_DASHBOARD_CONFIG
+        value: /etc/secrets/dashboard.json
+      # Supply the restricted reader's private-network URL, never the owner URL.
+      - key: SPENDWALL_DASHBOARD_DATABASE_URL
+        sync: false
+databases:
+  - name: spendwall
+    plan: 0.1c-256mb
+    diskSizeGB: 1
+    storageAutoscalingEnabled: false
+    region: singapore
+    databaseName: spendwall
+    postgresMajorVersion: '17'
+    ipAllowList: []

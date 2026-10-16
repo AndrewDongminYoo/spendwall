@@ -38,3 +38,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - run: docker compose --env-file .env.example config --quiet
+      - run: docker build -t spendwall-hosting:ci .
+      - run: node scripts/hosting-smoke.mjs spendwall-hosting:ci
