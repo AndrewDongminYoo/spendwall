@@ -45,7 +45,8 @@ The recorder uses narrowly scoped insert permissions; the preview reader cannot 
 The dashboard launcher purges expired replay payloads at startup and once per minute while running, using a narrow database function that cannot delete unexpired data or audit rows.
 Recording also purges expired payloads in its transaction.
 No system scheduler is installed; after downtime physical deletion resumes at the next launcher start or recorded evaluation.
-Seven days bounds replay availability; physical cleanup can lag by the worker interval or downtime.
+Seven days bounds replay availability; physical cleanup can lag by the worker interval, expired-record backlog or downtime.
+Each cleanup uses an expiry index and deletes at most 1,000 expired rows, skipping records locked by another cleanup.
 Read paths also exclude expired payloads, even if maintenance has not run.
 This store retains sensitive policy input that the ordinary audit log omits; the operator explicitly approved this extension.
 

@@ -2,8 +2,8 @@
 
 ## Contract and decision gate
 
-Follow [the proposed contract](../specs/2026-10-16-policy-preview.md).
-Use the existing main workspace and proposed branch `codex/issue-21-policy-preview` under the approved encrypted replay-retention decision.
+Follow [the approved contract](../specs/2026-10-16-policy-preview.md).
+Use the existing main workspace and branch `codex/issue-21-policy-preview` under the approved encrypted replay-retention decision.
 Do not create a worktree or change existing token management.
 The operator approved encrypted retention and exact reevaluation on 2026-10-16.
 The root owns edits, staging, commits and final verification.
@@ -12,7 +12,7 @@ The root owns edits, staging, commits and final verification.
 
 - Reuse `packages/policy/src/index.ts` and `evaluator.ts` without changing their public contract.
 - Add focused proposal and replay modules under `apps/firewall/src/policy-preview/`.
-- If encrypted replay retention is approved, add `migrations/006-policy-replay.sql` and a recorder option at the evaluation point in `apps/firewall/src/velocity/index.ts`.
+- Add `migrations/006-policy-replay.sql` and a recorder option at the evaluation point in `apps/firewall/src/velocity/index.ts`.
 - Add preview routes to `apps/firewall/src/dashboard/server.ts` only as opt-in read/compute operations; preserve all existing authorization and read-only runtime-policy guarantees.
 - Add the optional provider/configuration adapter through `scripts/dashboard.mjs` and a focused Claude adapter beside the preview module.
 - Add a dashboard proposal component and scoped styles under `apps/dashboard/src/`; reuse existing UI tokens and narrow-screen conventions.

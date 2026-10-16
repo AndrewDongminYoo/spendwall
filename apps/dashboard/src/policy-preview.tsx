@@ -211,6 +211,9 @@ export function PolicyPreviewPanel({
                 The draft passed format and expression checks. Review whether it
                 matches your intent.
               </p>
+              <p className="widget-note">
+                Draft version <code>{draft.candidateVersion.slice(0, 12)}</code>
+              </p>
               <div className="policy-diff">
                 <div>
                   <h4>
