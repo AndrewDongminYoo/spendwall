@@ -45,7 +45,14 @@ async function fixture(t, config = {}) {
   const resources = [];
   const downstreams = [];
   const sessions = new Map();
-  const seen = { calls: [], refunds: 0, http: 0, sse: 0, tokens: 0 };
+  const seen = {
+    calls: [],
+    refunds: 0,
+    refundIds: [],
+    http: 0,
+    sse: 0,
+    tokens: 0,
+  };
   const upstream = createServer(async (req, res) => {
     res.setHeader('content-type', 'application/json');
     if (req.url === '/v1/oauth2/token') {
@@ -72,7 +79,9 @@ async function fixture(t, config = {}) {
     }
     if (req.url === `/v2/payments/captures/${captureId}/refund`) {
       seen.refunds++;
-      assert.equal(req.headers['paypal-request-id'], executionId);
+      if (!config.scopedIds)
+        assert.equal(req.headers['paypal-request-id'], executionId);
+      seen.refundIds.push(req.headers['paypal-request-id']);
       res.end(
         JSON.stringify({
           ...refund,
@@ -176,6 +185,7 @@ async function fixture(t, config = {}) {
       PAYPAL_CLIENT_SECRET: 'fake-secret',
     },
     proxyKey: key,
+    ...(config.agentAuth ? { agentAuth: config.agentAuth } : {}),
     ledgerPath: join(dir, 'refunds.json'),
     expectedTools: config.expectedTools ?? catalog,
     port: 0,
@@ -448,4 +458,206 @@ test('terminal refund statuses are MCP errors on the first call and retry', asyn
       assert.equal(ledger.executions[executionId].status, 'failed');
     });
   }
+});
+
+test('agent grants hide tools and reject direct calls before upstream work', async (t) => {
+  let grants = ['get_order'];
+  const f = await fixture(t, {
+    agentAuth: {
+      authenticate: async (token) =>
+        token === key
+          ? { merchantId: 'merchantA', agentId: 'support', tools: [...grants] }
+          : null,
+    },
+  });
+  const { client } = await f.start();
+  assert.deepEqual(
+    (await client.listTools()).tools.map((t) => t.name),
+    ['get_order'],
+  );
+  assert.equal(
+    (await client.callTool({ name: 'get_refund', arguments: { id: refundId } }))
+      .isError,
+    true,
+  );
+  assert.equal(
+    (
+      await client.callTool({
+        name: 'create_refund',
+        arguments: { capture_id: captureId },
+        _meta: { 'spendwall/execution-id': executionId },
+      })
+    ).isError,
+    true,
+  );
+  assert.equal(f.seen.calls.length, 0);
+  assert.equal(f.seen.refunds, 0);
+  await client.callTool({
+    name: 'get_order',
+    arguments: { id: 'ORDER1234567890123' },
+  });
+  assert.equal(f.seen.calls.length, 1);
+  grants = [];
+  assert.deepEqual((await client.listTools()).tools, []);
+  assert.equal(
+    (
+      await client.callTool({
+        name: 'get_order',
+        arguments: { id: 'ORDER1234567890123' },
+      })
+    ).isError,
+    true,
+  );
+  assert.equal(f.seen.calls.length, 1);
+});
+
+test('agent mode never falls back to shared key when credentials fail or database fails', async (t) => {
+  let failure = false,
+    revoked = false;
+  const f = await fixture(t, {
+    agentAuth: {
+      authenticate: async () => {
+        if (failure) throw new Error('private-database-connection');
+        return revoked
+          ? null
+          : {
+              merchantId: 'merchantA',
+              agentId: 'support',
+              tools: ['get_order'],
+            };
+      },
+    },
+  });
+  const { client, proxy } = await f.start();
+  revoked = true;
+  await assert.rejects(client.listTools());
+  failure = true;
+  const response = await fetch(proxy.url, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${key}`,
+      'content-type': 'application/json',
+    },
+    body: '{}',
+  });
+  assert.equal(response.status, 503);
+  assert.ok(!(await response.text()).includes('private-database'));
+  assert.equal(f.seen.calls.length, 0);
+});
+
+test('refund UUIDs are isolated by authenticated identity while same-agent retries stay stable', async (t) => {
+  let agentId = 'support';
+  const f = await fixture(t, {
+    scopedIds: true,
+    agentAuth: {
+      authenticate: async () => ({
+        merchantId: 'merchantA',
+        agentId,
+        tools: ['create_refund'],
+      }),
+    },
+  });
+  const { client } = await f.start();
+  const call = (callerId = executionId) =>
+    client.callTool({
+      name: 'create_refund',
+      arguments: { capture_id: captureId },
+      _meta: {
+        'spendwall/execution-id': callerId,
+        agentId: 'attacker-controlled',
+      },
+    });
+  const first = await call();
+  assert.notEqual(first.isError, true);
+  assert.equal(
+    first.structuredContent.executionId,
+    executionId,
+    'Return the caller ID so retrying the receipt cannot create a second operation',
+  );
+  assert.equal(JSON.parse(first.content[0].text).executionId, executionId);
+  assert.notEqual(
+    (await call(first.structuredContent.executionId)).isError,
+    true,
+  );
+  assert.equal(f.seen.refunds, 1);
+  agentId = 'returns';
+  assert.notEqual((await call()).isError, true);
+  assert.equal(f.seen.refunds, 2);
+  assert.notEqual(f.seen.refundIds[0], f.seen.refundIds[1]);
+  assert.ok(f.seen.refundIds.every((id) => id !== executionId));
+});
+
+test('two API keys identify distinct grants and body-time revocation denies dispatch', async (t) => {
+  const secondKey = 'second-agent-test-key-over-32-characters';
+  let revoked = false,
+    observed;
+  const f = await fixture(t, {
+    agentAuth: {
+      authenticate: async (token) => {
+        observed?.();
+        if (revoked) return null;
+        if (token === key)
+          return {
+            merchantId: 'merchantA',
+            agentId: 'support',
+            tools: ['get_order'],
+          };
+        if (token === secondKey)
+          return {
+            merchantId: 'merchantA',
+            agentId: 'returns',
+            tools: ['get_refund'],
+          };
+        return null;
+      },
+    },
+  });
+  const { proxy, client } = await f.start();
+  const second = new Client({ name: 'second-agent', version: '1' });
+  t.after(() => second.close());
+  await second.connect(
+    new StreamableHTTPClientTransport(new URL(proxy.url), {
+      requestInit: { headers: { Authorization: `Bearer ${secondKey}` } },
+    }),
+  );
+  assert.deepEqual(
+    (await client.listTools()).tools.map((t) => t.name),
+    ['get_order'],
+  );
+  assert.deepEqual(
+    (await second.listTools()).tools.map((t) => t.name),
+    ['get_refund'],
+  );
+  const authorized = new Promise((resolve) => {
+    observed = resolve;
+  });
+  const response = new Promise((resolve, reject) => {
+    const req = httpRequest(
+      proxy.url,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+        },
+      },
+      (res) => {
+        let body = '';
+        res.on('data', (chunk) => (body += chunk));
+        res.on('end', () => resolve({ status: res.statusCode, body }));
+      },
+    );
+    req.on('error', reject);
+    req.write('{');
+    void authorized.then(() => {
+      revoked = true;
+      req.end(
+        '"jsonrpc":"2.0","id":30,"method":"tools/call","params":{"name":"get_order","arguments":{"id":"ORDER123456789012"}}}',
+      );
+    });
+  });
+  const result = await response;
+  assert.equal(JSON.parse(result.body).result.isError, true);
+  assert.equal(f.seen.calls.length, 0);
 });
