@@ -222,6 +222,102 @@ test(
             await f.owner.query('DROP ROLE reconciliation_privileged_test');
           }
           await checkWebhookReceiver(receiver);
+          for (const attribute of [
+            'SUPERUSER',
+            'CREATEROLE',
+            'CREATEDB',
+            'REPLICATION',
+            'BYPASSRLS',
+          ]) {
+            await f.owner.query(
+              `ALTER ROLE ${pg.escapeIdentifier(group)} ${attribute}`,
+            );
+            try {
+              const client = await receiver.connect();
+              try {
+                await client.query('BEGIN');
+                await client.query(
+                  `SET LOCAL ROLE ${pg.escapeIdentifier(group)}`,
+                );
+                const active = await client.query(
+                  'SELECT current_user AS name',
+                );
+                assert.equal(active.rows[0].name, group);
+                if (attribute === 'SUPERUSER') {
+                  const changed = await client.query(
+                    'UPDATE reconciliation.refund_events SET usd_cents=1',
+                  );
+                  assert.ok(changed.rowCount > 0);
+                }
+              } finally {
+                await client.query('ROLLBACK');
+                client.release();
+              }
+              await assert.rejects(
+                checkWebhookReceiver(receiver),
+                /receiver/i,
+                `receiver must reject privileged group attribute ${attribute}`,
+              );
+            } finally {
+              await f.owner.query(
+                `ALTER ROLE ${pg.escapeIdentifier(group)} NO${attribute}`,
+              );
+            }
+            await checkWebhookReceiver(receiver);
+          }
+          await f.owner.query(
+            `GRANT ${pg.escapeIdentifier(group)} TO reconciliation_receiver_test WITH INHERIT FALSE, SET TRUE`,
+          );
+          try {
+            await f.owner.query(
+              'GRANT USAGE ON SCHEMA reconciliation TO reconciliation_receiver_test',
+            );
+            await f.owner.query(
+              'GRANT SELECT ON reconciliation.refund_events TO reconciliation_receiver_test',
+            );
+            await f.owner.query(
+              'GRANT INSERT (adapter_ref,event_ref,payload_hash,key_id,merchant_ref,refund_ref,capture_ref,usd_cents) ON reconciliation.refund_events TO reconciliation_receiver_test',
+            );
+            await checkWebhookReceiver(receiver);
+            await f.owner.query(
+              `GRANT UPDATE ON reconciliation.refund_events TO ${pg.escapeIdentifier(group)}`,
+            );
+            const client = await receiver.connect();
+            try {
+              await assert.rejects(
+                client.query(
+                  'UPDATE reconciliation.refund_events SET usd_cents=1',
+                ),
+                { code: '42501' },
+              );
+              await client.query('BEGIN');
+              await client.query(
+                `SET LOCAL ROLE ${pg.escapeIdentifier(group)}`,
+              );
+              assert.ok(
+                (
+                  await client.query(
+                    'UPDATE reconciliation.refund_events SET usd_cents=1',
+                  )
+                ).rowCount > 0,
+              );
+            } finally {
+              await client.query('ROLLBACK');
+              client.release();
+            }
+            await assert.rejects(
+              checkWebhookReceiver(receiver),
+              /receiver/i,
+              'receiver must reject SET-only group object privileges',
+            );
+          } finally {
+            await f.owner.query(
+              `REVOKE UPDATE ON reconciliation.refund_events FROM ${pg.escapeIdentifier(group)}`,
+            );
+            await f.owner.query(
+              `GRANT ${pg.escapeIdentifier(group)} TO reconciliation_receiver_test WITH INHERIT TRUE, SET TRUE`,
+            );
+          }
         } finally {
           await receiver.end();
           await f.owner.query('DROP OWNED BY reconciliation_receiver_test');

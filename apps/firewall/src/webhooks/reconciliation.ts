@@ -11,28 +11,32 @@ type Database = Pick<Pool | PoolClient, 'query'>;
 export async function checkWebhookReceiver(db: Database): Promise<void> {
   try {
     const result = await db.query<{ restricted: boolean }>(`
+      WITH principals AS (SELECT oid FROM pg_roles
+        WHERE rolname=current_user OR pg_has_role(current_user,oid,'MEMBER'))
       SELECT NOT (
-        EXISTS (SELECT FROM pg_roles WHERE rolname=current_user
+        EXISTS (SELECT FROM pg_roles WHERE (rolname=current_user OR pg_has_role(current_user,oid,'MEMBER'))
           AND (rolsuper OR rolcreaterole OR rolcreatedb OR rolreplication OR rolbypassrls))
         OR EXISTS (SELECT FROM pg_roles r
           WHERE r.rolname <> current_user AND pg_has_role(current_user,r.oid,'MEMBER')
           AND r.rolname <> 'spendwall_webhook_' || left(encode(sha256(convert_to(current_database(),'UTF8')),'hex'),40))
-        OR EXISTS (SELECT FROM pg_database WHERE datname=current_database() AND pg_has_role(current_user,datdba,'USAGE'))
-        OR EXISTS (SELECT FROM pg_namespace WHERE nspname IN ('audit','approvals','approver','agent_auth','policy_replay','reconciliation')
-          AND (pg_has_role(current_user,nspowner,'USAGE') OR has_schema_privilege(oid,'CREATE')))
+        OR EXISTS (SELECT FROM pg_database CROSS JOIN principals r WHERE datname=current_database() AND pg_has_role(r.oid,datdba,'USAGE'))
+        OR EXISTS (SELECT FROM pg_namespace n CROSS JOIN principals r WHERE nspname IN ('audit','approvals','approver','agent_auth','policy_replay','reconciliation')
+          AND (pg_has_role(r.oid,nspowner,'USAGE') OR has_schema_privilege(r.oid,n.oid,'CREATE')))
         OR EXISTS (SELECT FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+          CROSS JOIN principals r
           WHERE n.nspname IN ('audit','approvals','approver','agent_auth','policy_replay','reconciliation')
           AND ((c.relkind IN ('r','p','v','m','f') AND (
-            has_table_privilege(c.oid,'UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
-            OR has_any_column_privilege(c.oid,'UPDATE,REFERENCES')
+            has_table_privilege(r.oid,c.oid,'UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+            OR has_any_column_privilege(r.oid,c.oid,'UPDATE,REFERENCES')
             OR EXISTS (SELECT FROM pg_attribute a WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped
-              AND ((has_column_privilege(c.oid,a.attnum,'SELECT') AND NOT (n.nspname='reconciliation' AND c.relname='refund_events'))
-                OR (has_column_privilege(c.oid,a.attnum,'INSERT') AND NOT (n.nspname='reconciliation' AND c.relname='refund_events'
+              AND ((has_column_privilege(r.oid,c.oid,a.attnum,'SELECT') AND NOT (n.nspname='reconciliation' AND c.relname='refund_events'))
+                OR (has_column_privilege(r.oid,c.oid,a.attnum,'INSERT') AND NOT (n.nspname='reconciliation' AND c.relname='refund_events'
                   AND a.attname IN ('adapter_ref','event_ref','payload_hash','key_id','merchant_ref','refund_ref','capture_ref','usd_cents')))))))
-            OR (c.relkind='S' AND has_sequence_privilege(c.oid,'SELECT,USAGE,UPDATE'))))
+            OR (c.relkind='S' AND has_sequence_privilege(r.oid,c.oid,'SELECT,USAGE,UPDATE'))))
         OR EXISTS (SELECT FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+          CROSS JOIN principals r
           WHERE n.nspname IN ('audit','approvals','approver','agent_auth','policy_replay','reconciliation')
-          AND p.prosecdef AND has_function_privilege(p.oid,'EXECUTE'))
+          AND p.prosecdef AND has_function_privilege(r.oid,p.oid,'EXECUTE'))
       ) AND has_schema_privilege('reconciliation','USAGE')
         AND has_table_privilege('reconciliation.refund_events','SELECT')
         AND NOT EXISTS (SELECT FROM unnest(ARRAY['adapter_ref','event_ref','payload_hash','key_id','merchant_ref','refund_ref','capture_ref','usd_cents']) AS field
