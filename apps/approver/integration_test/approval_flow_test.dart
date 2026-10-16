@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:spendwall_approver/app.dart';
+import 'package:spendwall_approver/api.dart';
 import 'package:spendwall_approver/controller.dart';
 
 import '../test/fixtures.dart';
@@ -86,6 +87,20 @@ void main() {
     expect(api.decisions, hasLength(1));
     expect(find.text('Refund completed'), findsOneWidget);
     await binding.takeScreenshot('07-completed');
+    api.current = approvalJson();
+    await controller.refresh();
+    api.beforeDecision = () async {
+      api.current = approvalJson(status: 'approved');
+      throw const ApiFailure();
+    };
+    await controller.decide('approve');
+    controller.back();
+    await controller.refresh();
+    await tester.pumpAndSettle();
+    expect(find.text('Requests to review'), findsOneWidget);
+    expect(find.text('Refund completed'), findsOneWidget);
+    expect(api.decisions, hasLength(2));
+    await binding.takeScreenshot('08-recovered-outcome');
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });

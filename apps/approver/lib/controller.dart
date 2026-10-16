@@ -38,6 +38,7 @@ class ApproverController extends ChangeNotifier {
   int _epoch = 0, _authEpoch = 0;
   ApprovalGateway? _api;
   Map<String, dynamic>? _session;
+  String? _latestPush;
   final Set<String> _unresolved = {};
   Future<void> _storage = Future<void>.value();
   Approval? selected;
@@ -100,6 +101,9 @@ class ApproverController extends ChangeNotifier {
       }
       _supported = await biometrics.available();
       if (_disposed || epoch != _epoch) return;
+      if (_latestPush != null && _latestPush != value['push']) {
+        throw const FormatException();
+      }
       _session = value;
       _api = gateway(origin);
       _unresolved.addAll(unresolved.cast<String>());
@@ -137,9 +141,11 @@ class ApproverController extends ChangeNotifier {
         message = 'Set up biometrics on this device before enrolling.';
         return;
       }
+      if (_latestPush != null && _latestPush != push) throw const ApiFailure();
       final api = gateway(origin);
       final result = await api.enroll(device, credential, push);
       if (_disposed || epoch != _epoch) return;
+      if (_latestPush != null && _latestPush != push) throw const ApiFailure();
       final expires = started.add(Duration(seconds: result.expiresIn));
       if (!clock().isBefore(expires)) throw const ApiFailure();
       _session = {
@@ -249,13 +255,18 @@ class ApproverController extends ChangeNotifier {
         cursor: more ? nextCursor : null,
       );
       if (!_current(epoch)) return;
+      final recovered = <String, Approval>{};
+      for (final id in _unresolved.toList()) {
+        final detail = await _api!.detail(_token, id);
+        if (!_current(epoch)) return;
+        recovered[id] = detail;
+      }
       items = List.unmodifiable(
-        more
-            ? {
-                ...{for (final item in items) item.id: item},
-                ...{for (final item in page.items) item.id: item},
-              }.values
-            : page.items,
+        {
+          if (more) ...{for (final item in items) item.id: item},
+          ...{for (final item in page.items) item.id: item},
+          ...recovered,
+        }.values,
       );
       nextCursor = page.nextCursor;
       final id = selected?.id;
@@ -332,7 +343,8 @@ class ApproverController extends ChangeNotifier {
   }
 
   Future<void> pushChanged(String token) async {
-    if (connected && token != _session?['push']) {
+    _latestPush = token;
+    if (_session != null && token != _session?['push']) {
       await disconnect();
       message =
           'Push registration changed. Enroll again with a new credential.';

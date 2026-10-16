@@ -60,6 +60,7 @@ No tunnel or device port forward is created automatically.
 
 The server issues a session for at most 15 minutes.
 The app stores it in platform secure storage with a conservative local deadline and clears local state after expiry, HTTP 401 or changed push registration.
+Push registration changes during enrollment or session restoration also prevent stale session activation.
 Re-enrollment needs a newly provisioned one-use credential; there is no refresh-token flow.
 Biometrics gate the app's own actions but do not attest the device to the server or protect a stolen bearer token from use elsewhere.
 
@@ -67,6 +68,8 @@ The app blocks actions during authentication, backgrounding, expiry and complete
 After biometric confirmation it reloads the request and compares the facts the user saw.
 Changed facts require another review.
 Before sending a decision, it persists an unresolved marker so a restart cannot offer a blind retry.
+Refresh also reads each unresolved request by ID, keeping its result accessible in the queue even after the server removes it from pending requests.
+The marker clears only after its non-pending detail is opened or refreshed in the detail view.
 An uncertain outcome permits read-only refresh; an unknown or failed execution needs administrator reconciliation.
 Notifications carry only an approval ID and generic visible text; they never authorize a decision.
 A stale or duplicate notification opens the authenticated current state.

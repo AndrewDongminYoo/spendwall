@@ -157,4 +157,28 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a recovered completed outcome can be opened from the queue', (
+    tester,
+  ) async {
+    await detail(tester);
+    api.beforeDecision = () async {
+      api.current = approvalJson(status: 'approved');
+      throw const ApiFailure();
+    };
+    await tester.runAsync(() async {
+      await controller.decide('approve');
+      controller.back();
+      await controller.refresh();
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('Refund completed'), findsOneWidget);
+    await tester.runAsync(() async {
+      await tester.tap(find.text('USD 125.40'));
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('REFUND REQUEST'), findsOneWidget);
+    expect(controller.canDecide, isFalse);
+    expect(api.decisions, hasLength(1));
+  });
 }

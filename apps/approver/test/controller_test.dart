@@ -198,6 +198,47 @@ void main() {
     expect(controller.canDecide, isFalse);
   });
 
+  for (final outcome in ['approved', 'denied']) {
+    test(
+      'restart exposes a lost $outcome outcome outside the pending queue',
+      () async {
+        await connect();
+        api.beforeDecision = () async {
+          api.current = approvalJson(status: outcome);
+          throw const ApiFailure();
+        };
+        await controller.decide('approve');
+        final restored = ApproverController(
+          gateway: (_) => api,
+          store: store,
+          biometrics: auth,
+          pushToken: () async => 'push-token',
+          clock: () => now,
+        );
+        addTearDown(restored.dispose);
+        await restored.restore();
+        expect(restored.items.map((item) => item.id), contains(approvalId));
+        await restored.open(restored.items.single.id);
+        expect(restored.selected?.status, outcome);
+        expect(restored.uncertain, isFalse);
+        await restored.decide('approve');
+        expect(api.decisions, hasLength(1));
+      },
+    );
+  }
+
+  test('push rotation during enrollment prevents session activation', () async {
+    api.beforeEnrollment = () => controller.pushChanged('rotated-token');
+    await controller.enroll(
+      'https://approvals.example',
+      'deviceA',
+      'private-one-use-token',
+    );
+    expect(controller.connected, isFalse);
+    expect(store.value, isNull);
+    expect(controller.message, contains('Enrollment failed'));
+  });
+
   test(
     'revocation during post-decision lookup cannot restore a cleared view',
     () async {

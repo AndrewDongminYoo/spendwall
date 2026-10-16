@@ -39,6 +39,7 @@ class ControlledGateway implements ApprovalGateway {
   Map<String, dynamic> current = approvalJson();
   final decisions = <(String, String, String)>[];
   Future<void> Function()? beforeDecision;
+  Future<void> Function()? beforeEnrollment;
   Object? readError;
   int reads = 0;
   @override
@@ -46,10 +47,17 @@ class ControlledGateway implements ApprovalGateway {
     String deviceId,
     String credential,
     String pushToken,
-  ) async => const Enrollment('header.payload.signature', 900);
+  ) async {
+    await beforeEnrollment?.call();
+    return const Enrollment('header.payload.signature', 900);
+  }
+
   @override
   Future<ApprovalPage> pending(String token, {String? cursor}) async =>
-      ApprovalPage([Approval.parse(current)!], null);
+      ApprovalPage(
+        current['status'] == 'pending' ? [Approval.parse(current)!] : [],
+        null,
+      );
   @override
   Future<Approval> detail(String token, String id) async {
     reads++;

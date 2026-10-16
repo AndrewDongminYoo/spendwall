@@ -273,7 +273,7 @@ class _ApproverAppState extends State<ApproverApp> with WidgetsBindingObserver {
                   Text(
                     item.actionableAt(c.clock())
                         ? 'Awaiting your review →'
-                        : 'Expired',
+                        : _state(item),
                   ),
                 ],
               ),
