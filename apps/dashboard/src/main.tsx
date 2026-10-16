@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Report } from './studio.tsx';
+import { PolicyPreviewPanel } from './policy-preview.tsx';
 import { AuditAgent } from './audit-agent.tsx';
 import type { Stats } from './studio.tsx';
 import type { DashboardData } from '../../firewall/src/dashboard/data.ts';
@@ -178,6 +179,11 @@ function App() {
               key={stats.as_of}
               token={token}
               mode={stats.query_mode}
+            />
+            <PolicyPreviewPanel
+              key={'policy-' + stats.as_of}
+              token={token}
+              mode={stats.policy_preview_mode ?? 'disabled'}
             />
             <Report stats={stats} narrow={narrow} />
             <details className="audit">

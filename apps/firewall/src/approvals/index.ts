@@ -1,3 +1,4 @@
+import type { PolicyReplay } from '../policy-preview/replay.ts';
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import type { LoadedPolicy } from '../../../../packages/policy/src/index.ts';
@@ -56,6 +57,7 @@ export type ApprovalView = Readonly<{
   result: RefundResult | null;
 }>;
 type Options = {
+  replay?: PolicyReplay;
   identityKey: string;
   merchantId: string;
   executor: Pick<RefundExecutor, 'identity' | 'execute' | 'reconcile'>;
@@ -127,6 +129,7 @@ export class ApprovalService {
       invalid();
     this.velocity = new VelocityPolicy(pool, {
       identityKey: options.identityKey,
+      ...(options.replay ? { replay: options.replay } : {}),
     });
   }
   private prepared(policy: LoadedPolicy, input: unknown) {

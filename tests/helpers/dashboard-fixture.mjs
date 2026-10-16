@@ -48,11 +48,16 @@ export async function dashboardFixture(
   assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(target.hostname));
   assert.equal(target.pathname, '/spendwall_audit_test');
   const owner = new pg.Pool({ connectionString: url });
-  let app, server, group;
+  let app, server, group, replayGroup;
   const close = async () => {
     await server?.close();
     await app?.end();
     try {
+      if (replayGroup) {
+        await owner.query('DROP SCHEMA IF EXISTS policy_replay CASCADE');
+        await owner.query(`DROP OWNED BY ${pg.escapeIdentifier(replayGroup)}`);
+        await owner.query(`DROP ROLE ${pg.escapeIdentifier(replayGroup)}`);
+      }
       if (group) {
         await owner.query(`DROP OWNED BY ${pg.escapeIdentifier(group)}`);
         await owner.query(`DROP ROLE ${pg.escapeIdentifier(group)}`);
@@ -76,6 +81,20 @@ export async function dashboardFixture(
         ),
       );
     group = (await owner.query('SELECT audit.app_role() AS name')).rows[0].name;
+    if (queryOptions.policyPreview) {
+      await owner.query(
+        await readFile(
+          new URL('../../migrations/006-policy-replay.sql', import.meta.url),
+          'utf8',
+        ),
+      );
+      replayGroup = (
+        await owner.query('SELECT policy_replay.reader_role() AS name')
+      ).rows[0].name;
+      await owner.query(
+        `GRANT ${pg.escapeIdentifier(replayGroup)} TO ${pg.escapeIdentifier(group)}`,
+      );
+    }
     await owner.query(
       "DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='dashboard_test_login') THEN CREATE ROLE dashboard_test_login LOGIN PASSWORD 'dashboard-test-only'; END IF; END $$",
     );
@@ -110,8 +129,16 @@ export async function dashboardFixture(
       identityKey: key,
       merchantId: 'merchantA',
       executor,
+      ...(queryOptions.policyPreview
+        ? { replay: queryOptions.policyPreview.replay }
+        : {}),
     });
-    const velocity = new VelocityPolicy(app, { identityKey: key });
+    const velocity = new VelocityPolicy(app, {
+      identityKey: key,
+      ...(queryOptions.policyPreview
+        ? { replay: queryOptions.policyPreview.replay }
+        : {}),
+    });
     server = await startDashboardServer({
       pool: app,
       identityKey: key,
@@ -123,6 +150,9 @@ export async function dashboardFixture(
       ],
       ...(staticDirectory ? { staticDirectory } : {}),
       ...queryOptions,
+      ...(queryOptions.policyPreview
+        ? { policyPreview: { ...queryOptions.policyPreview, pool: app } }
+        : {}),
     });
     const addPending = async (value = '60.00', agent = 'support') => {
       const input = request(value, agent),

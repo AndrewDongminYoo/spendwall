@@ -1,4 +1,7 @@
 import 'reflect-metadata';
+import { assertReplayDatabase } from '../policy-preview/database.ts';
+import { PolicyPreview, readPreviewBody } from '../policy-preview/service.ts';
+import type { PreviewOptions } from '../policy-preview/service.ts';
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -15,6 +18,7 @@ import { parseIntent } from './query-contract.ts';
 import type { QueryClassifier } from './query-contract.ts';
 
 export type DashboardOptions = {
+  policyPreview?: PreviewOptions;
   pool: Pick<Pool, 'connect'>;
   identityKey: string;
   merchantId: string;
@@ -119,6 +123,26 @@ export async function startDashboardServer(options: DashboardOptions) {
     new Set(agents.map((a) => a.name)).size !== agents.length
   )
     throw new Error('Invalid dashboard configuration.');
+  const policyAccess = options.policyPreview?.accessToken;
+  if (options.policyPreview) {
+    if (
+      typeof policyAccess !== 'string' ||
+      !/^[a-f0-9]{64}$/i.test(policyAccess) ||
+      [options.identityKey, options.token].some(
+        (key) => key.toLowerCase() === policyAccess.toLowerCase(),
+      )
+    )
+      throw new Error('Invalid policy reviewer configuration.');
+    options.policyPreview.replay.assertIndependent(policyAccess);
+  }
+  const policyTokenHash = policyAccess ? hash(policyAccess) : undefined;
+  options.policyPreview?.replay.assertIndependent(options.identityKey);
+  options.policyPreview?.replay.assertIndependent(options.token);
+  if (options.policyPreview)
+    await assertReplayDatabase(options.pool, options.policyPreview.pool);
+  const preview = options.policyPreview
+    ? new PolicyPreview(options.policyPreview)
+    : undefined;
   const tokenHash = hash(options.token);
   const exactSupport = options.agents?.find((a) => a.id === 'support-bot');
   const supportRef = exactSupport
@@ -142,8 +166,17 @@ export async function startDashboardServer(options: DashboardOptions) {
         return;
       }
       const url = new URL(req.url ?? '/', origin);
+      const isPolicy = [
+        '/policy',
+        '/policy/propose',
+        '/policy/dry-run',
+        '/policy/export',
+      ].includes(url.pathname);
       const isQuery = url.pathname === '/query';
-      if (req.method !== (isQuery ? 'POST' : 'GET')) {
+      if (
+        req.method !==
+        (isQuery || (isPolicy && url.pathname !== '/policy') ? 'POST' : 'GET')
+      ) {
         reply(res, 405, { error: 'Read-only dashboard.' });
         return;
       }
@@ -151,7 +184,12 @@ export async function startDashboardServer(options: DashboardOptions) {
         reply(res, 400, { error: 'Invalid request.' });
         return;
       }
-      if (!isQuery && url.pathname !== '/audit' && url.pathname !== '/stats') {
+      if (
+        !isQuery &&
+        !isPolicy &&
+        url.pathname !== '/audit' &&
+        url.pathname !== '/stats'
+      ) {
         const asset = /^\/assets\/[A-Za-z0-9_-]+\.(js|css|woff2)$/.exec(
           url.pathname,
         );
@@ -193,6 +231,20 @@ export async function startDashboardServer(options: DashboardOptions) {
         reply(res, 401, { error: 'Dashboard authentication required.' });
         return;
       }
+      if (isPolicy) {
+        const reviewer = req.headers['x-spendwall-policy-token'];
+        if (
+          !policyTokenHash ||
+          typeof reviewer !== 'string' ||
+          !/^[a-f0-9]{64}$/i.test(reviewer) ||
+          !timingSafeEqual(hash(reviewer), policyTokenHash)
+        ) {
+          reply(res, 401, {
+            error: 'Policy reviewer authentication required.',
+          });
+          return;
+        }
+      }
       if (active >= 4 || (isQuery && querying)) {
         reply(res, 503, { error: 'Dashboard busy.' });
         return;
@@ -204,6 +256,29 @@ export async function startDashboardServer(options: DashboardOptions) {
       const cancel = () => controller.abort();
       res.once('close', cancel);
       try {
+        if (isPolicy) {
+          if (!preview) {
+            reply(res, 404, { error: 'Policy preview is not configured.' });
+            return;
+          }
+          try {
+            const input =
+              req.method === 'GET' ? {} : await readPreviewBody(req);
+            const result = await preview.run(
+              url.pathname,
+              input,
+              { merchantRef, keyId },
+              controller.signal,
+            );
+            reply(res, 200, result);
+          } catch {
+            reply(res, 400, {
+              error:
+                'Policy preview unavailable. Check the draft and reload the current policy.',
+            });
+          }
+          return;
+        }
         let intent;
         if (isQuery) {
           let text;
@@ -300,6 +375,11 @@ export async function startDashboardServer(options: DashboardOptions) {
               }
             : (({ audit: _audit, ...stats }) => ({
                 ...stats,
+                policy_preview_mode: preview
+                  ? options.policyPreview!.generate
+                    ? (options.policyPreview!.mode ?? 'claude')
+                    : 'disabled'
+                  : 'disabled',
                 query_mode: options.classify
                   ? (options.queryMode ?? 'claude')
                   : 'disabled',
