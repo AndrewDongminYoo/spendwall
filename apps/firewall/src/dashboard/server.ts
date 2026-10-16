@@ -123,6 +123,19 @@ export async function startDashboardServer(options: DashboardOptions) {
     new Set(agents.map((a) => a.name)).size !== agents.length
   )
     throw new Error('Invalid dashboard configuration.');
+  const policyAccess = options.policyPreview?.accessToken;
+  if (options.policyPreview) {
+    if (
+      typeof policyAccess !== 'string' ||
+      !/^[a-f0-9]{64}$/i.test(policyAccess) ||
+      [options.identityKey, options.token].some(
+        (key) => key.toLowerCase() === policyAccess.toLowerCase(),
+      )
+    )
+      throw new Error('Invalid policy reviewer configuration.');
+    options.policyPreview.replay.assertIndependent(policyAccess);
+  }
+  const policyTokenHash = policyAccess ? hash(policyAccess) : undefined;
   options.policyPreview?.replay.assertIndependent(options.identityKey);
   options.policyPreview?.replay.assertIndependent(options.token);
   if (options.policyPreview)
@@ -217,6 +230,20 @@ export async function startDashboardServer(options: DashboardOptions) {
       ) {
         reply(res, 401, { error: 'Dashboard authentication required.' });
         return;
+      }
+      if (isPolicy) {
+        const reviewer = req.headers['x-spendwall-policy-token'];
+        if (
+          !policyTokenHash ||
+          typeof reviewer !== 'string' ||
+          !/^[a-f0-9]{64}$/i.test(reviewer) ||
+          !timingSafeEqual(hash(reviewer), policyTokenHash)
+        ) {
+          reply(res, 401, {
+            error: 'Policy reviewer authentication required.',
+          });
+          return;
+        }
       }
       if (active >= 4 || (isQuery && querying)) {
         reply(res, 503, { error: 'Dashboard busy.' });

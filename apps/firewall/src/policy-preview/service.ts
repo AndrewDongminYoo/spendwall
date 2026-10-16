@@ -6,6 +6,7 @@ import type { ProposalGenerator } from './proposal.ts';
 import type { PolicyReplay } from './replay.ts';
 
 export type PreviewOptions = {
+  accessToken: string;
   pool: Pick<Pool, 'connect'>;
   replay: PolicyReplay;
   loadPolicy: () => Promise<string>;

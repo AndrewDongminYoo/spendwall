@@ -17,6 +17,7 @@ export function PolicyPreviewPanel({
   token: string;
   mode: 'claude' | 'synthetic' | 'disabled';
 }) {
+  const [reviewerToken, setReviewerToken] = useState('');
   const [instruction, setInstruction] = useState(
     'Require approval when a customer has already requested two refunds in seven days.',
   );
@@ -38,6 +39,18 @@ export function PolicyPreviewPanel({
     },
     [token],
   );
+  function lock() {
+    active.current?.abort();
+    active.current = null;
+    setReviewerToken('');
+    setBase(null);
+    setDraft(null);
+    setCoverage(null);
+    setConfirmed(false);
+    setBusy(false);
+    setError('');
+    setNotice('');
+  }
   async function perform(action: 'load' | 'propose' | 'dry-run' | 'export') {
     if (busy) return;
     active.current?.abort();
@@ -69,6 +82,7 @@ export function PolicyPreviewPanel({
           method: action === 'load' ? 'GET' : 'POST',
           headers: {
             authorization: `Bearer ${token}`,
+            'x-spendwall-policy-token': reviewerToken,
             'content-type': 'application/json',
           },
           ...(action === 'load' ? {} : { body: JSON.stringify(input) }),
@@ -99,7 +113,9 @@ export function PolicyPreviewPanel({
     } catch {
       if (active.current === controller) {
         setError(
-          'This draft could not be verified. Reload the current policy and try again.',
+          action === 'load'
+            ? 'Policy review is unavailable. Check your separate review token and try again.'
+            : 'This draft could not be verified. Reload the current policy and try again.',
         );
         setDraft(null);
         setCoverage(null);
@@ -165,9 +181,28 @@ export function PolicyPreviewPanel({
         <div>
           <h3>Describe the change</h3>
           {!base ? (
-            <button onClick={() => void perform('load')} disabled={busy}>
-              Load current policy
-            </button>
+            <>
+              <p className="widget-note">
+                Policy review needs separate access. Exact results can reveal
+                sensitive customer details.
+              </p>
+              <label htmlFor="policy-review-token">Policy review token</label>
+              <input
+                id="policy-review-token"
+                type="password"
+                autoComplete="off"
+                maxLength={64}
+                value={reviewerToken}
+                onChange={(e) => setReviewerToken(e.target.value)}
+                disabled={busy}
+              />
+              <button
+                onClick={() => void perform('load')}
+                disabled={busy || !/^[a-f0-9]{64}$/i.test(reviewerToken)}
+              >
+                Load current policy
+              </button>
+            </>
           ) : (
             <>
               <p className="widget-note">
@@ -178,6 +213,10 @@ export function PolicyPreviewPanel({
                   disabled={busy}
                 >
                   Reload policy
+                </button>{' '}
+                ·{' '}
+                <button className="policy-link" onClick={lock}>
+                  Lock policy review
                 </button>
               </p>
               <label htmlFor="policy-instruction">What should change?</label>

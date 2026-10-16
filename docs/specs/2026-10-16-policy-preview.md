@@ -50,6 +50,13 @@ Each cleanup uses an expiry index and deletes at most 1,000 expired rows, skippi
 Read paths also exclude expired payloads, even if maintenance has not run.
 This store retains sensitive policy input that the ordinary audit log omits; the operator explicitly approved this extension.
 
+## Reviewer authorization
+
+All policy routes require both the dashboard bearer and an independent policy reviewer credential.
+Verify both before reading policy/history or invoking the model.
+Exact predicate counts can disclose retained attributes, so this credential grants sensitive replay access and must not be shared with read-only dashboard users.
+The UI retains it only in component memory and clears it on lock, refresh or disconnect.
+
 ## Historical preview semantics
 
 Read one merchant-scoped, bounded snapshot of original tool-call events in `(now - 7 days, now]`.

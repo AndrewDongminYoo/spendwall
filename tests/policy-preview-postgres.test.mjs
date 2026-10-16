@@ -331,6 +331,7 @@ test('Postgres encrypted policy preview', { skip: !url }, async (t) => {
         merchantId: 'merchantA',
         token: '8'.repeat(64),
         policyPreview: {
+          accessToken: 'b'.repeat(64),
           pool: f.reader,
           replay: f.replay,
           loadPolicy: async () => source,
@@ -346,6 +347,7 @@ test('Postgres encrypted policy preview', { skip: !url }, async (t) => {
         method: 'POST',
         headers: {
           authorization: `Bearer ${'8'.repeat(64)}`,
+          'x-spendwall-policy-token': 'b'.repeat(64),
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -420,6 +422,7 @@ test('Postgres encrypted policy preview', { skip: !url }, async (t) => {
             merchantId: 'merchantA',
             token: '8'.repeat(64),
             policyPreview: {
+              accessToken: 'b'.repeat(64),
               pool: other,
               replay: f.replay,
               loadPolicy: async () => 'default: deny',

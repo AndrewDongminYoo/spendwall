@@ -412,10 +412,10 @@ footer {
   font-size: 14px;
   font-weight: 600;
 }
-.policy-step textarea {
+.policy-step textarea,
+.policy-step input[type='password'] {
   width: 100%;
   max-width: 800px;
-  min-height: 90px;
   display: block;
   margin-bottom: 14px;
   padding: 12px;
@@ -424,6 +424,9 @@ footer {
   resize: vertical;
   font: inherit;
   color: var(--ink);
+}
+.policy-step textarea {
+  min-height: 90px;
 }
 .policy-link {
   border: 0;

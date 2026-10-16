@@ -9,6 +9,7 @@ const source = JSON.stringify({
   default: 'deny',
 });
 const token = '8'.repeat(64);
+const accessToken = 'b'.repeat(64);
 
 test('HTTP draft export requires valid candidate, current base and human confirmation', async (t) => {
   let base = source,
@@ -26,6 +27,7 @@ test('HTTP draft export requires valid candidate, current base and human confirm
     merchantId: 'merchantA',
     token,
     policyPreview: {
+      accessToken,
       pool,
       replay: new PolicyReplay('9'.repeat(64)),
       loadPolicy: async () => base,
@@ -37,16 +39,29 @@ test('HTTP draft export requires valid candidate, current base and human confirm
     },
   });
   t.after(() => server.close());
-  const call = (route, body, auth = token) =>
+  const call = (route, body, auth = token, reviewer = accessToken) =>
     fetch(server.url + route, {
       method: body ? 'POST' : 'GET',
       headers: {
         authorization: `Bearer ${auth}`,
+        ...(reviewer ? { 'x-spendwall-policy-token': reviewer } : {}),
         'content-type': 'application/json',
       },
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
   assert.equal((await call('/policy', undefined, '0'.repeat(64))).status, 401);
+  assert.equal((await call('/policy', undefined, token, '')).status, 401);
+  assert.equal((await call('/policy', undefined, token, token)).status, 401);
+  for (const route of [
+    '/policy/propose',
+    '/policy/dry-run',
+    '/policy/export',
+  ]) {
+    for (const reviewer of ['', '0'.repeat(64)])
+      assert.equal((await call(route, {}, token, reviewer)).status, 401);
+  }
+  assert.equal(modelCalls, 0);
+  assert.equal(databaseCalls, 0);
   const current = await call('/policy');
   assert.equal(current.status, 200);
   const initial = await current.json();
@@ -101,6 +116,7 @@ test('preview HTTP denies foreign origin, malformed body and invalid model propo
     merchantId: 'merchantA',
     token,
     policyPreview: {
+      accessToken,
       pool,
       replay: new PolicyReplay('9'.repeat(64)),
       loadPolicy: async () => source,
@@ -117,6 +133,7 @@ test('preview HTTP denies foreign origin, malformed body and invalid model propo
   };
   const headers = {
     authorization: `Bearer ${token}`,
+    'x-spendwall-policy-token': accessToken,
     'content-type': 'application/json',
   };
   assert.equal(

@@ -43,6 +43,7 @@ try {
     });
     stopRetention = await startReplayRetention(replayPool, replay);
     policyPreview = {
+      accessToken: preview.accessToken,
       pool: replayPool,
       replay,
       loadPolicy: () => readFile(preview.policyPath, 'utf8'),

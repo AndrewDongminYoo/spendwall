@@ -36,8 +36,10 @@ pnpm --filter @spendwall/dashboard build
 pnpm dashboard:preview
 ```
 
-Open the loopback URL printed by the preview and enter its disposable test token.
+Open the loopback URL printed by the preview and enter its disposable dashboard token.
 Use the three prompt buttons to inspect large refund attempts, denial groups and support-bot reservations.
+To unlock the policy workshop, enter the separate disposable reviewer token printed by the preview.
+Reviewer access permits exact replay counts that can reveal retained payment attributes; grant it only to trusted policy reviewers ([authorization details](docs/dashboard.md#policy-workshop-optional)).
 The policy workshop also supplies a synthetic draft, a YAML diff and seven-day replay counts from encrypted fixture inputs.
 Confirming a draft downloads YAML; it does not change the running policy.
 Stop with Ctrl+C to remove that preview's database.

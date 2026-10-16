@@ -80,6 +80,7 @@ try {
     fileURLToPath(new URL('../apps/dashboard/dist', import.meta.url)),
     {
       policyPreview: {
+        accessToken: 'b'.repeat(64),
         replay: new PolicyReplay('9'.repeat(64)),
         loadPolicy: async () => `agents:
   support:
@@ -129,7 +130,7 @@ default: deny
     );
   }
   console.log(
-    `Synthetic local preview: ${fixture.server.url}\nDisposable test token: ${token}\nDatabase: ${name}\nNo PayPal or model requests. Stop with Ctrl+C to remove this preview database.`,
+    `Synthetic local preview: ${fixture.server.url}\nDisposable test token: ${token}\nDisposable policy reviewer token: ${'b'.repeat(64)}\nDatabase: ${name}\nNo PayPal or model requests. Stop with Ctrl+C to remove this preview database.`,
   );
   process.once('SIGINT', () => void close());
   process.once('SIGTERM', () => void close());

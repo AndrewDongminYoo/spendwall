@@ -140,6 +140,7 @@ Add `policyPreview` to the private dashboard configuration:
   "policyPreview": {
     "databaseUrl": "postgresql://replay-reader@localhost/spendwall",
     "encryptionKey": "<independent 64-hex key from private configuration>",
+    "accessToken": "<separate 64-hex policy reviewer credential>",
     "policyPath": "/absolute/current-policy.yaml",
     "claude": {
       "apiKey": "<private provider key>",
@@ -150,6 +151,10 @@ Add `policyPreview` to the private dashboard configuration:
 ```
 
 This is an optional section alongside the existing dashboard fields.
+Every policy route requires the existing dashboard bearer plus the independent `policyPreview.accessToken` in `x-spendwall-policy-token`, before any policy, model or history work.
+Give the reviewer credential only to operators authorized to infer sensitive retained input: arbitrary CEL predicates and exact counts can reveal attributes, even though plaintext is not returned.
+The ordinary dashboard token cannot access proposals, replay or export by itself.
+The UI keeps the reviewer token only in component memory and clears it on lock, dashboard refresh or disconnect.
 It does not replace the audit-query Claude configuration.
 The generator follows the [Claude structured-output contract](https://platform.claude.com/docs/en/build-with-claude/structured-outputs).
 Enabling it sends the operator instruction and current policy to Anthropic and can incur charges.
