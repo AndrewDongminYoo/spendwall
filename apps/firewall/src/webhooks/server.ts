@@ -11,7 +11,7 @@ function reply(res: ServerResponse, code: number, body: unknown) {
   });
   res.end(JSON.stringify(body));
 }
-async function body(req: IncomingMessage): Promise<unknown> {
+async function body(req: IncomingMessage): Promise<string> {
   if (
     !/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(
       req.headers['content-type'] ?? '',
@@ -33,9 +33,12 @@ async function body(req: IncomingMessage): Promise<unknown> {
       chunks.push(chunk);
     }
     try {
-      return JSON.parse(
-        new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)),
-      );
+      const raw = new TextDecoder('utf-8', {
+        fatal: true,
+        ignoreBOM: true,
+      }).decode(Buffer.concat(chunks));
+      JSON.parse(raw);
+      return raw;
     } catch {
       throw new WebhookError(400);
     }

@@ -99,7 +99,7 @@ export class PayPalWebhookVerifier {
       .digest('hex');
     this.tokens = createTokenManager(this.options);
   }
-  private async request(path: string, body?: unknown): Promise<unknown> {
+  private async request(path: string, body?: string): Promise<unknown> {
     try {
       for (let attempt = 0; attempt < 2; attempt++) {
         const token = await this.tokens.get();
@@ -113,7 +113,7 @@ export class PayPalWebhookVerifier {
               authorization: `Bearer ${token}`,
               'content-type': 'application/json',
             },
-            ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+            ...(body === undefined ? {} : { body }),
           },
         );
         if (response.status === 401 && attempt === 0) {
@@ -134,12 +134,14 @@ export class PayPalWebhookVerifier {
   }
   async verify(
     inputHeaders: IncomingHttpHeaders,
-    input: unknown,
+    input: string,
   ): Promise<VerifiedRefund | null> {
     const transmission = headers(inputHeaders);
     let event;
     try {
-      event = object(snapshot(input));
+      if (typeof input !== 'string' || Buffer.byteLength(input, 'utf8') > 65536)
+        throw new Error();
+      event = object(snapshot(JSON.parse(input)));
       identifier(event.id, 1, 255);
       if (
         typeof event.event_type !== 'string' ||
@@ -149,13 +151,14 @@ export class PayPalWebhookVerifier {
     } catch {
       throw new WebhookError(400);
     }
+    const metadata = JSON.stringify({
+      ...transmission,
+      webhook_id: this.options.webhookId,
+    });
+    // The validated event must keep its signed representation, including whitespace.
     const verified = await this.request(
       '/v1/notifications/verify-webhook-signature',
-      {
-        ...transmission,
-        webhook_id: this.options.webhookId,
-        webhook_event: event,
-      },
+      `${metadata.slice(0, -1)},"webhook_event":${input}}`,
     );
     const verification = object(verified);
     if (verification.verification_status === 'FAILURE')

@@ -49,6 +49,7 @@ The listener requires JSON, limits the body to 64 KiB, limits in-flight work to 
 Verification and capture requests have 15-second fetch deadlines; an expired access token can cause one refresh/retry.
 Missing/duplicate transmission headers, foreign certificate hosts, verification failures and provider errors are rejected before persistence.
 The process sends the configured webhook ID, transmission headers and full event to PayPal's fixed sandbox verification endpoint.
+It retains the validated UTF-8 event text exactly for postback, including whitespace, escaping and numeric spelling, while parsing a separate copy for semantic checks.
 It never downloads a header-provided certificate URL or follows a payload-provided URL.
 Only the exact successful verification result is accepted.
 

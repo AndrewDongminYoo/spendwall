@@ -78,7 +78,7 @@ function fixture(overrides = {}) {
 test('verifies the configured webhook and binds the refund to the capture merchant', async () => {
   const { verifier, calls } = fixture();
   const event = refundEvent();
-  const result = await verifier.verify(webhookHeaders, event);
+  const result = await verifier.verify(webhookHeaders, JSON.stringify(event));
   assert.equal(result.refundId, event.resource.id);
   assert.equal(result.captureId, 'CAPTURE12345678901');
   assert.equal(result.usdCents, 500);
@@ -88,6 +88,34 @@ test('verifies the configured webhook and binds the refund to the capture mercha
   assert.deepEqual(sent.webhook_event, event);
   assert.equal(sent.transmission_id, webhookHeaders['paypal-transmission-id']);
   assert.equal(calls.length, 3);
+});
+test('postback keeps the exact validated raw event representation', async () => {
+  const event = { ...refundEvent(), debug_count: 1000, unicode: 'a' };
+  const raw =
+    '\r\n' +
+    JSON.stringify(event, null, 2)
+      .replace('"debug_count": 1000', '"debug_count": 1e3')
+      .replace('"unicode": "a"', '"unicode": "\\u0061"') +
+    '\r\n';
+  const { verifier, calls } = fixture({
+    verification: (init) => {
+      assert.ok(init.body.endsWith('"webhook_event":' + raw + '}'));
+      assert.deepEqual(JSON.parse(init.body).webhook_event, event);
+      return Response.json({ verification_status: 'SUCCESS' });
+    },
+  });
+  assert.equal((await verifier.verify(webhookHeaders, raw)).usdCents, 500);
+  assert.equal(calls.length, 3);
+  for (const invalid of [
+    '{} , "webhook_id": "other"',
+    '[]',
+    '{bad',
+    '\ufeff{}',
+  ]) {
+    const next = fixture();
+    await assert.rejects(next.verifier.verify(webhookHeaders, invalid));
+    assert.equal(next.calls.length, 0);
+  }
 });
 test('signature failure and provider errors never proceed to capture lookup', async () => {
   for (const response of [
@@ -102,7 +130,9 @@ test('signature failure and provider errors never proceed to capture lookup', as
     },
   ]) {
     const { verifier, calls } = fixture({ verification: response });
-    await assert.rejects(verifier.verify(webhookHeaders, refundEvent()));
+    await assert.rejects(
+      verifier.verify(webhookHeaders, JSON.stringify(refundEvent())),
+    );
     assert.equal(calls.length, 2);
   }
 });
@@ -116,7 +146,7 @@ test('rejects missing, duplicate and foreign certificate headers before network 
     await assert.rejects(
       verifier.verify(
         { ...webhookHeaders, 'paypal-cert-url': replacement },
-        refundEvent(),
+        JSON.stringify(refundEvent()),
       ),
     );
     assert.equal(calls.length, 0);
@@ -138,7 +168,9 @@ test('wrong merchant, capture identity or currency cannot become verified eviden
           ...changed,
         }),
     });
-    await assert.rejects(verifier.verify(webhookHeaders, refundEvent()));
+    await assert.rejects(
+      verifier.verify(webhookHeaders, JSON.stringify(refundEvent())),
+    );
   }
 });
 test('refund envelope rejects noncompleted, ambiguous and foreign capture links', async () => {
@@ -163,18 +195,25 @@ test('refund envelope rejects noncompleted, ambiguous and foreign capture links'
     const { verifier } = fixture();
     const event = refundEvent();
     change(event);
-    await assert.rejects(verifier.verify(webhookHeaders, event));
+    await assert.rejects(
+      verifier.verify(webhookHeaders, JSON.stringify(event)),
+    );
   }
 });
 test('other event types are ignored only after successful verification', async () => {
   const { verifier, calls } = fixture();
   const event = { ...refundEvent(), event_type: 'CUSTOMER.DISPUTE.CREATED' };
-  assert.equal(await verifier.verify(webhookHeaders, event), null);
+  assert.equal(
+    await verifier.verify(webhookHeaders, JSON.stringify(event)),
+    null,
+  );
   assert.equal(calls.length, 2);
   const failed = fixture({
     verification: () => Response.json({ verification_status: 'FAILURE' }),
   });
-  await assert.rejects(failed.verifier.verify(webhookHeaders, event));
+  await assert.rejects(
+    failed.verifier.verify(webhookHeaders, JSON.stringify(event)),
+  );
 });
 test('a stalled verifier request is aborted before capture lookup', async () => {
   const { verifier, calls } = fixture({
@@ -195,7 +234,9 @@ test('a stalled verifier request is aborted before capture lookup', async () => 
         );
       }),
   });
-  await assert.rejects(verifier.verify(webhookHeaders, refundEvent()));
+  await assert.rejects(
+    verifier.verify(webhookHeaders, JSON.stringify(refundEvent())),
+  );
   assert.equal(calls.length, 2);
 });
 test('a verification authorization expiry refreshes once without changing the event', async () => {
@@ -207,7 +248,8 @@ test('a verification authorization expiry refreshes once without changing the ev
         : Response.json({ verification_status: 'SUCCESS' }),
   });
   assert.equal(
-    (await verifier.verify(webhookHeaders, refundEvent())).usdCents,
+    (await verifier.verify(webhookHeaders, JSON.stringify(refundEvent())))
+      .usdCents,
     500,
   );
   assert.equal(

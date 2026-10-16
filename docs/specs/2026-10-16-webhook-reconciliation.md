@@ -16,6 +16,7 @@ Issue #19 remains open until real delivery and a direct PayPal-dashboard refund 
 
 - Bind the listener to loopback and one configured sandbox app, webhook ID, merchant and identity key.
 - Verify the complete event and required transmission headers through the fixed PayPal sandbox signature endpoint.
+  Preserve the validated raw UTF-8 event representation in the postback and parse a separate copy for semantic checks.
   Accept only HTTP 200 with `verification_status: SUCCESS`.
   Reject missing, duplicate or malformed headers, malformed or oversized bodies, verification failure, timeouts and provider errors before storage.
 - Parse the signed refund resource and its fixed-origin capture link.

@@ -4,6 +4,29 @@ import http from 'node:http';
 import { startWebhookServer } from '../apps/firewall/src/webhooks/server.ts';
 import { WebhookError } from '../apps/firewall/src/webhooks/paypal.ts';
 
+test('listener passes the unchanged UTF-8 body to verification', async (t) => {
+  const raw =
+    ' \r\n{ "id": "WH-raw", "escaped": "\\u0061", "number": 1e3 }\r\n';
+  let received;
+  const server = await startWebhookServer({
+    verifier: {
+      verify: async (_headers, body) => {
+        received = body;
+        return null;
+      },
+    },
+    receive: async () => {},
+  });
+  t.after(server.close);
+  const res = await fetch(`${server.url}/webhooks/paypal`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: raw,
+  });
+  assert.equal(res.status, 200);
+  assert.equal(received, raw);
+});
+
 test('loopback webhook acknowledges only verified and durably received events', async (t) => {
   let mode = 'valid',
     received = 0,
