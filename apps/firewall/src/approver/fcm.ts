@@ -66,7 +66,14 @@ export class FcmSender {
               'content-type': 'application/json',
             },
             body: JSON.stringify({
-              message: { token, data: { approval_id: id } },
+              message: {
+                token,
+                data: { approval_id: id },
+                notification: {
+                  title: 'Approval requested',
+                  body: 'Open Spendwall to review the request.',
+                },
+              },
             }),
           },
         );

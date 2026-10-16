@@ -78,6 +78,7 @@ type DecisionGuard = {
 };
 export type ApprovalDetails = ApprovalView & {
   args_hash: string;
+  matched_rules: readonly string[];
   input: PreparedApproval['input'];
   policy_version: string;
   created_at: string;
@@ -434,6 +435,7 @@ export class ApprovalService {
       return Object.freeze({
         ...this.view(row),
         args_hash: row.args_hash,
+        matched_rules: Object.freeze([...row.matched_rules]),
         input: data.input,
         policy_version: row.policy_version,
         created_at: row.created_at.toISOString(),

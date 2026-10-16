@@ -3,3 +3,8 @@ pnpm-lock.yaml
 node_modules/
 dist/
 coverage/
+apps/approver/.dart_tool/
+apps/approver/build/
+apps/approver/ios/Flutter/ephemeral/
+apps/approver/ios/Pods/
+apps/approver/pubspec.lock

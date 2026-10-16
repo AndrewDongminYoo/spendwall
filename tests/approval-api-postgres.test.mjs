@@ -1015,6 +1015,10 @@ test(
           message: {
             token: 'synthetic-fcm-token-deviceA',
             data: { approval_id: pending.id },
+            notification: {
+              title: 'Approval requested',
+              body: 'Open Spendwall to review the request.',
+            },
           },
         });
         const listed = await f.curl('/approvals?status=pending', { token });
@@ -1023,6 +1027,8 @@ test(
         const detail = await f.curl('/approvals/' + pending.id, { token });
         assert.equal(detail.status, 200);
         assert.match(detail.body.args_hash, /^[a-f0-9]{64}$/);
+        assert.deepEqual(detail.body.matched_rules, ['rules.v1:0']);
+        assert.deepEqual(listed.body.items[0].matched_rules, ['rules.v1:0']);
         assert.doesNotMatch(
           JSON.stringify(detail.body),
           /synthetic-private-context|synthetic-fcm|synthetic-google|synthetic-paypal|request_sealed|enrollment/,

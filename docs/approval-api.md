@@ -68,7 +68,8 @@ JWT verification fixes HS256, issuer, merchant-specific audience, type, subject,
 The principal comes from the current configured device and active DB row.
 The decision transaction locks and validates that generation again after trusted refresh, so re-registration during refresh prevents the claim.
 
-This is a demo enrollment model: an expired JWT needs a newly provisioned enrollment token; no refresh/login flow, user directory, device attestation or biometric verification is implemented.
+This is a demo enrollment model: an expired JWT needs a newly provisioned enrollment token; no refresh/login flow, user directory, device attestation or server-side biometric verification is implemented.
+The [Flutter approver](../apps/approver/README.md) adds a local biometric confirmation gate; it does not change this server trust model.
 A stolen unconsumed enrollment credential can register a device, and a stolen JWT can act within its remaining lifetime and assigned scope.
 Production deployment needs an appropriate identity system, HTTPS and operational revocation policy.
 Do not expose the W0 MCP proxy publicly as a substitute for this human authorization.
@@ -79,11 +80,11 @@ All approval endpoints require the returned bearer JWT.
 The server enforces local Host/Origin, JSON decision bodies up to 16 KiB, bounded requests, strict fields and `Cache-Control: no-store`.
 Cookies and CORS credential grants are not provided.
 
-| Request                                                | Result                                                                                                           |
-| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| `GET /approvals?status=pending&limit=20&cursor=<uuid>` | Owned pending items and `next_cursor`; limit 1–100, default 20                                                   |
-| `GET /approvals/:id`                                   | Owned status/result, normalized arguments, safe identity IDs, amount, policy version, timestamps and `args_hash` |
-| `POST /approvals/:id/decision`                         | Exact body `{decision: "approve" \| "deny", args_hash}`                                                          |
+| Request                                                | Result                                                                                                                                              |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /approvals?status=pending&limit=20&cursor=<uuid>` | Owned pending items and `next_cursor`; limit 1–100, default 20                                                                                      |
+| `GET /approvals/:id`                                   | Owned status/result, normalized arguments, safe identity IDs, amount, stored `matched_rules` references, policy version, timestamps and `args_hash` |
+| `POST /approvals/:id/decision`                         | Exact body `{decision: "approve" \| "deny", args_hash}`                                                                                             |
 
 The hash remains the audit SHA-256 of canonical normalized original arguments, not a JWT or a replacement for the complete approval binding.
 Compare the value obtained from detail; a mismatch returns 409 before refresh, expiry mutation, audit append, delivery work or payment execution.
@@ -159,6 +160,7 @@ The worker processes at most ten jobs per drain, uses a 30-second persisted clai
 FCM HTTP v1 uses [Google ADC and short-lived OAuth authorization](https://firebase.google.com/docs/cloud-messaging/send/v1-api) with the messaging scope.
 Keep Google credentials private and configure ADC outside the repository.
 The message contains only `{approval_id}` in its data payload plus the target registration token.
+Its visible notification uses the fixed title `Approval requested` and body `Open Spendwall to review the request.`.
 No amount, customer identity, JWT or provider secret is sent in the data.
 Token acquisition and HTTP delivery are bounded; ambiguous provider/authentication failures retry with backoff until expiry.
 Only an explicit FCM `UNREGISTERED` device error terminates provider retries.
@@ -170,7 +172,8 @@ A decision can complete after the worker's pending-state check; a late or duplic
 FCM failure never releases the payment reservation or deletes the approval.
 The default poll interval is one second; set `pollIntervalMs: 0` for explicit drains in tests.
 `close()` stops new drains and waits for active delivery work without starting queued notifications.
-Real Android/iOS background delivery, APNs configuration and device behavior remain for #15; data-only push is not a guaranteed visible alert.
+The Flutter app validates the ID and loads authenticated detail when the notification is opened.
+Real Android/iOS background delivery, APNs configuration and physical-device behavior remain unverified for #15; a notification payload alone does not prove delivery.
 
 ## Verification
 
