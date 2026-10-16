@@ -20,11 +20,11 @@ export async function checkWebhookReceiver(db: Database): Promise<void> {
           WHERE r.rolname <> current_user AND pg_has_role(current_user,r.oid,'MEMBER')
           AND r.rolname <> 'spendwall_webhook_' || left(encode(sha256(convert_to(current_database(),'UTF8')),'hex'),40))
         OR EXISTS (SELECT FROM pg_database CROSS JOIN principals r WHERE datname=current_database() AND pg_has_role(r.oid,datdba,'USAGE'))
-        OR EXISTS (SELECT FROM pg_namespace n CROSS JOIN principals r WHERE nspname IN ('audit','approvals','approver','agent_auth','policy_replay','reconciliation')
+        OR EXISTS (SELECT FROM pg_namespace n CROSS JOIN principals r WHERE nspname IN ('audit','approvals','approver','agent_auth','policy_replay','reconciliation','invoice_policy')
           AND (pg_has_role(r.oid,nspowner,'USAGE') OR has_schema_privilege(r.oid,n.oid,'CREATE')))
         OR EXISTS (SELECT FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
           CROSS JOIN principals r
-          WHERE n.nspname IN ('audit','approvals','approver','agent_auth','policy_replay','reconciliation')
+          WHERE n.nspname IN ('audit','approvals','approver','agent_auth','policy_replay','reconciliation','invoice_policy')
           AND ((c.relkind IN ('r','p','v','m','f') AND (
             has_table_privilege(r.oid,c.oid,'UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
             OR has_any_column_privilege(r.oid,c.oid,'UPDATE,REFERENCES')
@@ -35,7 +35,7 @@ export async function checkWebhookReceiver(db: Database): Promise<void> {
             OR (c.relkind='S' AND has_sequence_privilege(r.oid,c.oid,'SELECT,USAGE,UPDATE'))))
         OR EXISTS (SELECT FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
           CROSS JOIN principals r
-          WHERE n.nspname IN ('audit','approvals','approver','agent_auth','policy_replay','reconciliation')
+          WHERE n.nspname IN ('audit','approvals','approver','agent_auth','policy_replay','reconciliation','invoice_policy')
           AND p.prosecdef AND has_function_privilege(r.oid,p.oid,'EXECUTE'))
       ) AND has_schema_privilege('reconciliation','USAGE')
         AND has_table_privilege('reconciliation.refund_events','SELECT')
