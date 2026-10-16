@@ -18,6 +18,7 @@ const testFiles =
         'tests/dashboard-postgres.test.mjs',
         'tests/agent-auth-postgres.test.mjs',
         'tests/policy-preview-postgres.test.mjs',
+        'tests/hosting-postgres.test.mjs',
       ];
 const name = `spendwall-audit-test-${randomUUID()}`;
 function docker(...args) {

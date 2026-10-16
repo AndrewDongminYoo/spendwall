@@ -6,6 +6,7 @@ The dashboard is a separate, read-only loopback server.
 It serves the production React/AG Studio build and authenticated `/audit` and `/stats` routes from one origin.
 No approval decisions, policy updates, or PayPal requests are available through it.
 The optional audit agent uses Claude only to select a supported read-only query.
+The separate [hosted preparation entrypoint](hosting.md) exposes only authenticated audit/statistics reads and minimal health, with no frontend assets, model queries or policy workshop.
 
 Use the pinned Node and pnpm versions, then build and start an isolated preview:
 

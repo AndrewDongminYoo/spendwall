@@ -16,8 +16,10 @@ import type { HistoryRow } from '../velocity/aggregate.ts';
 import { auditQuery } from './query.ts';
 import { parseIntent } from './query-contract.ts';
 import type { QueryClassifier } from './query-contract.ts';
+import { checkHostedReader } from './hosted-reader.ts';
 
 export type DashboardOptions = {
+  hosted?: { publicOrigin: string };
   policyPreview?: PreviewOptions;
   pool: Pick<Pool, 'connect'>;
   identityKey: string;
@@ -79,6 +81,25 @@ async function question(req: IncomingMessage): Promise<string> {
 }
 
 export async function startDashboardServer(options: DashboardOptions) {
+  let hostedOrigin: string | undefined;
+  if (options.hosted !== undefined) {
+    try {
+      const value = options.hosted.publicOrigin;
+      const url = new URL(value);
+      if (
+        url.protocol !== 'https:' ||
+        url.origin !== value ||
+        options.policyPreview !== undefined ||
+        options.classify !== undefined ||
+        options.queryMode !== undefined ||
+        options.staticDirectory !== undefined
+      )
+        throw new Error();
+      hostedOrigin = value;
+    } catch {
+      throw new Error('Invalid hosted dashboard configuration.');
+    }
+  }
   if (
     !/^[a-f0-9]{64}$/i.test(options.identityKey) ||
     !/^[a-f0-9]{64}$/i.test(options.token) ||
@@ -166,6 +187,13 @@ export async function startDashboardServer(options: DashboardOptions) {
         return;
       }
       const url = new URL(req.url ?? '/', origin);
+      if (
+        hostedOrigin &&
+        !['/healthz', '/audit', '/stats'].includes(url.pathname)
+      ) {
+        reply(res, 404, { error: 'Not found.' });
+        return;
+      }
       const isPolicy = [
         '/policy',
         '/policy/propose',
@@ -182,6 +210,22 @@ export async function startDashboardServer(options: DashboardOptions) {
       }
       if (url.search) {
         reply(res, 400, { error: 'Invalid request.' });
+        return;
+      }
+      if (hostedOrigin && url.pathname === '/healthz') {
+        if (active >= 4) {
+          reply(res, 503, { ready: false });
+          return;
+        }
+        active++;
+        try {
+          await checkHostedReader(options.pool);
+          reply(res, 200, { ready: true });
+        } catch {
+          reply(res, 503, { ready: false });
+        } finally {
+          active--;
+        }
         return;
       }
       if (
@@ -409,11 +453,15 @@ export async function startDashboardServer(options: DashboardOptions) {
     });
   });
   try {
-    await app.listen(port, '127.0.0.1');
-    origin = await app.getUrl();
+    await app.listen(port, hostedOrigin ? '0.0.0.0' : '127.0.0.1');
+    origin = hostedOrigin ?? (await app.getUrl());
   } catch (error) {
     await app.close();
     throw error;
   }
-  return { url: origin, close: () => app.close() };
+  return {
+    url: origin,
+    listenUrl: await app.getUrl(),
+    close: () => app.close(),
+  };
 }

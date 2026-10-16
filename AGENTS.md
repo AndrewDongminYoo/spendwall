@@ -7,6 +7,7 @@ Keep policy decisions deterministic and default to denial when trustworthy payme
 Never put PayPal credentials in the agent or commit real credentials.
 The repository contains tested payment-control modules, a synthetic support-agent demo and a local read-only dashboard.
 The W0 sandbox proxy is a separate integration without the demo's policy/approval composition; do not describe it as a production payment service.
+The hosted dashboard preparation entrypoint is API-only; public UI licensing, deployment and 48-hour operation remain unverified.
 
 ## Structure
 
