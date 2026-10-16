@@ -21,8 +21,19 @@ export async function checkHostedReader(pool: Pick<Pool, 'connect'>) {
           WHERE n.nspname IN ('audit','approvals','approver','agent_auth','policy_replay')
           AND ((c.relkind IN ('r','p','v','m','f') AND
             (has_table_privilege(c.oid,'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
-             OR has_any_column_privilege(c.oid,'INSERT,UPDATE,REFERENCES')))
-            OR (c.relkind='S' AND has_sequence_privilege(c.oid,'USAGE,UPDATE'))))
+             OR has_any_column_privilege(c.oid,'INSERT,UPDATE,REFERENCES')
+             OR EXISTS (SELECT FROM pg_attribute a WHERE a.attrelid=c.oid
+               AND a.attnum>0 AND NOT a.attisdropped
+               AND has_column_privilege(c.oid,a.attnum,'SELECT')
+               AND NOT (
+                 (n.nspname='audit' AND c.relname='audit_events' AND a.attname IN
+                   ('id','row_hash','ts','agent_id','tool','args_hash','decision','event_kind',
+                    'approval_id','upstream_status','upstream_result_ref','policy_version',
+                    'matched_rules','resolved_ctx'))
+                 OR (n.nspname='approvals' AND c.relname='requests' AND a.attname IN
+                   ('approval_id','reservation_id','approval_state','execution_state','execution_id','expires_at'))
+               ))))
+            OR (c.relkind='S' AND has_sequence_privilege(c.oid,'SELECT,USAGE,UPDATE'))))
         OR EXISTS (SELECT FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
           WHERE n.nspname IN ('audit','approvals','approver','agent_auth','policy_replay')
           AND p.prosecdef AND has_function_privilege(p.oid,'EXECUTE'))

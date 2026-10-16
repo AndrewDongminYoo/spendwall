@@ -69,7 +69,7 @@ The script fails if its fixed reader role already exists; inspect ownership befo
 
 The reader receives only schema usage and the specific audit/approval columns used by the projection.
 It does not receive sealed approval snapshots, write privileges, sequence authority, role memberships or executable security-definer functions in Spendwall schemas.
-Startup and health probes reject elevated roles, owners, role memberships and application write capabilities.
+Startup and health probes reject elevated roles, owners, role memberships, application write capabilities and read grants outside the required projection columns and relations.
 This is a scoped privilege check of Spendwall schemas, not an audit of every function in an arbitrary PostgreSQL installation.
 The process also requests read-only transactions by default.
 

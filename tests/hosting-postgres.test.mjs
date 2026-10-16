@@ -114,6 +114,14 @@ test(
     );
     for (const [grant, revoke] of [
       [
+        'GRANT SELECT (request_sealed) ON approvals.requests TO spendwall_dashboard_reader',
+        'REVOKE SELECT (request_sealed) ON approvals.requests FROM spendwall_dashboard_reader',
+      ],
+      [
+        'GRANT SELECT ON audit.chain_head TO spendwall_dashboard_reader',
+        'REVOKE SELECT ON audit.chain_head FROM spendwall_dashboard_reader',
+      ],
+      [
         'GRANT UPDATE ON audit.audit_events TO spendwall_dashboard_reader',
         'REVOKE UPDATE ON audit.audit_events FROM spendwall_dashboard_reader',
       ],
