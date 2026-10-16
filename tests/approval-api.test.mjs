@@ -64,7 +64,7 @@ test('oversized fixed and chunked JSON receives 413 without accessing storage', 
     await app.close();
   }
 });
-test('FCM uses the HTTP v1 target and a data-only approval UUID', async () => {
+test('FCM sends a generic tappable notification with only an approval UUID', async () => {
   const seen = [];
   const sender = new FcmSender({
     projectId: 'synthetic-project',
@@ -86,7 +86,14 @@ test('FCM uses the HTTP v1 target and a data-only approval UUID', async () => {
   );
   assert.equal(seen[0].options.redirect, 'error');
   assert.deepEqual(JSON.parse(seen[0].options.body), {
-    message: { token: 'synthetic-device-token', data: { approval_id: id } },
+    message: {
+      token: 'synthetic-device-token',
+      data: { approval_id: id },
+      notification: {
+        title: 'Approval requested',
+        body: 'Open Spendwall to review the request.',
+      },
+    },
   });
 });
 

@@ -101,6 +101,7 @@ function publicDetails(detail: ApprovalDetails) {
     execution_id: detail.execution_id,
     result: detail.result,
     args_hash: detail.args_hash,
+    matched_rules: detail.matched_rules,
     args: context.args,
     context: {
       agent: { id: context.agent.id },
