@@ -14,8 +14,8 @@ export async function checkWebhookReceiver(db: Database): Promise<void> {
       SELECT NOT (
         EXISTS (SELECT FROM pg_roles WHERE rolname=current_user
           AND (rolsuper OR rolcreaterole OR rolcreatedb OR rolreplication OR rolbypassrls))
-        OR EXISTS (SELECT FROM pg_auth_members m JOIN pg_roles r ON r.oid=m.roleid
-          WHERE m.member=(SELECT oid FROM pg_roles WHERE rolname=current_user)
+        OR EXISTS (SELECT FROM pg_roles r
+          WHERE r.rolname <> current_user AND pg_has_role(current_user,r.oid,'MEMBER')
           AND r.rolname <> 'spendwall_webhook_' || left(encode(sha256(convert_to(current_database(),'UTF8')),'hex'),40))
         OR EXISTS (SELECT FROM pg_database WHERE datname=current_database() AND pg_has_role(current_user,datdba,'USAGE'))
         OR EXISTS (SELECT FROM pg_namespace WHERE nspname IN ('audit','approvals','approver','agent_auth','policy_replay','reconciliation')

@@ -169,6 +169,59 @@ test(
           await f.owner.query(
             'REVOKE UPDATE ON reconciliation.refund_events FROM reconciliation_receiver_test',
           );
+          await f.owner.query(
+            'CREATE ROLE reconciliation_privileged_test NOLOGIN',
+          );
+          try {
+            await f.owner.query(
+              'GRANT USAGE ON SCHEMA reconciliation TO reconciliation_privileged_test',
+            );
+            await f.owner.query(
+              'GRANT UPDATE ON reconciliation.refund_events TO reconciliation_privileged_test',
+            );
+            await f.owner.query(
+              `GRANT reconciliation_privileged_test TO ${pg.escapeIdentifier(group)} WITH INHERIT FALSE, SET TRUE`,
+            );
+            const client = await receiver.connect();
+            try {
+              const capabilities = await client.query(
+                "SELECT pg_has_role(current_user,'reconciliation_privileged_test','USAGE') AS inherited, pg_has_role(current_user,'reconciliation_privileged_test','SET') AS switchable",
+              );
+              assert.deepEqual(capabilities.rows[0], {
+                inherited: false,
+                switchable: true,
+              });
+              await assert.rejects(
+                client.query(
+                  'UPDATE reconciliation.refund_events SET usd_cents=1',
+                ),
+                { code: '42501' },
+              );
+              await client.query('BEGIN');
+              await client.query(
+                'SET LOCAL ROLE reconciliation_privileged_test',
+              );
+              const changed = await client.query(
+                'UPDATE reconciliation.refund_events SET usd_cents=1',
+              );
+              assert.ok(
+                changed.rowCount > 0,
+                'indirect role can alter observations',
+              );
+            } finally {
+              await client.query('ROLLBACK');
+              client.release();
+            }
+            await assert.rejects(
+              checkWebhookReceiver(receiver),
+              /receiver/i,
+              'receiver must reject an indirect role even without inherited privileges',
+            );
+          } finally {
+            await f.owner.query('DROP OWNED BY reconciliation_privileged_test');
+            await f.owner.query('DROP ROLE reconciliation_privileged_test');
+          }
+          await checkWebhookReceiver(receiver);
         } finally {
           await receiver.end();
           await f.owner.query('DROP OWNED BY reconciliation_receiver_test');

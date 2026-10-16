@@ -27,6 +27,7 @@ END $$;
 
 The runner checks actual role capabilities at startup and before each persisted event.
 An owner login, application login or receiver with extra protected-schema privileges is rejected.
+Additional direct or indirect role memberships are rejected, including roles reachable through `SET ROLE` without inherited privileges.
 Keep the existing identity key stable across the execution composition, receiver and dashboard.
 The app reference is SHA-256 of the exact sandbox `PAYPAL_CLIENT_ID`, matching `RefundExecutor.identity`.
 Different apps and merchants do not share matches; changing the identity key makes existing reconciliation evidence unavailable.
