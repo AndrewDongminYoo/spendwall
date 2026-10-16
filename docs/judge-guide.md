@@ -111,6 +111,10 @@ Two earlier harness attempts failed because host-network loopback was unavailabl
 The successful run used normal inner bridge networking.
 This is a bounded installation measurement, not a guarantee on other networks or machines.
 
+The [repository-history secret scan](notes/2026-10-16-history-secret-scan.md) records a later snapshot at `f226b6a` with 30 advertised refs and 122 reachable commits.
+Gitleaks reported zero findings after deleted-history and merge-only detection controls, with explicit Git output formatting to make the commit coverage count agree.
+That text-history result excludes media inspection and does not establish that every secret format is detected or that later commits are covered.
+
 ## Remaining submission work
 
 - A hosted URL and read-only judge access depend on #20 and a valid deployment license.
