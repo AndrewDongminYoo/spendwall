@@ -8,8 +8,10 @@ import type {
   AgReportState,
 } from 'ag-studio';
 import type { DashboardData } from '../../firewall/src/dashboard/data.ts';
+import type { ReconciliationData } from '../../firewall/src/webhooks/reconciliation.ts';
 
 export type Stats = Omit<DashboardData, 'audit'> & {
+  reconciliation?: ReconciliationData | null;
   query_mode: 'claude' | 'synthetic' | 'disabled';
   policy_preview_mode?: 'claude' | 'synthetic' | 'disabled';
 };

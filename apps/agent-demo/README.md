@@ -13,6 +13,11 @@ pnpm demo velocity
 The default mode replays authored synthetic agent calls through the SDK's firewall MCP server.
 It uses the real context resolver, policy evaluator, PostgreSQL velocity reservations, approval service, and refund executor.
 All payment HTTP responses come from a synthetic adapter that has no network fallback.
+Completed direct allowances and approved executions also record [reconciliation receipts](../../docs/webhooks.md#record-execution-evidence) tied to their audit evidence.
+The demo does not receive real webhook deliveries.
+If direct refund receipt persistence fails after execution, the tool retains the completed refund result and execution UUID and reports `reconciliation: unresolved`.
+The runner can call `recoverReconciliation(executionId)` to retry only that receipt write; this capability is not an agent tool and never resubmits a refund.
+The recovery queue lasts only for this disposable demo session; it is not production restart recovery.
 No PayPal credentials or `.env` files are read.
 Each invocation owns a disposable `postgres:17-alpine` container and temporary refund ledgers.
 If the image is not cached, a separate cancellable download has a five-minute deadline before container startup.

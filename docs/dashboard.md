@@ -68,6 +68,15 @@ Each API request reads its own consistent snapshot; the two endpoints are not an
 Refresh clears the previous displayed data before loading and clears it on failure.
 The page shows the stats snapshot time.
 
+## Refund reconciliation
+
+The optional [webhook reconciliation integration](webhooks.md) adds a read-only panel to the local dashboard.
+After migration `007`, configure `reconciliation.adapterRef` with the executor's sandbox app reference and grant the reader the documented reconciliation reads.
+The panel distinguishes pending, matched, unmediated and mismatched observations, plus disabled and empty configurations.
+It refreshes from persisted observations and execution receipts without calling PayPal or changing payment state.
+Unmediated means no matching completion evidence after five minutes, not proven bypass activity.
+The preview supplies synthetic examples; the hosted API-only entrypoint does not enable this integration.
+
 ## Audit assistant
 
 The AG Studio Agent Framework runs a custom agent that sends one complete question to the authenticated `POST /query` route.

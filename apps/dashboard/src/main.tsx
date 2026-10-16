@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { Report } from './studio.tsx';
 import { PolicyPreviewPanel } from './policy-preview.tsx';
 import { AuditAgent } from './audit-agent.tsx';
+import { ReconciliationPanel } from './reconciliation.tsx';
 import type { Stats } from './studio.tsx';
 import type { DashboardData } from '../../firewall/src/dashboard/data.ts';
 import './style.css';
@@ -175,6 +176,7 @@ function App() {
                 refresh.
               </p>
             )}
+            <ReconciliationPanel data={stats.reconciliation ?? null} />
             <AuditAgent
               key={stats.as_of}
               token={token}

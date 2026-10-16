@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { withDemoDatabase } from '../apps/agent-demo/src/database.ts';
 import { createDemo, readTicket } from '../apps/agent-demo/src/firewall.ts';
+import { Reconciliation } from '../apps/firewall/src/webhooks/reconciliation.ts';
 import {
   connectRecorded,
   reviewPending,
@@ -125,6 +126,56 @@ test('firewall keeps approval authority and ticket identity outside MCP', async 
     } finally {
       await otherClient.close();
       await other.close();
+    }
+  });
+});
+
+test('completed direct refund remains completed when its receipt needs recovery', async (t) => {
+  await withDemoDatabase(async (url) => {
+    const demo = await createDemo(url, await readTicket('small'));
+    const client = await connectRecorded(demo);
+    const original = Reconciliation.prototype.record;
+    let stored = 0;
+    const failure = t.mock.method(
+      Reconciliation.prototype,
+      'record',
+      async function (...args) {
+        if (stored++ === 0)
+          throw new Error('Injected receipt persistence failure');
+        return original.apply(this, args);
+      },
+    );
+    try {
+      const response = await client.callTool({
+        name: 'create_refund',
+        arguments: { capture_id: 'DEMO_CAPTURE_00001' },
+      });
+      assert.equal(demo.payments.length, 1);
+      assert.equal(response.structuredContent.decision, 'allow');
+      assert.equal(response.structuredContent.result.status, 'COMPLETED');
+      assert.equal(response.structuredContent.reconciliation, 'unresolved');
+      const executionId = response.structuredContent.result.executionId;
+      assert.equal(executionId, demo.payments[0].executionId);
+      assert.equal(
+        demo.events.some((event) => event.decision === 'deny'),
+        false,
+      );
+      await assert.rejects(demo.recoverReconciliation('unknown-execution'));
+      await demo.recoverReconciliation(executionId);
+      assert.equal(stored, 2);
+      assert.equal(
+        demo.payments.length,
+        1,
+        'Receipt recovery must not execute another refund',
+      );
+      assert.deepEqual(
+        (await client.listTools()).tools.map((tool) => tool.name).sort(),
+        ['check_approval', 'create_refund'],
+      );
+    } finally {
+      failure.mock.restore();
+      await client.close();
+      await demo.close();
     }
   });
 });

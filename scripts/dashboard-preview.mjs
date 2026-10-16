@@ -1,5 +1,6 @@
 import { VelocityPolicy } from '../apps/firewall/src/velocity/index.ts';
 import { PolicyReplay } from '../apps/firewall/src/policy-preview/replay.ts';
+import { Reconciliation } from '../apps/firewall/src/webhooks/reconciliation.ts';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -79,6 +80,7 @@ try {
     url,
     fileURLToPath(new URL('../apps/dashboard/dist', import.meta.url)),
     {
+      reconciliation: { adapterRef: 'a'.repeat(64) },
       policyPreview: {
         accessToken: 'b'.repeat(64),
         replay: new PolicyReplay('9'.repeat(64)),
@@ -127,6 +129,28 @@ default: deny
     await fixture.velocity.evaluateAndReserve(
       policy('deny'),
       request('120.00', 'returns'),
+    );
+    const reconciliation = new Reconciliation({
+      identityKey: '7'.repeat(64),
+      merchantId: 'merchantA',
+      adapterRef: 'a'.repeat(64),
+    });
+    for (const [index, refundId, cents] of [
+      [1, 'REFUND123456789012', 2500],
+      [2, 'OUTSIDE12345678901', 4200],
+      [3, 'WAITING12345678901', 1800],
+      [4, 'REFUND123456789012', 2600],
+    ]) {
+      await reconciliation.receive(fixture.owner, {
+        eventId: `WH-PREVIEW-${index}`,
+        refundId,
+        captureId: 'CAPTURE12345678901',
+        usdCents: cents,
+        payload: { synthetic: true, id: index },
+      });
+    }
+    await fixture.owner.query(
+      "UPDATE reconciliation.refund_events SET received_at=clock_timestamp()-interval '6 minutes' WHERE usd_cents=4200",
     );
   }
   console.log(

@@ -27,3 +27,4 @@
 !scripts/
 !scripts/hosted-dashboard.mjs
 !scripts/dashboard.mjs
+!scripts/check-paypal-sandbox.mjs

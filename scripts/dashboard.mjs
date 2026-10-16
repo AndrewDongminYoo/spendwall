@@ -57,6 +57,7 @@ try {
     merchantId: config.merchantId,
     token: config.token,
     agents: config.agents,
+    ...(config.reconciliation ? { reconciliation: config.reconciliation } : {}),
     ...(config.claude
       ? {
           classify: claudeQuery({
