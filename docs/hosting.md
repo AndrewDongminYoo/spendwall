@@ -58,6 +58,8 @@ Forwarded headers never establish authority.
 The minimal unauthenticated `/healthz` checks restricted DB authority and access to the required tables, returning only `{"ready":true}` or `{"ready":false}`.
 It is not an audit-integrity check or proof of payment-provider availability.
 Health and data requests share the concurrency limit.
+Only one health probe can run at a time, so unauthenticated probes cannot occupy all four request slots.
+An overlapping health probe returns `503` without acquiring another database connection.
 
 ## Database provisioning
 

@@ -159,3 +159,64 @@ test('hosted health fails closed without exposing database errors', async (t) =>
   assert.equal(result.headers['cache-control'], 'no-store');
   assert.equal((await call(server, '/healthz', {}, 'POST')).status, 405);
 });
+
+test('hosted health probes leave capacity for authenticated reads and release their slot', async () => {
+  const entered = Promise.withResolvers();
+  const held = Promise.withResolvers();
+  const secondEntered = Promise.withResolvers();
+  let calls = 0;
+  let releases = 0;
+  const client = {
+    query: async (sql) => ({
+      rows: sql.includes(' AS restricted')
+        ? [{ restricted: true }]
+        : sql.includes(' AS mismatch')
+          ? [{ mismatch: false }]
+          : sql.includes('clock_timestamp')
+            ? [{ now: 1700000000000 }]
+            : [],
+    }),
+    release: () => releases++,
+  };
+  const server = await startDashboardServer({
+    ...options,
+    hosted: { publicOrigin: origin },
+    pool: {
+      connect: async () => {
+        calls++;
+        if (calls === 1) {
+          entered.resolve();
+          await held.promise;
+        } else secondEntered.resolve();
+        return client;
+      },
+    },
+  });
+  const health = call(server, '/healthz');
+  let duplicate;
+  try {
+    await entered.promise;
+    duplicate = call(server, '/healthz');
+    const rejected = await Promise.race([
+      duplicate,
+      secondEntered.promise.then(() => ({ status: 'second DB probe entered' })),
+    ]);
+    assert.equal(rejected.status, 503);
+    assert.deepEqual(JSON.parse(rejected.body), { ready: false });
+    assert.equal(calls, 1);
+    assert.equal(
+      (await call(server, '/audit', { authorization: `Bearer ${token}` }))
+        .status,
+      200,
+    );
+    held.reject(new Error('controlled connection failure'));
+    assert.equal((await health).status, 503);
+    assert.equal((await call(server, '/healthz')).status, 200);
+    assert.equal((await call(server, '/healthz')).status, 200);
+    assert.equal(releases, 3);
+  } finally {
+    held.resolve();
+    await Promise.allSettled([health, duplicate]);
+    await server.close();
+  }
+});
