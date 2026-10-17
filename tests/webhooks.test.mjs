@@ -1,3 +1,5 @@
+// `Ghld` is a fragment of the base64 synthetic transmission signature below.
+// cspell:ignore Ghld
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { PayPalWebhookVerifier } from '../apps/firewall/src/webhooks/paypal.ts';

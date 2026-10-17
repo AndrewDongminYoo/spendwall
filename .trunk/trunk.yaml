@@ -21,6 +21,7 @@ lint:
     - gitleaks@8.30.1
     - prettier@3.9.10
     - actionlint@1.7.12
+    - cspell@10.4.0
 tools:
   enabled:
     - gitleaks@8.30.1
