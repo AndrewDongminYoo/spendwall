@@ -13,21 +13,23 @@ import { ApprovalService } from '../../firewall/src/approvals/index.ts';
 import { checkApproval } from '../../firewall/src/approvals/tool.ts';
 import { recordedPayments } from './payments.ts';
 
-export const scenarios = [
+export const refundScenarios = [
   'small',
   'approval',
   'injection',
   'velocity',
 ] as const;
+export const scenarios = [...refundScenarios, 'shopping'] as const;
+export type RefundScenario = (typeof refundScenarios)[number];
 export type Scenario = (typeof scenarios)[number];
 export type Ticket = {
-  id: Scenario;
+  id: RefundScenario;
   customerId: string;
   body: string;
   captures: string[];
   recordedCalls: { capture_id: string }[];
 };
-export async function readTicket(name: Scenario): Promise<Ticket> {
+export async function readTicket(name: RefundScenario): Promise<Ticket> {
   return JSON.parse(
     await readFile(new URL(`../tickets/${name}.json`, import.meta.url), 'utf8'),
   );
@@ -37,33 +39,21 @@ export type DecisionEvent = {
   decision: string;
   reason: string;
   capture?: string;
+  order?: string;
 };
 const agentId = 'demo-support';
 
-// This composition is exclusively for synthetic demos. It never accepts a payment provider URL.
-export async function createDemo(
-  ownerUrl: string,
-  sourceTicket: Ticket,
-  emit: (event: DecisionEvent) => void = () => {},
-) {
-  const ticket = structuredClone(sourceTicket);
+// Each demo owns one disposable database and an application login limited to the audit app group.
+export async function openDemoDatabase(ownerUrl: string, files: string[]) {
   const database = `demo_${randomUUID().replaceAll('-', '')}`;
   const admin = new pg.Pool({ connectionString: ownerUrl });
   let owner: pg.Pool | undefined, app: pg.Pool | undefined;
-  let executor: RefundExecutor | undefined;
-  let directory: string | undefined;
-  const payment = recordedPayments();
   try {
     await admin.query(`CREATE DATABASE ${pg.escapeIdentifier(database)}`);
     const target = new URL(ownerUrl);
     target.pathname = `/${database}`;
     owner = new pg.Pool({ connectionString: target.toString() });
-    for (const file of [
-      '001-audit.sql',
-      '002-velocity.sql',
-      '003-approvals.sql',
-      '007-reconciliation.sql',
-    ])
+    for (const file of files)
       await owner.query(
         await readFile(
           new URL(`../../../migrations/${file}`, import.meta.url),
@@ -86,6 +76,41 @@ export async function createDemo(
       connectionString: target.toString(),
       connectionTimeoutMillis: 2000,
     });
+    const pools = { owner, app };
+    return {
+      ...pools,
+      async close() {
+        await pools.app.end();
+        await pools.owner.end();
+        await admin.end();
+      },
+    };
+  } catch (error) {
+    await app?.end();
+    await owner?.end();
+    await admin.end();
+    throw error;
+  }
+}
+
+// This composition is exclusively for synthetic demos. It never accepts a payment provider URL.
+export async function createDemo(
+  ownerUrl: string,
+  sourceTicket: Ticket,
+  emit: (event: DecisionEvent) => void = () => {},
+) {
+  const ticket = structuredClone(sourceTicket);
+  const database = await openDemoDatabase(ownerUrl, [
+    '001-audit.sql',
+    '002-velocity.sql',
+    '003-approvals.sql',
+    '007-reconciliation.sql',
+  ]);
+  const app = database.app;
+  let executor: RefundExecutor | undefined;
+  let directory: string | undefined;
+  const payment = recordedPayments();
+  try {
     directory = await mkdtemp(join(tmpdir(), 'spendwall-demo-'));
     executor = await RefundExecutor.open({
       ledgerPath: join(directory, 'refunds.json'),
@@ -188,7 +213,7 @@ export async function createDemo(
                 });
                 if (completed.status === 'COMPLETED') {
                   const recover = () =>
-                    reconciliation.record(app!, audit, completed);
+                    reconciliation.record(app, audit, completed);
                   receiptRecoveries.set(completed.executionId, recover);
                   try {
                     await recover();
@@ -287,17 +312,13 @@ export async function createDemo(
       async close() {
         await server.instance.close();
         await refunds.close();
-        await app!.end();
-        await owner!.end();
-        await admin.end();
+        await database.close();
         await rm(directory!, { recursive: true, force: true });
       },
     };
   } catch (error) {
     await executor?.close();
-    await app?.end();
-    await owner?.end();
-    await admin.end();
+    await database.close();
     if (directory) await rm(directory, { recursive: true, force: true });
     throw error;
   }

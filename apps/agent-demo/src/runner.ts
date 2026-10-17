@@ -1,8 +1,8 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import type { Demo, Scenario } from './firewall.ts';
+import type { Demo, RefundScenario } from './firewall.ts';
 
-export async function connectRecorded(demo: Demo) {
+export async function connectRecorded(demo: Pick<Demo, 'server'>) {
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
   await demo.server.instance.connect(serverTransport);
@@ -71,7 +71,7 @@ export async function replay(demo: Demo, signal?: AbortSignal) {
   }
 }
 
-export function assertScenario(name: Scenario, demo: Demo) {
+export function assertScenario(name: RefundScenario, demo: Demo) {
   const expected = {
     small: ['allow'],
     approval: ['pending_approval', 'approved'],

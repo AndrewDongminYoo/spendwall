@@ -15,6 +15,7 @@ import type { DenyReason, JsonObject } from './json.ts';
 import { createInvoice, readInvoice } from './invoice.ts';
 import { disputeIdentifier, readDispute } from './dispute.ts';
 import { normalizedAmount, policyAmount } from './money.ts';
+import { createOrder, readOrder } from './order.ts';
 import { readRefund, refundAmount } from './refund.ts';
 import { ContextRest } from './rest.ts';
 import type { RestOptions } from './rest.ts';
@@ -26,6 +27,8 @@ export const resolverRegistry = Object.freeze({
   get_invoice: 'read',
   accept_dispute_claim: 'money-out',
   get_dispute: 'read',
+  create_order: 'money-in',
+  pay_order: 'money-in',
 });
 type ToolName = keyof typeof resolverRegistry;
 export type PolicyContext = {
@@ -45,6 +48,11 @@ export type Resolution =
       amount: NormalizedAmount;
       resolvedCtx: JsonObject;
     };
+
+export function orderIdentifier(value: unknown): string {
+  if (typeof value !== 'string' || !/^[A-Z0-9]{17,32}$/.test(value)) fail();
+  return value;
+}
 
 const validator = new AjvJsonSchemaValidator();
 const catalog: { tools: { name: string; inputSchema: JsonSchemaType }[] } =
@@ -66,7 +74,7 @@ const validators = new Map(
 
 export class ContextResolver {
   private readonly rest: ContextRest;
-  private readonly merchant: JsonObject;
+  readonly merchant: JsonObject;
   constructor(
     options: RestOptions & { merchant: { id: string; email: string } },
   ) {
@@ -86,35 +94,62 @@ export class ContextResolver {
   invalidateDispute(id: string) {
     this.rest.invalidate(`dispute:${disputeIdentifier(id)}`);
   }
+  invalidateOrder(id: string) {
+    this.rest.invalidate(`order:${orderIdentifier(id)}`);
+  }
+
+  private inputs(input: unknown, serverContext: unknown) {
+    const request = object(snapshot(input));
+    if (
+      Object.keys(request).length !== 2 ||
+      typeof request.tool !== 'string' ||
+      !Object.hasOwn(request, 'args')
+    )
+      fail('invalid_arguments');
+    if (!Object.hasOwn(resolverRegistry, request.tool))
+      fail('unsupported_tool');
+    const tool = request.tool as ToolName;
+    const args = object(request.args);
+    if (!validators.get(tool)!(args).valid) fail('invalid_arguments');
+    const trusted = object(snapshot(serverContext));
+    if (
+      Object.keys(trusted).length !== 3 ||
+      !['agent', 'customer', 'agg'].every((key) => Object.hasOwn(trusted, key))
+    )
+      fail();
+    const agent = object(trusted.agent);
+    const customer = object(trusted.customer);
+    const agg = object(trusted.agg);
+    identifier(agent.id);
+    identifier(customer.id);
+    customer.email = email(customer.email);
+    return { tool, args, agent, customer, agg };
+  }
+
+  // The policy context of a call whose amount the caller already holds from a
+  // ledger row that was bound equal to the provider's facts when it was
+  // written: the same inputs as resolve() builds, without a provider read or a
+  // cache lease. Inputs that resolve() would deny throw a ResolutionError.
+  bound(
+    input: unknown,
+    serverContext: unknown,
+    amount: PolicyContext['amount'],
+  ): PolicyContext {
+    const context: PolicyContext = {
+      ...this.inputs(input, serverContext),
+      amount,
+      merchant: this.merchant,
+    };
+    snapshot(context);
+    return freeze(context);
+  }
 
   async resolve(input: unknown, serverContext: unknown): Promise<Resolution> {
     try {
-      const request = object(snapshot(input));
-      if (
-        Object.keys(request).length !== 2 ||
-        typeof request.tool !== 'string' ||
-        !Object.hasOwn(request, 'args')
-      )
-        fail('invalid_arguments');
-      if (!Object.hasOwn(resolverRegistry, request.tool))
-        fail('unsupported_tool');
-      const tool = request.tool as ToolName;
-      const args = object(request.args);
-      if (!validators.get(tool)!(args).valid) fail('invalid_arguments');
-      const trusted = object(snapshot(serverContext));
-      if (
-        Object.keys(trusted).length !== 3 ||
-        !['agent', 'customer', 'agg'].every((key) =>
-          Object.hasOwn(trusted, key),
-        )
-      )
-        fail();
-      const agent = object(trusted.agent);
-      const customer = object(trusted.customer);
-      const agg = object(trusted.agg);
-      identifier(agent.id);
-      identifier(customer.id);
-      customer.email = email(customer.email);
+      const { tool, args, agent, customer, agg } = this.inputs(
+        input,
+        serverContext,
+      );
       let assertCurrent = () => {};
       let amount;
       let resolvedCtx: JsonObject;
@@ -167,6 +202,36 @@ export class ContextResolver {
             ...(facts.dueAt === undefined
               ? {}
               : { seller_response_due_date: facts.dueAt }),
+          },
+        };
+      } else if (tool === 'create_order') {
+        const facts = createOrder(args);
+        amount = facts.total;
+        resolvedCtx = {
+          order: {
+            amount: policyAmount(facts.total),
+            amount_minor: Number(facts.total.minor),
+            quantity: facts.lines.length,
+          },
+        };
+      } else if (tool === 'pay_order') {
+        const id = orderIdentifier(args.id);
+        const lease = await this.rest.facts(`order:${id}`, (get) =>
+          readOrder(get, id, String(this.merchant.id)),
+        );
+        const facts = lease.value;
+        assertCurrent = lease.assertCurrent;
+        amount = facts.total;
+        resolvedCtx = {
+          order: {
+            order_id: facts.id,
+            amount: policyAmount(facts.total),
+            amount_minor: Number(facts.total.minor),
+            status: facts.status,
+            ...(facts.customId === null ? {} : { custom_id: facts.customId }),
+            ...(facts.captureId === null
+              ? {}
+              : { capture_id: facts.captureId }),
           },
         };
       } else {

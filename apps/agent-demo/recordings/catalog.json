@@ -1,0 +1,32 @@
+{
+  "products": [
+    {
+      "sku": "CABLE-USBC-1M",
+      "name": "USB-C cable 1 m",
+      "description": "Braided USB-C to USB-C cable, 1 meter",
+      "price": 19.99,
+      "currency": "USD"
+    },
+    {
+      "sku": "CABLE-USBC-2M",
+      "name": "USB-C cable 2 m",
+      "description": "Braided USB-C to USB-C cable, 2 meters",
+      "price": 24.5,
+      "currency": "USD"
+    },
+    {
+      "sku": "CHARGER-65W",
+      "name": "65 W GaN charger",
+      "description": "Dual-port USB-C wall charger",
+      "price": 59.0,
+      "currency": "USD"
+    },
+    {
+      "sku": "DOCK-TB4",
+      "name": "Thunderbolt 4 dock",
+      "description": "Eleven-port desktop dock",
+      "price": 289.0,
+      "currency": "USD"
+    }
+  ]
+}
