@@ -8,7 +8,8 @@ Its deferred checks run at commit for every role.
 A new row must start pending, name the velocity `tool_call` reservation of the same approval, and have an `approval_created` event appended in the inserting transaction.
 Each decision needs an `approval_decided` event (`allow` only for approval), and each execution outcome needs an `approval_executed` event (`allow` only for success), appended in the same transaction.
 A success event must also carry provider status 200 and the row's execution UUID.
-The recovery re-claim from `unknown` to `in_flight` writes no event and is admitted without one, because the outcome that follows it is bound.
+The sealed execution result changes only in the same update as an outcome from `in_flight`, so that outcome's `approval_executed` event binds it.
+The recovery re-claim from `unknown` to `in_flight` writes no event and is admitted without one, because the outcome that follows it is bound; it must leave the sealed result unchanged.
 A role that can append audit events can still forge a row or a transition, but only by appending fresh matching events in the same transaction.
 This is a trusted server persistence boundary, not an approval authorization API for agents.
 Human decision authentication and REST endpoints belong to #14.

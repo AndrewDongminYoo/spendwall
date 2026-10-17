@@ -38,6 +38,8 @@ END $$;
 -- failed and unknown need deny. The recovery re-claim unknown to in_flight writes
 -- no event and is admitted, because the outcome that follows is bound. Any other
 -- state change fails closed. 003's guard_update still orders the transitions.
+-- The sealed result is the outcome's payload, so it changes only in the same
+-- update as an outcome from in_flight; the re-claim must leave it unchanged.
 CREATE FUNCTION approvals.guard_transition_receipt() RETURNS trigger
 LANGUAGE plpgsql SET search_path = pg_catalog, approvals
 AS $$
@@ -45,6 +47,11 @@ DECLARE
   kind text;
   verdict text;
 BEGIN
+  IF OLD.result_sealed IS DISTINCT FROM NEW.result_sealed AND NOT coalesce(
+    OLD.approval_state = 'approved' AND NEW.approval_state = 'approved'
+    AND OLD.execution_state = 'in_flight' AND NEW.execution_state IN ('succeeded','failed','unknown'), false) THEN
+    RAISE EXCEPTION 'Approval result changes only with its execution outcome';
+  END IF;
   IF OLD.approval_state = 'pending' AND NEW.approval_state IN ('approved','denied','expired') THEN
     kind := 'approval_decided';
     verdict := CASE WHEN NEW.approval_state = 'approved' THEN 'allow' ELSE 'deny' END;
@@ -75,6 +82,7 @@ CREATE CONSTRAINT TRIGGER approval_insert_receipt AFTER INSERT ON approvals.requ
 CREATE CONSTRAINT TRIGGER approval_transition_receipt AFTER UPDATE ON approvals.requests
   DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
   WHEN (OLD.approval_state IS DISTINCT FROM NEW.approval_state
-    OR OLD.execution_state IS DISTINCT FROM NEW.execution_state)
+    OR OLD.execution_state IS DISTINCT FROM NEW.execution_state
+    OR OLD.result_sealed IS DISTINCT FROM NEW.result_sealed)
   EXECUTE FUNCTION approvals.guard_transition_receipt();
 COMMIT;

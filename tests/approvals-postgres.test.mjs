@@ -773,6 +773,67 @@ test('Postgres approval boundary', { skip: !url }, async (t) => {
       );
     },
   );
+  await t.test(
+    'the sealed result changes only with an audited outcome from in_flight',
+    async (t) => {
+      const f = await fixture(t),
+        { id, input } = await pending(f);
+      f.setMode('pending');
+      assert.equal(
+        (await f.service.approve(id, policy, input)).execution_state,
+        'unknown',
+      );
+      const stored = async () =>
+        (
+          await f.app.query(
+            'SELECT execution_state,result_sealed FROM approvals.requests',
+          )
+        ).rows[0];
+      const sealed = (await stored()).result_sealed;
+      assert.notEqual(sealed, null);
+      const changed = /Approval result changes only with its execution outcome/;
+      const reclaim =
+        "UPDATE approvals.requests SET execution_state='in_flight' WHERE approval_id=$1";
+      const rewrite =
+        'UPDATE approvals.requests SET result_sealed=$2 WHERE approval_id=$1';
+      const reclaimRewrite =
+        "UPDATE approvals.requests SET execution_state='in_flight',result_sealed=$2 WHERE approval_id=$1";
+      for (const value of [null, 'x'.repeat(40)]) {
+        // A cleared PENDING result would turn recovery from reconcile into execute.
+        await assert.rejects(
+          inTransaction(f, (client) => client.query(rewrite, [id, value])),
+          changed,
+        );
+        await assert.rejects(
+          inTransaction(f, (client) =>
+            client.query(reclaimRewrite, [id, value]),
+          ),
+          changed,
+        );
+        // An appended execution event does not license a change outside the outcome.
+        await assert.rejects(
+          inTransaction(f, async (client) => {
+            await client.query(reclaim, [id]);
+            await client.query(rewrite, [id, value]);
+            await forge(client, id, 'approval_executed', 'deny');
+          }),
+          changed,
+        );
+      }
+      assert.deepEqual(await stored(), {
+        execution_state: 'unknown',
+        result_sealed: sealed,
+      });
+      // Recovery still reconciles the stored result instead of posting again.
+      f.setMode('success');
+      assert.equal(
+        (await f.service.recover(id, policy, input)).execution_state,
+        'succeeded',
+      );
+      assert.equal(f.seen.posts.length, 1);
+      assert.equal(f.seen.gets.length, 1);
+    },
+  );
 
   await t.test(
     'a definite failed result retains capacity and cannot execute again',
