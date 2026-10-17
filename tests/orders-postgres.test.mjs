@@ -149,6 +149,11 @@ test(
         assert.equal(replayed.replayed, true);
         assert.equal(replayed.result.id, allowed.result.id);
         assert.deepEqual(
+          replayed.matchedRules,
+          allowed.matchedRules,
+          'a replay carries the matched rules of the first attempt',
+        );
+        assert.deepEqual(
           replayed.receipt,
           allowed.receipt,
           'a replay returns the receipt of the outcome event',
@@ -382,6 +387,11 @@ test(
         const recovered = await service.create(policy, input, trusted());
         assert.equal(recovered.decision, 'allow');
         assert.equal(recovered.replayed, true);
+        assert.deepEqual(
+          recovered.matchedRules,
+          ['order_within_budget'],
+          'a retry of an unknown attempt carries the matched rules',
+        );
         assert.equal((await ledger(input.requestId)).status, 'created');
         assert.equal(
           (await service.create(policy, input, trusted())).result.id,

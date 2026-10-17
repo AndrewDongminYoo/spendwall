@@ -479,6 +479,10 @@ export class OrderService {
         [merchantRef, requestId],
       );
       const previous = rows[0];
+      // Evaluated before the ledger lookup so a replay or retry of a bound
+      // request carries the same matched rules as its first attempt: the
+      // binding hash and policy version checks below prove the inputs equal.
+      const decision = this.evaluate(policy, context);
       if (previous) {
         if (previous.key_id !== this.ref('key', 'continuity'))
           throw new Error();
@@ -496,7 +500,7 @@ export class OrderService {
           committed = true;
           return freeze({
             decision: 'allow',
-            matchedRules: [],
+            matchedRules: decision.matchedRules,
             policyVersion: policy.policyVersion,
             replayed: true,
             receipt,
@@ -529,10 +533,9 @@ export class OrderService {
           amount,
           body: this.body(context, requestId),
           retry: true,
-          matchedRules: [],
+          matchedRules: decision.matchedRules,
         };
       } else {
-        const decision = this.evaluate(policy, context);
         const receipt = await new AuditLog(client).append(
           this.event(context, resolution.resolvedCtx, decision, policy),
         );
