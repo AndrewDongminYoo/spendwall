@@ -3,6 +3,13 @@
 Apply `migrations/003-approvals.sql` as the trusted owner after `001` and `002`.
 The new private schema stores authenticated encrypted request/result snapshots and durable state.
 The existing database-specific app role receives only SELECT, INSERT and UPDATE for this table; bindings, execution IDs and terminal outcomes have database update guards.
+Then apply `migrations/011-approval-guards.sql` as the same owner; it does not change those grants.
+Its deferred checks run at commit for every role.
+A new row must start pending, name the velocity `tool_call` reservation of the same approval, and have an `approval_created` event appended in the inserting transaction.
+Each decision needs an `approval_decided` event (`allow` only for approval), and each execution outcome needs an `approval_executed` event (`allow` only for success), appended in the same transaction.
+A success event must also carry provider status 200 and the row's execution UUID.
+The recovery re-claim from `unknown` to `in_flight` writes no event and is admitted without one, because the outcome that follows it is bound.
+A role that can append audit events can still forge a row or a transition, but only by appending fresh matching events in the same transaction.
 This is a trusted server persistence boundary, not an approval authorization API for agents.
 Human decision authentication and REST endpoints belong to #14.
 
