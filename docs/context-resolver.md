@@ -1,7 +1,7 @@
 # Context resolver
 
 The #9 boundary resolves monetary context before policy evaluation.
-It supports `create_refund`, `create_invoice`, `send_invoice`, `get_invoice`, `accept_dispute_claim` and `get_dispute` from the #3 catalog.
+It supports `create_refund`, `create_invoice`, `send_invoice`, `get_invoice`, `accept_dispute_claim`, `get_dispute`, `create_order` and `pay_order` from the #3 catalog; the order rules are in the [shopping flow](shopping.md).
 Other tools return an explicit deny until their own resolvers exist.
 Successful resolution supplies facts; it does not grant execution permission.
 

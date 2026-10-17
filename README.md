@@ -65,6 +65,9 @@ Run `node scripts/invoice-demo.mjs` for a synthetic console example; it does not
 The [dispute policy baseline](docs/dispute-policy.md) resolves trusted claim facts, requires human approval for acceptance and classifies response deadlines.
 Run `node scripts/dispute-demo.mjs` for a synthetic example; it creates no approval and performs no provider write or notification delivery.
 
+The [buyer-side shopping flow](docs/shopping.md) recomputes order totals, creates Orders v2 orders with a server-owned approve-link ledger and captures only after PayPal reports buyer approval.
+Run `pnpm demo shopping` for the recorded scenario; product search is a local catalog and payments are synthetic.
+
 ## Architecture and trust boundaries
 
 The solid path is the synthetic demo composition in `apps/agent-demo`.

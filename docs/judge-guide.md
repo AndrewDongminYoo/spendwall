@@ -4,7 +4,7 @@
 
 The recommended first run is the credential-free synthetic demo in the [README Quickstart](../README.md#quickstart).
 It executes actual MCP calls, policy evaluation, PostgreSQL reservations, approval binding and the refund executor against synthetic payment responses.
-It is suitable for checking the four documented scenarios, not for demonstrating live PayPal or model accuracy.
+It is suitable for checking the five documented scenarios (four refund cases and the buyer-side shopping flow), not for demonstrating live PayPal or model accuracy.
 
 Public hosted demo URL: **not available**.
 Hosting is tracked in [#20](https://github.com/AndrewDongminYoo/spendwall/issues/20).
