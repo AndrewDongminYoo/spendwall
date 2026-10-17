@@ -1,3 +1,6 @@
+// `Gllbn` is a fragment of a base64 synthetic Basic credential; `reconcil` is a
+// deliberate partial-match stem in a rejection assertion.
+// cspell:ignore Gllbn reconcil
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import {
