@@ -1,3 +1,5 @@
+// `rivate` is the token fragment that survives any escape of its first character.
+// cspell:ignore rivate
 import assert from 'node:assert/strict';
 import { createServer, request as httpRequest } from 'node:http';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -136,7 +138,14 @@ async function fixture(t, config = {}) {
           resources.push({ close: async () => resolve() }),
         );
       if (config.leak)
-        return { content: [{ type: 'text', text: 'private-paypal-token' }] };
+        return {
+          content: [
+            {
+              type: 'text',
+              text: config.leak === true ? 'private-paypal-token' : config.leak,
+            },
+          ],
+        };
       return {
         content: [
           {
@@ -353,6 +362,34 @@ test('upstream results that echo a credential are not exposed downstream', async
   });
   assert.equal(result.isError, true);
   assert.doesNotMatch(JSON.stringify(result), /private-paypal-token/);
+});
+
+test('upstream results that echo an escaped credential are withheld from client and logs', async (t) => {
+  const f = await fixture(t, {
+    leak: 'Result: "\\u0070rivate-paypal-token',
+  });
+  const { client } = await f.start();
+  const logs = [];
+  for (const method of ['log', 'info', 'warn', 'error', 'debug'])
+    t.mock.method(console, method, (...items) => {
+      logs.push(items.map(String).join(' '));
+    });
+  t.mock.method(process.stderr, 'write', (chunk) => {
+    logs.push(String(chunk));
+    return true;
+  });
+  console.error('capture-probe');
+  const result = await client.callTool({
+    name: 'get_order',
+    arguments: { id: 'ORDER123456789012' },
+  });
+  t.mock.restoreAll();
+  assert.equal(logs[0], 'capture-probe');
+  assert.equal(f.seen.calls.length, 1);
+  assert.equal(result.isError, true);
+  // The fragment survives any escape of the token's first character.
+  assert.doesNotMatch(JSON.stringify(result), /rivate-paypal-token/);
+  assert.doesNotMatch(logs.join('\n'), /rivate-paypal-token/);
 });
 
 test('smoke CLI rejects ambiguous refunds and missing credentials without leaking them', () => {

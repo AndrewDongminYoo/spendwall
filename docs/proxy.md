@@ -100,6 +100,19 @@ If a durable write fails, the process refuses further refunds; reconcile the sav
 The local lock and ledger do not coordinate multiple machines, supply policy approval, or protect against manual ledger loss.
 See [the execution contract](specs/2026-10-13-refund-proxy.md) for follow-up boundaries.
 
+## Credential output
+
+The proxy withholds an upstream or refund result that contains a known credential: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, or an access token that the token manager issued.
+The check serializes the result as JSON and reads that text as plain text, without regard to quote structure.
+It searches the text and each decoded stage for those credentials.
+Each stage decodes the JSON escapes `\uXXXX`, `\"`, `\\`, `\/`, `\b`, `\f`, `\n`, `\r` and `\t`, and the percent encoding `%XX`, in either hex case.
+Decoding repeats until the text stops changing, so nested JSON strings and percent-encoded escapes are covered.
+A malformed sequence stays as it is.
+If the text still changes at the fixed stage bound (`MAX_DECODE_ROUNDS` in [the token manager](../apps/firewall/src/token.ts)), the result is withheld.
+
+The check does not cover base64, hex or other encodings that JSON and URL unescaping do not reverse.
+It does not detect unknown credentials or Bearer-shaped text.
+
 ## Verification
 
 ```sh
