@@ -26,6 +26,18 @@ const advisoryLock = 'spendwall/orders/v1';
 // margin (docs/specs/2026-10-13-sandbox-seed.md). After that, reconciliation
 // is required and no request is resent under the identifier.
 const replayMs = 5 * 60 * 60 * 1_000;
+// created_at is timestamptz(3), and PostgreSQL rounds a microsecond clock to
+// the nearest millisecond on storage, so a row read right after it is written
+// can show an age down to -0.5 ms with no clock reversal (issue #66).
+const storageRoundingMs = 0.5;
+
+// An unknown row outside the replay window goes to reconciliation instead of
+// being resent. Ages from -0.5 ms up to, but not including, the window's end
+// are replayable; a larger clock reversal, the window's end and a non-numeric
+// age all fail closed.
+export function replayExpired(ageMs: number): boolean {
+  return !(ageMs >= -storageRoundingMs && ageMs < replayMs);
+}
 
 export type Money = { value: string; currency_code: 'USD' };
 export type OrderDenyReason =
@@ -554,7 +566,7 @@ export class OrderService {
           committed = true;
           return settled;
         }
-        if (previous.age_ms < 0 || previous.age_ms >= replayMs)
+        if (replayExpired(previous.age_ms))
           throw new OrderOutcomeUnknownError(
             'Order creation replay expired; reconciliation is required.',
             requestId,
@@ -925,7 +937,7 @@ export class OrderService {
         // A bound unknown row is this order's one live capture attempt (the
         // slot index admits one row per order that is not failed), so it is
         // resent under the same identifier.
-        if (previous.age_ms < 0 || previous.age_ms >= replayMs)
+        if (replayExpired(previous.age_ms))
           throw new OrderOutcomeUnknownError(
             'Capture replay expired; reconciliation is required.',
             executionId,

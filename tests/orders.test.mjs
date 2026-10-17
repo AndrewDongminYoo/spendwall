@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ContextResolver } from '../apps/firewall/src/context/index.ts';
-import { OrderService } from '../apps/firewall/src/orders/index.ts';
+import {
+  OrderService,
+  replayExpired,
+} from '../apps/firewall/src/orders/index.ts';
 import { evaluatePolicy } from '../packages/policy/src/index.ts';
 import {
   captureInput,
@@ -17,6 +20,15 @@ import {
 const serverContext = () => ({ ...trusted(), agg: {} });
 const resolve = (f, args) =>
   f.resolver.resolve({ tool: 'create_order', args }, serverContext());
+
+test('replay ages tolerate millisecond storage rounding but fail closed on a clock reversal', () => {
+  const windowMs = 5 * 60 * 60 * 1_000;
+  // timestamptz(3) rounds created_at by at most half a millisecond (issue #66).
+  for (const age of [-0.4, -0.5, 0, 1, windowMs - 1])
+    assert.equal(replayExpired(age), false, `age ${age} ms is replayable`);
+  for (const age of [-0.501, -1, -1.5, windowMs, windowMs + 1, NaN])
+    assert.equal(replayExpired(age), true, `age ${age} ms is expired`);
+});
 
 test('create_order totals are recomputed from catalog lines and never trusted', async () => {
   const f = fixture({
