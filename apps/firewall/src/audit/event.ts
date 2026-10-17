@@ -86,7 +86,12 @@ const statuses = new Set([
   'DENIED',
   'REFUNDED',
   'PARTIALLY_REFUNDED',
+  'CREATED',
+  'APPROVED',
 ]);
+// Orders v2 facts: the provider order id and the sandbox buyer approve link.
+const orderId = /^[A-Z0-9]{17,32}$/;
+const approveUrl = /^https:\/\/www\.sandbox\.paypal\.com\/\S{1,481}$/;
 // Match the demo's supported currencies without importing policy code.
 const currencies = new Set(['USD', 'EUR', 'KRW']);
 const containers = new Set([
@@ -160,6 +165,18 @@ function redact(value: Json): { [key: string]: Json } {
       key === 'status' &&
       typeof entry === 'string' &&
       statuses.has(entry)
+    )
+      safe[key] = entry;
+    else if (
+      key === 'order_id' &&
+      typeof entry === 'string' &&
+      orderId.test(entry)
+    )
+      safe[key] = entry;
+    else if (
+      key === 'approve_url' &&
+      typeof entry === 'string' &&
+      approveUrl.test(entry)
     )
       safe[key] = entry;
   }

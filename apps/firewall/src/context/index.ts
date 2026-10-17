@@ -15,6 +15,7 @@ import type { DenyReason, JsonObject } from './json.ts';
 import { createInvoice, readInvoice } from './invoice.ts';
 import { disputeIdentifier, readDispute } from './dispute.ts';
 import { normalizedAmount, policyAmount } from './money.ts';
+import { createOrder, readOrder } from './order.ts';
 import { readRefund, refundAmount } from './refund.ts';
 import { ContextRest } from './rest.ts';
 import type { RestOptions } from './rest.ts';
@@ -26,6 +27,8 @@ export const resolverRegistry = Object.freeze({
   get_invoice: 'read',
   accept_dispute_claim: 'money-out',
   get_dispute: 'read',
+  create_order: 'money-in',
+  pay_order: 'money-in',
 });
 type ToolName = keyof typeof resolverRegistry;
 export type PolicyContext = {
@@ -45,6 +48,11 @@ export type Resolution =
       amount: NormalizedAmount;
       resolvedCtx: JsonObject;
     };
+
+export function orderIdentifier(value: unknown): string {
+  if (typeof value !== 'string' || !/^[A-Z0-9]{17,32}$/.test(value)) fail();
+  return value;
+}
 
 const validator = new AjvJsonSchemaValidator();
 const catalog: { tools: { name: string; inputSchema: JsonSchemaType }[] } =
@@ -85,6 +93,9 @@ export class ContextResolver {
   }
   invalidateDispute(id: string) {
     this.rest.invalidate(`dispute:${disputeIdentifier(id)}`);
+  }
+  invalidateOrder(id: string) {
+    this.rest.invalidate(`order:${orderIdentifier(id)}`);
   }
 
   async resolve(input: unknown, serverContext: unknown): Promise<Resolution> {
@@ -167,6 +178,36 @@ export class ContextResolver {
             ...(facts.dueAt === undefined
               ? {}
               : { seller_response_due_date: facts.dueAt }),
+          },
+        };
+      } else if (tool === 'create_order') {
+        const facts = createOrder(args);
+        amount = facts.total;
+        resolvedCtx = {
+          order: {
+            amount: policyAmount(facts.total),
+            amount_minor: Number(facts.total.minor),
+            quantity: facts.lines.length,
+          },
+        };
+      } else if (tool === 'pay_order') {
+        const id = orderIdentifier(args.id);
+        const lease = await this.rest.facts(`order:${id}`, (get) =>
+          readOrder(get, id, String(this.merchant.id)),
+        );
+        const facts = lease.value;
+        assertCurrent = lease.assertCurrent;
+        amount = facts.total;
+        resolvedCtx = {
+          order: {
+            order_id: facts.id,
+            amount: policyAmount(facts.total),
+            amount_minor: Number(facts.total.minor),
+            status: facts.status,
+            ...(facts.customId === null ? {} : { custom_id: facts.customId }),
+            ...(facts.captureId === null
+              ? {}
+              : { capture_id: facts.captureId }),
           },
         };
       } else {

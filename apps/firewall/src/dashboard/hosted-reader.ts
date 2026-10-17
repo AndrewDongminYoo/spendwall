@@ -15,10 +15,10 @@ export async function checkHostedReader(pool: Pick<Pool, 'connect'>) {
         OR EXISTS (SELECT FROM pg_database WHERE datname=current_database()
           AND pg_has_role(current_user,datdba,'USAGE'))
         OR EXISTS (SELECT FROM pg_namespace WHERE nspname IN
-          ('audit','approvals','approver','agent_auth','policy_replay','reconciliation','invoice_policy')
+          ('audit','approvals','approver','agent_auth','policy_replay','reconciliation','invoice_policy','orders')
           AND (pg_has_role(current_user,nspowner,'USAGE') OR has_schema_privilege(oid,'CREATE')))
         OR EXISTS (SELECT FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-          WHERE n.nspname IN ('audit','approvals','approver','agent_auth','policy_replay','reconciliation','invoice_policy')
+          WHERE n.nspname IN ('audit','approvals','approver','agent_auth','policy_replay','reconciliation','invoice_policy','orders')
           AND ((c.relkind IN ('r','p','v','m','f') AND
             (has_table_privilege(c.oid,'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
              OR has_any_column_privilege(c.oid,'INSERT,UPDATE,REFERENCES')
@@ -35,7 +35,7 @@ export async function checkHostedReader(pool: Pick<Pool, 'connect'>) {
                ))))
             OR (c.relkind='S' AND has_sequence_privilege(c.oid,'SELECT,USAGE,UPDATE'))))
         OR EXISTS (SELECT FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-          WHERE n.nspname IN ('audit','approvals','approver','agent_auth','policy_replay','reconciliation','invoice_policy')
+          WHERE n.nspname IN ('audit','approvals','approver','agent_auth','policy_replay','reconciliation','invoice_policy','orders')
           AND p.prosecdef AND has_function_privilege(p.oid,'EXECUTE'))
       ) AS restricted`);
     if (result.rows[0]?.restricted !== true) throw new Error();

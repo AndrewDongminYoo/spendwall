@@ -220,11 +220,12 @@ test('nonexistent capture and unknown tools deny without returning raw error det
     /private|unknown-capture|Bearer|https:/,
   );
   const calls = f.seen.length;
-  assert.equal(
-    (await f.resolver.resolve({ tool: 'create_order', args: {} }, trusted))
-      .decision,
-    'deny',
+  const unknown = await f.resolver.resolve(
+    { tool: 'get_order', args: { id: 'MISSING0000000000' } },
+    trusted,
   );
+  assert.equal(unknown.decision, 'deny');
+  assert.equal(unknown.reason, 'unsupported_tool');
   assert.equal(f.seen.length, calls);
 });
 

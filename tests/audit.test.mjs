@@ -187,6 +187,49 @@ test('nested payment containers retain safe fields while arbitrary keys and item
   assert.doesNotMatch(JSON.stringify(prepared), /private-nested|123456/);
 });
 
+test('order ids, sandbox approve links and Orders v2 statuses are retained only in their validated shapes', () => {
+  const link =
+    'https://www.sandbox.paypal.com/checkoutnow?token=5O190127TN364715T';
+  const input = {
+    order: {
+      order_id: '5O190127TN364715T',
+      approve_url: link,
+      status: 'CREATED',
+      token: 'private-order',
+    },
+    order_id: 'private-order',
+    approve_url: 'https://www.paypal.com/checkoutnow?token=private-order',
+    status: 'APPROVED',
+    links: [{ rel: 'approve', href: link }],
+  };
+  const expected = {
+    order: {
+      order_id: '5O190127TN364715T',
+      approve_url: link,
+      status: 'CREATED',
+    },
+    status: 'APPROVED',
+  };
+  const prepared = prepareEvent({ ...event, args: input, resolvedCtx: input });
+  assert.deepEqual(prepared.args_redacted, expected);
+  assert.deepEqual(prepared.resolved_ctx, expected);
+  assert.doesNotMatch(
+    JSON.stringify(prepared),
+    /private-order|www\.paypal\.com/,
+  );
+  for (const approve_url of [
+    `https://www.sandbox.paypal.com/${'a'.repeat(482)}`,
+    'https://www.sandbox.paypal.com/checkout now',
+    'https://www.sandbox.paypal.com/',
+    'http://www.sandbox.paypal.com/checkoutnow',
+  ])
+    assert.deepEqual(
+      prepareEvent({ ...event, args: { approve_url } }).args_redacted,
+      {},
+      approve_url,
+    );
+});
+
 test('database append failures expose no payload, credentials or database error details', async () => {
   const log = new AuditLog({
     async query() {
