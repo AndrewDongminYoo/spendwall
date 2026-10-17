@@ -823,6 +823,135 @@ test(
           'TRUNCATE orders.captures',
         ])
           await assert.rejects(f.app.query(statement), /permission denied/);
+        // The granted columns are guarded by row triggers: a settled row never
+        // changes, attempts never decrease, and an unknown row settles only
+        // under a new audit receipt. Each statement targets one existing row
+        // of the named status and must leave it untouched.
+        const keys = { orders: 'request_id', captures: 'execution_id' };
+        const sample = async (table, status) => {
+          const rows = (
+            await f.app.query(
+              `SELECT * FROM orders.${table} WHERE status=$1 ORDER BY created_at LIMIT 1`,
+              [status],
+            )
+          ).rows;
+          assert.equal(rows.length, 1, `${table} row with status ${status}`);
+          return rows[0];
+        };
+        const refused = async (client, table, status, set, message) => {
+          const row = await sample(table, status);
+          const where = `WHERE merchant_ref=$1 AND ${keys[table]}=$2::uuid`;
+          const params = [row.merchant_ref, row[keys[table]]];
+          await assert.rejects(
+            client.query(`UPDATE orders.${table} SET ${set} ${where}`, params),
+            message,
+          );
+          const after = (
+            await f.app.query(`SELECT * FROM orders.${table} ${where}`, params)
+          ).rows[0];
+          assert.deepEqual(after, row);
+        };
+        const link =
+          "'https://www.sandbox.paypal.com/checkoutnow?token=rewritten'";
+        await refused(
+          f.app,
+          'orders',
+          'created',
+          `order_id=repeat('X',17), approve_url=${link}`,
+          /Terminal order/,
+        );
+        await refused(
+          f.app,
+          'orders',
+          'created',
+          "status='failed', order_id=NULL, approve_url=NULL",
+          /Terminal order/,
+        );
+        await refused(
+          f.app,
+          'orders',
+          'failed',
+          'attempts=attempts+1',
+          /Terminal order/,
+        );
+        await refused(
+          f.app,
+          'orders',
+          'unknown',
+          'attempts=attempts-1',
+          /Order attempts never decrease/,
+        );
+        await refused(
+          f.app,
+          'orders',
+          'unknown',
+          `status='created', order_id=repeat('X',17), approve_url=${link}`,
+          /Order outcome requires a new audit receipt/,
+        );
+        await refused(
+          f.app,
+          'orders',
+          'unknown',
+          "audit_hash=repeat('0',64)",
+          /Invalid order transition/,
+        );
+        await refused(
+          f.app,
+          'captures',
+          'completed',
+          "capture_id=repeat('X',15)",
+          /Terminal capture/,
+        );
+        await refused(
+          f.app,
+          'captures',
+          'completed',
+          "status='failed', capture_id=NULL",
+          /Terminal capture/,
+        );
+        await refused(
+          f.app,
+          'captures',
+          'failed',
+          "status='completed', capture_id=repeat('X',15)",
+          /Terminal capture/,
+        );
+        await refused(
+          f.app,
+          'captures',
+          'unknown',
+          'attempts=attempts-1',
+          /Capture attempts never decrease/,
+        );
+        await refused(
+          f.app,
+          'captures',
+          'unknown',
+          "status='completed', capture_id=repeat('X',15)",
+          /Capture outcome requires a new audit receipt/,
+        );
+        await refused(
+          f.app,
+          'captures',
+          'unknown',
+          "audit_hash=repeat('0',64)",
+          /Invalid capture transition/,
+        );
+        // The binding is immutable for the owner too, not only by grant.
+        await refused(
+          f.owner,
+          'orders',
+          'created',
+          "amount_value='0.01'",
+          /Immutable order binding/,
+        );
+        await refused(
+          f.owner,
+          'captures',
+          'completed',
+          'order_request=gen_random_uuid()',
+          /Immutable capture binding/,
+        );
         const verification = await verifyAudit(f.app);
         assert.equal(verification.ok, true);
       },

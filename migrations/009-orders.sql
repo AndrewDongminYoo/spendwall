@@ -78,6 +78,66 @@ CREATE TABLE orders.captures (
 -- One live capture attempt per order; only a definitive failure frees the slot.
 CREATE UNIQUE INDEX orders_capture_once ON orders.captures (merchant_ref,order_request)
   WHERE status<>'failed';
+-- Updates are forward-only for every role, as approvals.guard_update does for
+-- approvals: the binding never changes, attempts never decrease, an unknown row
+-- may count attempts or settle once into a terminal status under a new audit
+-- receipt, and a settled row is never rewritten.
+CREATE FUNCTION orders.guard_order_update() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog, orders
+AS $$
+BEGIN
+  IF (NEW.merchant_ref,NEW.request_id,NEW.key_id,NEW.agent_id,NEW.binding_hash,NEW.args_hash,NEW.policy_version,NEW.amount_value,NEW.amount_currency)
+    IS DISTINCT FROM (OLD.merchant_ref,OLD.request_id,OLD.key_id,OLD.agent_id,OLD.binding_hash,OLD.args_hash,OLD.policy_version,OLD.amount_value,OLD.amount_currency) THEN
+    RAISE EXCEPTION 'Immutable order binding';
+  END IF;
+  IF NEW.attempts < OLD.attempts THEN
+    RAISE EXCEPTION 'Order attempts never decrease';
+  END IF;
+  IF OLD.status <> 'unknown' THEN
+    IF (NEW.status,NEW.attempts,NEW.order_id,NEW.approve_url,NEW.audit_id,NEW.audit_hash)
+      IS DISTINCT FROM (OLD.status,OLD.attempts,OLD.order_id,OLD.approve_url,OLD.audit_id,OLD.audit_hash) THEN
+      RAISE EXCEPTION 'Terminal order';
+    END IF;
+  ELSIF NEW.status = 'unknown' THEN
+    IF (NEW.order_id,NEW.approve_url,NEW.audit_id,NEW.audit_hash)
+      IS DISTINCT FROM (OLD.order_id,OLD.approve_url,OLD.audit_id,OLD.audit_hash) THEN
+      RAISE EXCEPTION 'Invalid order transition';
+    END IF;
+  ELSIF NEW.audit_id = OLD.audit_id THEN
+    RAISE EXCEPTION 'Order outcome requires a new audit receipt';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE FUNCTION orders.guard_capture_update() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog, orders
+AS $$
+BEGIN
+  IF (NEW.merchant_ref,NEW.execution_id,NEW.order_request,NEW.key_id,NEW.agent_id,NEW.binding_hash,NEW.policy_version)
+    IS DISTINCT FROM (OLD.merchant_ref,OLD.execution_id,OLD.order_request,OLD.key_id,OLD.agent_id,OLD.binding_hash,OLD.policy_version) THEN
+    RAISE EXCEPTION 'Immutable capture binding';
+  END IF;
+  IF NEW.attempts < OLD.attempts THEN
+    RAISE EXCEPTION 'Capture attempts never decrease';
+  END IF;
+  IF OLD.status <> 'unknown' THEN
+    IF (NEW.status,NEW.attempts,NEW.capture_id,NEW.audit_id,NEW.audit_hash)
+      IS DISTINCT FROM (OLD.status,OLD.attempts,OLD.capture_id,OLD.audit_id,OLD.audit_hash) THEN
+      RAISE EXCEPTION 'Terminal capture';
+    END IF;
+  ELSIF NEW.status = 'unknown' THEN
+    IF (NEW.capture_id,NEW.audit_id,NEW.audit_hash)
+      IS DISTINCT FROM (OLD.capture_id,OLD.audit_id,OLD.audit_hash) THEN
+      RAISE EXCEPTION 'Invalid capture transition';
+    END IF;
+  ELSIF NEW.audit_id = OLD.audit_id THEN
+    RAISE EXCEPTION 'Capture outcome requires a new audit receipt';
+  END IF;
+  RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION orders.guard_order_update() FROM PUBLIC;
+REVOKE ALL ON FUNCTION orders.guard_capture_update() FROM PUBLIC;
+CREATE TRIGGER forward_only_order BEFORE UPDATE ON orders.orders FOR EACH ROW EXECUTE FUNCTION orders.guard_order_update();
+CREATE TRIGGER forward_only_capture BEFORE UPDATE ON orders.captures FOR EACH ROW EXECUTE FUNCTION orders.guard_capture_update();
 REVOKE ALL ON ALL TABLES IN SCHEMA orders FROM PUBLIC;
 DO $$
 DECLARE app_group text := audit.app_role();
