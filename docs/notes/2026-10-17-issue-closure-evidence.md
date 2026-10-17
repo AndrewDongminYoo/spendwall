@@ -10,21 +10,14 @@ The check marks in roadmap issue #29 are not evidence; it marks several issues d
 
 ### #8 velocity aggregation
 
-- Window boundary under a fixed clock: `tests/velocity.test.mjs:13` fixes `now`, and `tests/velocity.test.mjs:65` asserts that each window excludes its exact lower boundary; `tests/velocity-postgres.test.mjs:494` repeats the boundary against stored timestamps with an injected clock.
+- Window boundary under a fixed clock: `tests/velocity.test.mjs:13` fixes `now`, and `tests/velocity.test.mjs:65` asserts that each window excludes its exact lower boundary.
+  Against PostgreSQL, `tests/velocity-postgres.test.mjs:494` covers a different clock case: an injected clock earlier than a stored timestamp denies that future history.
 - Two concurrent calls cannot exceed the limit: `tests/velocity-postgres.test.mjs:207` (same agent, one `allow` and one `deny`) and `tests/velocity-postgres.test.mjs:230` (two agents at one customer limit).
 
 ### #9 context resolver
 
 - Exact `amount.usd` for partial and full refunds: `tests/context-resolver.test.mjs:176` asserts 25 for a partial and 80 for the remaining full amount, with the original, prior and remaining minor units.
 - A nonexistent capture denies: `tests/context-resolver.test.mjs:213`.
-
-### #10 agent authentication, tool filtering and token manager
-
-- A key sees only its own tools: `tests/refund-proxy.test.mjs:463` (listed and callable tools follow the grant) and `tests/refund-proxy.test.mjs:590` (two keys list different tools).
-- The PayPal token never reaches downstream output: responses at `tests/refund-proxy.test.mjs:347`, persisted audit fields at `tests/audit.test.mjs:34`, CLI and startup output at `tests/refund-proxy.test.mjs:358`, `tests/refund-proxy.test.mjs:386` and `tests/paypal-sandbox.test.mjs:73`.
-  The proxy entrypoint logs only its URL, transport and tool count (`apps/firewall/src/index.ts:8`).
-- Short `expires_in` renewal and merged concurrent refresh: `tests/refund-execution.test.mjs:183`.
-- A refund's 401 retry keeps the same `PayPal-Request-Id` and body: `tests/refund-execution.test.mjs:270`.
 
 ### #11 append-only audit log
 
@@ -80,6 +73,10 @@ Limit: the UI conditions are read from source; no component test renders them.
 
 ## Left open
 
+- #10 agent authentication, tool filtering and token manager: three of four criteria are met.
+  A key sees only its own tools (`tests/refund-proxy.test.mjs:463`, `tests/refund-proxy.test.mjs:590`), a short `expires_in` renews early and concurrent refreshes merge (`tests/refund-execution.test.mjs:183`), and a refund's 401 retry keeps its `PayPal-Request-Id` and body (`tests/refund-execution.test.mjs:270`).
+  The token criterion is met only for the literal token: responses (`tests/refund-proxy.test.mjs:347`), persisted audit fields (`tests/audit.test.mjs:34`), CLI and startup output (`tests/refund-proxy.test.mjs:358`, `tests/refund-proxy.test.mjs:386`, `tests/paypal-sandbox.test.mjs:73`) and the entrypoint log (`apps/firewall/src/index.ts:8`).
+  `isSensitive` searches the serialized result for the raw secret (`apps/firewall/src/token.ts:43`), so an upstream result that carries the token in escaped or encoded form passes; #48 states that escaped credential output is outside its verified guarantees, and draft #39 holds the unresolved sanitization attempt.
 - #15 Flutter approver: push, biometric approval and a sandbox refund on a physical device remain pending (`README.md:96`).
   The second criterion, disabled buttons for expired or processed items, was not assessed in this note.
 - #18 Studio audit queries: the server chooses one of three deterministic projections (`docs/dashboard.md:83`) and a repeated synthetic run replaces one widget (`tests/dashboard-runner.test.mjs:24`).
