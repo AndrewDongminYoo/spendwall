@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { OrderOutcomeUnknownError } from '../apps/firewall/src/orders/index.ts';
 import { prepareEvent } from '../apps/firewall/src/audit/event.ts';
-import { verifyAudit } from '../apps/firewall/src/audit/index.ts';
+import { AuditLog, verifyAudit } from '../apps/firewall/src/audit/index.ts';
 import { checkHostedReader } from '../apps/firewall/src/dashboard/hosted-reader.ts';
 import { checkWebhookReceiver } from '../apps/firewall/src/webhooks/reconciliation.ts';
 import { loadPolicy } from '../packages/policy/src/index.ts';
@@ -20,9 +20,10 @@ import {
 } from './helpers/order-fixture.mjs';
 
 const url = process.env.AUDIT_TEST_DATABASE_URL;
-const migration = await readFile(
-  new URL('../migrations/009-orders.sql', import.meta.url),
-  'utf8',
+const migrations = await Promise.all(
+  ['009-orders.sql', '010-orders-insert-guard.sql'].map((file) =>
+    readFile(new URL(`../migrations/${file}`, import.meta.url), 'utf8'),
+  ),
 );
 const lockSql =
   "SELECT pg_advisory_xact_lock(hashtextextended('spendwall/orders/v1',0))";
@@ -53,7 +54,7 @@ test(
       await f.close();
     });
     await f.owner.query('DROP SCHEMA IF EXISTS orders CASCADE');
-    await f.owner.query(migration);
+    for (const migration of migrations) await f.owner.query(migration);
     const counts = async () =>
       (
         await f.app.query(
@@ -1173,6 +1174,169 @@ test(
         );
         const verification = await verifyAudit(f.app);
         assert.equal(verification.ok, true);
+      },
+    );
+    await t.test(
+      'application inserts only reserve unknown rows under a fresh allow receipt',
+      async () => {
+        // A fresh order keeps its capture slot free, so only the insert guard
+        // can refuse a capture row for it.
+        const created = await service.create(
+          policy,
+          createInput(orderArgs(7)),
+          trusted(),
+        );
+        assert.equal(created.decision, 'allow');
+        const order = (
+          await f.app.query('SELECT * FROM orders.orders WHERE order_id=$1', [
+            created.result.id,
+          ])
+        ).rows[0];
+        const templates = {
+          orders: () => ({
+            merchant_ref: order.merchant_ref,
+            request_id: randomUUID(),
+            key_id: order.key_id,
+            agent_id: order.agent_id,
+            binding_hash: order.binding_hash,
+            args_hash: order.args_hash,
+            policy_version: order.policy_version,
+            amount_value: order.amount_value,
+            amount_currency: 'USD',
+            status: 'unknown',
+            attempts: 1,
+          }),
+          captures: () => ({
+            merchant_ref: order.merchant_ref,
+            execution_id: randomUUID(),
+            order_request: order.request_id,
+            key_id: order.key_id,
+            agent_id: order.agent_id,
+            binding_hash: order.binding_hash,
+            policy_version: order.policy_version,
+            status: 'unknown',
+            attempts: 1,
+          }),
+        };
+        const tools = { orders: 'create_order', captures: 'pay_order' };
+        // Each probe appends its receipt and inserts the row in one
+        // application transaction, then rolls both back.
+        const probe = async (table, overrides = {}, event = {}) => {
+          const client = await f.app.connect();
+          try {
+            await client.query('BEGIN');
+            const receipt = await new AuditLog(client).append({
+              agentId: order.agent_id,
+              tool: tools[table],
+              args: {},
+              resolvedCtx: {},
+              decision: 'allow',
+              matchedRules: [],
+              policyVersion: order.policy_version,
+              eventKind: 'tool_call',
+              latencyMs: 0,
+              ...event,
+            });
+            const row = {
+              ...templates[table](),
+              audit_id: receipt.id,
+              audit_hash: receipt.row_hash,
+              ...overrides,
+            };
+            const columns = Object.keys(row);
+            return (
+              await client.query(
+                `INSERT INTO orders.${table}(${columns.join(',')})
+                VALUES(${columns.map((_, i) => `$${i + 1}`).join(',')})
+                RETURNING status, attempts, created_at`,
+                Object.values(row),
+              )
+            ).rows[0];
+          } finally {
+            await client.query('ROLLBACK');
+            client.release();
+          }
+        };
+        const before = await counts();
+        // The valid reservation shape inserts, and the server clock replaces a
+        // caller-supplied creation time.
+        for (const table of ['orders', 'captures']) {
+          const row = await probe(table, {
+            created_at: '2000-01-01T00:00:00Z',
+          });
+          assert.equal(row.status, 'unknown');
+          assert.equal(row.attempts, 1);
+          assert.ok(
+            Math.abs(Date.now() - row.created_at.getTime()) < 60_000,
+            `${table} created_at must be server-generated`,
+          );
+        }
+        const link = 'https://www.sandbox.paypal.com/checkoutnow?token=forged';
+        for (const overrides of [
+          { status: 'created', order_id: 'X'.repeat(17), approve_url: link },
+          { status: 'failed' },
+          { order_id: 'X'.repeat(17) },
+          { approve_url: link },
+          { attempts: 0 },
+          { attempts: 2 },
+        ])
+          await assert.rejects(
+            probe('orders', overrides),
+            /Order reservation must start unknown/,
+            JSON.stringify(overrides),
+          );
+        for (const overrides of [
+          { status: 'completed', capture_id: 'X'.repeat(15) },
+          { status: 'failed' },
+          { capture_id: 'X'.repeat(15) },
+          { attempts: 0 },
+          { attempts: 2 },
+        ])
+          await assert.rejects(
+            probe('captures', overrides),
+            /Capture reservation must start unknown/,
+            JSON.stringify(overrides),
+          );
+        // A receipt freed by settlement (the row's receipt moved to the outcome
+        // event) is not UNIQUE-blocked, so only its age refuses the copy.
+        const stale = async (table) => {
+          const rows = (
+            await f.app.query(
+              `SELECT id::text AS audit_id, row_hash AS audit_hash FROM audit.audit_events e
+              WHERE tool=$1 AND decision='allow'
+                AND NOT EXISTS (SELECT FROM orders.${table} r WHERE r.audit_id=e.id)
+              ORDER BY id DESC LIMIT 1`,
+              [tools[table]],
+            )
+          ).rows;
+          assert.equal(rows.length, 1, `a freed ${tools[table]} receipt`);
+          return rows[0];
+        };
+        for (const [table, message] of [
+          ['orders', /Order reservation requires a fresh audit receipt/],
+          ['captures', /Capture reservation requires a fresh audit receipt/],
+        ]) {
+          const other = table === 'orders' ? 'pay_order' : 'create_order';
+          await assert.rejects(probe(table, await stale(table)), message);
+          await assert.rejects(probe(table, {}, { tool: other }), message);
+          await assert.rejects(probe(table, {}, { decision: 'deny' }), message);
+          await assert.rejects(
+            probe(table, { audit_hash: '0'.repeat(64) }),
+            message,
+          );
+        }
+        assert.deepEqual(await counts(), before);
+        // No refused forgery occupied the slot: the legitimate capture proceeds.
+        x.provider.approve(created.result.id);
+        x.resolver.invalidateOrder(created.result.id);
+        const capture = captureInput(created.result.id);
+        const captured = await service.capture(policy, capture, trusted());
+        assert.equal(captured.decision, 'allow', JSON.stringify(captured));
+        assert.equal(
+          (await captureRow(capture.executionId)).status,
+          'completed',
+        );
+        assert.equal((await verifyAudit(f.app)).ok, true);
       },
     );
     await t.test(
