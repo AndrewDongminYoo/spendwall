@@ -232,7 +232,8 @@ test('human confirmation shows stored capture and amount before deciding', async
           assert.ok(prompt.includes(id));
           assert.match(prompt, /Capture: DEMO_CAPTURE_00002/);
           assert.match(prompt, /Amount: USD 60\.00/);
-          assert.doesNotMatch(prompt, /0\.01|MODEL_SUPPLIED/);
+          // Anchored to the currency: the expiry timestamp can contain "0.01" (e.g. :00.016Z).
+          assert.doesNotMatch(prompt, /USD 0\.01|MODEL_SUPPLIED/);
           return approved;
         });
         assert.equal(asked, 1);
