@@ -451,11 +451,24 @@ test(
         const rejected = await service.capture(policy, first, trusted());
         assert.equal(rejected.decision, 'deny');
         assert.equal(rejected.reason, 'provider_rejected');
+        assert.equal(rejected.replayed, false);
         assert.equal((await captureRow(first.executionId)).status, 'failed');
-        const rejectedAgain = await service.capture(policy, first, trusted());
-        assert.equal(rejectedAgain.reason, 'provider_rejected');
-        assert.deepEqual(rejectedAgain.receipt, rejected.receipt);
         const writesAfterRejection = x.provider.writes.length;
+        const rejectedAgain = await service.capture(policy, first, trusted());
+        assert.equal(rejectedAgain.decision, 'deny');
+        assert.equal(rejectedAgain.reason, 'provider_rejected');
+        assert.equal(
+          rejectedAgain.replayed,
+          true,
+          'a stored rejection is a replay, not a new provider rejection',
+        );
+        assert.deepEqual(rejectedAgain.receipt, rejected.receipt);
+        assert.deepEqual(rejectedAgain.matchedRules, rejected.matchedRules);
+        assert.equal(
+          x.provider.writes.length,
+          writesAfterRejection,
+          'a replayed rejection does not reach the provider',
+        );
         const rebound = loadPolicy(
           (
             await readFile(
@@ -488,10 +501,78 @@ test(
           Response.json({ name: 'INVALID_REQUEST' }, { status: 400 });
         const refused = await service.create(policy, creation, trusted());
         assert.equal(refused.reason, 'provider_rejected');
+        assert.equal(refused.replayed, false);
         assert.equal((await ledger(creation.requestId)).status, 'failed');
+        const postsAfterRefusal = x.posts().length;
         const refusedAgain = await service.create(policy, creation, trusted());
+        assert.equal(refusedAgain.decision, 'deny');
         assert.equal(refusedAgain.reason, 'provider_rejected');
+        assert.equal(refusedAgain.replayed, true);
         assert.deepEqual(refusedAgain.receipt, refused.receipt);
+        assert.deepEqual(refusedAgain.matchedRules, refused.matchedRules);
+        const rebinding = await service.create(
+          policy,
+          { ...creation, args: orderArgs(6) },
+          trusted(),
+        );
+        assert.equal(
+          rebinding.reason,
+          'request_conflict',
+          'a rejected request ID is bound to its inputs like a created one',
+        );
+        assert.equal(rebinding.receipt, undefined);
+        assert.equal((await ledger(creation.requestId)).status, 'failed');
+        assert.equal(x.posts().length, postsAfterRefusal);
+      },
+    );
+    await t.test(
+      'an execution ID reused for another approved order is refused as a conflict',
+      async () => {
+        const orders = [];
+        for (const amount of [11, 12]) {
+          const created = await service.create(
+            policy,
+            createInput(orderArgs(amount)),
+            trusted(),
+          );
+          assert.equal(created.decision, 'allow');
+          x.provider.approve(created.result.id);
+          x.resolver.invalidateOrder(created.result.id);
+          orders.push(created.result.id);
+        }
+        const first = captureInput(orders[0]);
+        const completed = await service.capture(policy, first, trusted());
+        assert.equal(completed.decision, 'allow');
+        const writes = x.provider.writes.length;
+        const before = await counts();
+        const reused = await service.capture(
+          policy,
+          { ...first, args: { id: orders[1] } },
+          trusted(),
+        );
+        assert.equal(reused.decision, 'deny');
+        assert.equal(
+          reused.reason,
+          'request_conflict',
+          'the primary key on the execution ID must not surface as a storage outage',
+        );
+        assert.equal(reused.receipt, undefined);
+        assert.equal(x.provider.writes.length, writes);
+        assert.deepEqual(await counts(), before);
+        assert.equal((await captureRow(first.executionId)).status, 'completed');
+        const again = await service.capture(policy, first, trusted());
+        assert.equal(again.decision, 'allow');
+        assert.equal(again.replayed, true);
+        assert.deepEqual(again.receipt, completed.receipt);
+        assert.deepEqual(again.matchedRules, completed.matchedRules);
+        assert.equal(again.result.id, completed.result.id);
+        assert.equal(x.provider.writes.length, writes);
+        const fresh = await service.capture(
+          policy,
+          captureInput(orders[1]),
+          trusted(),
+        );
+        assert.equal(fresh.decision, 'allow');
       },
     );
     await t.test(

@@ -275,6 +275,53 @@ export class OrderService {
     });
   }
 
+  // A provider rejection is not a policy match: its outcome event records no
+  // matched rules, so the first attempt and every replay of it return none.
+  private rejected<T>(
+    policy: LoadedPolicy,
+    receipt: AuditReceipt,
+    replayed: boolean,
+  ): OrderResult<T> {
+    return freeze({
+      decision: 'deny',
+      matchedRules: [],
+      policyVersion: policy.policyVersion,
+      replayed,
+      reason: 'provider_rejected',
+      receipt,
+    });
+  }
+
+  // Every path that answers a bound identifier from its ledger row converges
+  // here. A changed binding is another request and is refused before the row
+  // is read. A settled row answers as a replay, without a provider call, with
+  // the stored receipt and the matched rules of the first attempt. An unknown
+  // row returns nothing, so the caller resends under the same identifier.
+  private replay<T>(
+    policy: LoadedPolicy,
+    row: Pick<
+      OrderRow | CaptureRow,
+      'status' | 'binding_hash' | 'audit_id' | 'audit_hash'
+    >,
+    binding: string,
+    matchedRules: readonly string[],
+    result: () => T,
+  ): OrderResult<T> | undefined {
+    if (row.binding_hash !== binding)
+      return this.deny(policy, 'request_conflict');
+    if (row.status === 'unknown') return undefined;
+    const receipt = { id: row.audit_id, row_hash: row.audit_hash };
+    if (row.status === 'failed') return this.rejected(policy, receipt, true);
+    return freeze({
+      decision: 'allow',
+      matchedRules,
+      policyVersion: policy.policyVersion,
+      replayed: true,
+      receipt,
+      result: result(),
+    });
+  }
+
   private parseEnvelope(
     input: unknown,
     idField: 'requestId' | 'executionId',
@@ -443,6 +490,7 @@ export class OrderService {
           body: string;
           retry: boolean;
           matchedRules: readonly string[];
+          binding: string;
         }
       | undefined;
     try {
@@ -486,34 +534,26 @@ export class OrderService {
       if (previous) {
         if (previous.key_id !== this.ref('key', 'continuity'))
           throw new Error();
-        if (
-          previous.binding_hash !== binding ||
-          previous.policy_version !== policy.policyVersion
-        )
+        if (previous.policy_version !== policy.policyVersion)
           return this.deny(policy, 'request_conflict');
-        const receipt = {
-          id: previous.audit_id,
-          row_hash: previous.audit_hash,
-        };
-        if (previous.status === 'created') {
-          await client.query('COMMIT');
-          committed = true;
-          return freeze({
-            decision: 'allow',
-            matchedRules: decision.matchedRules,
-            policyVersion: policy.policyVersion,
-            replayed: true,
-            receipt,
-            result: freeze({
+        const settled = this.replay(
+          policy,
+          previous,
+          binding,
+          decision.matchedRules,
+          () =>
+            freeze({
               id: previous.order_id!,
               status: 'CREATED' as const,
               amount,
               approveUrl: previous.approve_url!,
             }),
-          });
+        );
+        if (settled) {
+          await client.query('COMMIT');
+          committed = true;
+          return settled;
         }
-        if (previous.status === 'failed')
-          return this.deny(policy, 'provider_rejected', undefined, receipt);
         if (previous.age_ms < 0 || previous.age_ms >= replayMs)
           throw new OrderOutcomeUnknownError(
             'Order creation replay expired; reconciliation is required.',
@@ -534,6 +574,7 @@ export class OrderService {
           body: this.body(context, requestId),
           retry: true,
           matchedRules: decision.matchedRules,
+          binding,
         };
       } else {
         const receipt = await new AuditLog(client).append(
@@ -578,6 +619,7 @@ export class OrderService {
           body,
           retry: false,
           matchedRules: decision.matchedRules,
+          binding,
         };
       }
     } catch (error) {
@@ -599,6 +641,7 @@ export class OrderService {
       body: string;
       retry: boolean;
       matchedRules: readonly string[];
+      binding: string;
     },
   ): Promise<OrderResult<CreatedOrder>> {
     const merchantRef = this.ref(
@@ -648,10 +691,15 @@ export class OrderService {
       const { rows } = await client.query<
         Pick<
           OrderRow,
-          'status' | 'order_id' | 'audit_id' | 'audit_hash' | 'attempts'
+          | 'status'
+          | 'order_id'
+          | 'binding_hash'
+          | 'audit_id'
+          | 'audit_hash'
+          | 'attempts'
         >
       >(
-        `SELECT status, order_id, audit_id::text, audit_hash, attempts::int FROM orders.orders
+        `SELECT status, order_id, binding_hash, audit_id::text, audit_hash, attempts::int FROM orders.orders
         WHERE merchant_ref=$1 AND request_id=$2::uuid`,
         [merchantRef, requestId],
       );
@@ -659,32 +707,27 @@ export class OrderService {
       if (!row) throw new Error();
       if (row.status !== 'unknown') {
         // An overlapping call with the same request UUID settled first and the
-        // provider replayed its idempotent response; reuse the settled receipt.
-        const settled = { id: row.audit_id, row_hash: row.audit_hash };
-        if (
-          row.status === 'created' &&
-          created &&
-          row.order_id === created.id
-        ) {
-          await client.query('COMMIT');
-          committed = true;
-          return freeze({
-            decision: 'allow',
-            matchedRules: pending.matchedRules,
-            policyVersion: policy.policyVersion,
-            replayed: true,
-            receipt: settled,
-            result: created,
-          });
-        }
-        if (row.status === 'failed' && definitiveFailure) {
-          await client.query('COMMIT');
-          committed = true;
-          return this.deny(policy, 'provider_rejected', undefined, settled);
-        }
-        throw unknown(
-          'Order ledger and provider response disagree; reconciliation is required.',
+        // provider replayed its idempotent response; the settled row answers
+        // this call as it answers any replay.
+        const agreed =
+          row.status === 'created'
+            ? created !== undefined && row.order_id === created.id
+            : definitiveFailure;
+        if (!agreed)
+          throw unknown(
+            'Order ledger and provider response disagree; reconciliation is required.',
+          );
+        const settled = this.replay(
+          policy,
+          row,
+          pending.binding,
+          pending.matchedRules,
+          () => created!,
         );
+        if (!settled) throw new Error();
+        await client.query('COMMIT');
+        committed = true;
+        return settled;
       }
       // A rejection of a PayPal-Request-Id that another attempt also sent, as a
       // retry or an overlapping first attempt, says nothing about that attempt.
@@ -747,8 +790,7 @@ export class OrderService {
     } finally {
       await this.finish(client, committed);
     }
-    if (definitiveFailure)
-      return this.deny(policy, 'provider_rejected', undefined, receipt);
+    if (definitiveFailure) return this.rejected(policy, receipt, pending.retry);
     return freeze({
       decision: 'allow',
       matchedRules: pending.matchedRules,
@@ -781,6 +823,7 @@ export class OrderService {
           amount: Money;
           retry: boolean;
           matchedRules: readonly string[];
+          binding: string;
         }
       | undefined;
     try {
@@ -841,57 +884,39 @@ export class OrderService {
         agent: identifier(context.agent.id),
         policyVersion: policy.policyVersion,
       });
-      const { rows: captures } = await client.query<CaptureRow>(
+      // An execution ID is bound to one order, so its row is read on its own:
+      // reused under another order, the binding differs and the call is
+      // refused as a conflict instead of failing on the primary key below.
+      const { rows: own } = await client.query<CaptureRow>(
         `SELECT execution_id::text, key_id, binding_hash, status, capture_id, audit_id::text, audit_hash,
           (extract(epoch FROM clock_timestamp()-created_at)*1000)::float8 AS age_ms
-        FROM orders.captures WHERE merchant_ref=$1 AND order_request=$2::uuid`,
-        [merchantRef, order.request_id],
+        FROM orders.captures WHERE merchant_ref=$1 AND execution_id=$2::uuid`,
+        [merchantRef, executionId],
       );
-      if (captures.some((row) => row.key_id !== this.ref('key', 'continuity')))
+      const previous = own[0];
+      if (previous && previous.key_id !== this.ref('key', 'continuity'))
         throw new Error();
-      // A definitive failure frees the order; the same execution ID stays
-      // rejected and replays the receipt of the recorded rejection, but only
-      // for the inputs it was bound to, as the completed and unknown rows below.
-      const rejected = captures.find(
-        (row) => row.execution_id === executionId && row.status === 'failed',
-      );
-      if (rejected) {
-        if (rejected.binding_hash !== binding)
-          return this.deny(policy, 'request_conflict');
-        return this.deny(policy, 'provider_rejected', decision, {
-          id: rejected.audit_id,
-          row_hash: rejected.audit_hash,
-        });
+      const settled =
+        previous &&
+        this.replay(policy, previous, binding, decision.matchedRules, () =>
+          freeze({
+            executionId,
+            orderId,
+            id: previous.capture_id!,
+            status: 'COMPLETED' as const,
+            amount,
+          }),
+        );
+      if (settled) {
+        await client.query('COMMIT');
+        committed = true;
+        return settled;
       }
-      const existing = captures.find((row) => row.status !== 'failed');
-      if (existing && existing.execution_id !== executionId)
-        return await denyWith('order_capture_reserved');
-      if (!existing && facts.status !== 'APPROVED')
-        return await denyWith('order_not_approved');
-      if (existing) {
-        if (existing.binding_hash !== binding)
-          return this.deny(policy, 'request_conflict');
-        const receipt = {
-          id: existing.audit_id,
-          row_hash: existing.audit_hash,
-        };
-        if (existing.status === 'completed') {
-          await client.query('COMMIT');
-          committed = true;
-          return freeze({
-            ...decision,
-            replayed: true,
-            receipt,
-            result: freeze({
-              executionId,
-              orderId,
-              id: existing.capture_id!,
-              status: 'COMPLETED' as const,
-              amount,
-            }),
-          });
-        }
-        if (existing.age_ms < 0 || existing.age_ms >= replayMs)
+      if (previous) {
+        // A bound unknown row is this order's one live capture attempt (the
+        // slot index admits one row per order that is not failed), so it is
+        // resent under the same identifier.
+        if (previous.age_ms < 0 || previous.age_ms >= replayMs)
           throw new OrderOutcomeUnknownError(
             'Capture replay expired; reconciliation is required.',
             executionId,
@@ -909,8 +934,21 @@ export class OrderService {
           amount,
           retry: true,
           matchedRules: decision.matchedRules,
+          binding,
         };
       } else {
+        // A definitive failure frees the order; a row that is not failed
+        // reserves it for its own execution ID.
+        const { rows: live } = await client.query<Pick<CaptureRow, 'key_id'>>(
+          `SELECT key_id FROM orders.captures
+          WHERE merchant_ref=$1 AND order_request=$2::uuid AND status<>'failed'`,
+          [merchantRef, order.request_id],
+        );
+        if (live.some((row) => row.key_id !== this.ref('key', 'continuity')))
+          throw new Error();
+        if (live.length > 0) return await denyWith('order_capture_reserved');
+        if (facts.status !== 'APPROVED')
+          return await denyWith('order_not_approved');
         const receipt = await audit.append(
           this.event(context, resolution.resolvedCtx, decision, policy),
         );
@@ -940,6 +978,7 @@ export class OrderService {
           amount,
           retry: false,
           matchedRules: decision.matchedRules,
+          binding,
         };
       }
     } catch (error) {
@@ -961,6 +1000,7 @@ export class OrderService {
       amount: Money;
       retry: boolean;
       matchedRules: readonly string[];
+      binding: string;
     },
   ): Promise<OrderResult<CompletedCapture>> {
     const merchantRef = this.ref(
@@ -1015,43 +1055,43 @@ export class OrderService {
       const { rows } = await client.query<
         Pick<
           CaptureRow,
-          'status' | 'capture_id' | 'audit_id' | 'audit_hash' | 'attempts'
+          | 'status'
+          | 'capture_id'
+          | 'binding_hash'
+          | 'audit_id'
+          | 'audit_hash'
+          | 'attempts'
         >
       >(
-        `SELECT status, capture_id, audit_id::text, audit_hash, attempts::int FROM orders.captures
+        `SELECT status, capture_id, binding_hash, audit_id::text, audit_hash, attempts::int FROM orders.captures
         WHERE merchant_ref=$1 AND execution_id=$2::uuid`,
         [merchantRef, executionId],
       );
       const row = rows[0];
       if (!row) throw new Error();
       if (row.status !== 'unknown') {
-        // An overlapping call with the same execution UUID settled first and the
-        // provider replayed its idempotent response; reuse the settled receipt.
-        const settled = { id: row.audit_id, row_hash: row.audit_hash };
-        if (
-          row.status === 'completed' &&
-          completed &&
-          row.capture_id === completed.id
-        ) {
-          await client.query('COMMIT');
-          committed = true;
-          return freeze({
-            decision: 'allow',
-            matchedRules: pending.matchedRules,
-            policyVersion: policy.policyVersion,
-            replayed: true,
-            receipt: settled,
-            result: completed,
-          });
-        }
-        if (row.status === 'failed' && definitiveFailure) {
-          await client.query('COMMIT');
-          committed = true;
-          return this.deny(policy, 'provider_rejected', undefined, settled);
-        }
-        throw unknown(
-          'Capture ledger and provider response disagree; reconciliation is required.',
+        // An overlapping call with the same execution UUID settled first and
+        // the provider replayed its idempotent response; the settled row
+        // answers this call as it answers any replay.
+        const agreed =
+          row.status === 'completed'
+            ? completed !== undefined && row.capture_id === completed.id
+            : definitiveFailure;
+        if (!agreed)
+          throw unknown(
+            'Capture ledger and provider response disagree; reconciliation is required.',
+          );
+        const settled = this.replay(
+          policy,
+          row,
+          pending.binding,
+          pending.matchedRules,
+          () => completed!,
         );
+        if (!settled) throw new Error();
+        await client.query('COMMIT');
+        committed = true;
+        return settled;
       }
       // A rejection of a PayPal-Request-Id that another attempt also sent, as a
       // retry or an overlapping first attempt, says nothing about that attempt.
@@ -1109,8 +1149,7 @@ export class OrderService {
     } finally {
       await this.finish(client, committed);
     }
-    if (definitiveFailure)
-      return this.deny(policy, 'provider_rejected', undefined, receipt);
+    if (definitiveFailure) return this.rejected(policy, receipt, pending.retry);
     return freeze({
       decision: 'allow',
       matchedRules: pending.matchedRules,
