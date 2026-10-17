@@ -84,10 +84,13 @@ test(
         )
       ).rows[0];
     let failNext;
+    let failReads;
     let beforePost;
     let interceptPost;
     const x = fixture({
       fetchImpl: async (input, init, real) => {
+        if (failReads && (init?.method ?? 'GET') === 'GET')
+          throw new Error('Injected provider read failure');
         if (interceptPost && init?.method === 'POST')
           return interceptPost(input, init, real);
         if (beforePost && init?.method === 'POST') await beforePost();
@@ -523,6 +526,120 @@ test(
         assert.equal(rebinding.receipt, undefined);
         assert.equal((await ledger(creation.requestId)).status, 'failed');
         assert.equal(x.posts().length, postsAfterRefusal);
+      },
+    );
+    await t.test(
+      'settled captures replay from the ledger while provider reads fail',
+      async () => {
+        const reads = () =>
+          x.seen.filter((entry) => entry.method === 'GET').length;
+        const settle = async (amount, response) => {
+          const created = await service.create(
+            policy,
+            createInput(orderArgs(amount)),
+            trusted(),
+          );
+          assert.equal(created.decision, 'allow');
+          x.provider.approve(created.result.id);
+          x.resolver.invalidateOrder(created.result.id);
+          const input = captureInput(created.result.id);
+          if (response) failNext = response;
+          return {
+            input,
+            result: await service.capture(policy, input, trusted()),
+          };
+        };
+        const completed = await settle(7);
+        assert.equal(completed.result.decision, 'allow');
+        const rejected = await settle(8, () =>
+          Response.json({ name: 'UNPROCESSABLE_ENTITY' }, { status: 422 }),
+        );
+        assert.equal(rejected.result.reason, 'provider_rejected');
+        const unapproved = await service.create(
+          policy,
+          createInput(orderArgs(9)),
+          trusted(),
+        );
+        assert.equal(unapproved.decision, 'allow');
+        for (const { input } of [completed, rejected])
+          x.resolver.invalidateOrder(input.args.id);
+        x.resolver.invalidateOrder(unapproved.result.id);
+        const writes = x.provider.writes.length;
+        const before = await counts();
+        const readsBefore = reads();
+        failReads = true;
+        try {
+          const replay = await service.capture(
+            policy,
+            completed.input,
+            trusted(),
+          );
+          assert.equal(replay.decision, 'allow', JSON.stringify(replay));
+          assert.equal(replay.replayed, true);
+          assert.deepEqual(replay.receipt, completed.result.receipt);
+          assert.deepEqual(replay.matchedRules, completed.result.matchedRules);
+          assert.deepEqual(replay.result, completed.result.result);
+          const replayedRejection = await service.capture(
+            policy,
+            rejected.input,
+            trusted(),
+          );
+          assert.equal(replayedRejection.reason, 'provider_rejected');
+          assert.equal(replayedRejection.replayed, true);
+          assert.deepEqual(replayedRejection.receipt, rejected.result.receipt);
+          const rebound = loadPolicy(
+            (
+              await readFile(
+                new URL(
+                  '../apps/agent-demo/shopping-policy.yaml',
+                  import.meta.url,
+                ),
+                'utf8',
+              )
+            ).replace('amount.usd <= 50', 'amount.usd <= 60'),
+          );
+          const conflict = await service.capture(
+            rebound,
+            completed.input,
+            trusted(),
+          );
+          assert.equal(conflict.reason, 'request_conflict');
+          assert.equal(conflict.receipt, undefined);
+          const reused = await service.capture(
+            policy,
+            { ...completed.input, args: { id: unapproved.result.id } },
+            trusted(),
+          );
+          assert.equal(reused.reason, 'request_conflict');
+          assert.equal(
+            reads(),
+            readsBefore,
+            'a bound execution ID is answered without a provider read',
+          );
+          // A first attempt still needs the provider's facts.
+          const fresh = await service.capture(
+            policy,
+            captureInput(unapproved.result.id),
+            trusted(),
+          );
+          assert.equal(fresh.reason, 'unresolved_context');
+          assert.equal(fresh.receipt, undefined);
+        } finally {
+          failReads = false;
+        }
+        assert.ok(reads() > readsBefore, 'the first attempt read the provider');
+        const early = await service.capture(
+          policy,
+          captureInput(unapproved.result.id),
+          trusted(),
+        );
+        assert.equal(early.reason, 'order_not_approved');
+        assert.ok(early.receipt?.id);
+        assert.equal(x.provider.writes.length, writes);
+        assert.deepEqual(await counts(), {
+          ...before,
+          audits: before.audits + 1,
+        });
       },
     );
     await t.test(

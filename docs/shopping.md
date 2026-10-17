@@ -48,7 +48,7 @@ The binding also covers the server-owned `returnUrl` and `cancelUrl`, so a retry
 The audit log records the policy decision and a second `tool_call` event whose `upstream_result_ref` is the request UUID and whose `resolved_ctx.order` holds the order id, the approve link and status `CREATED`; the ledger row keyed by the same UUID holds the same order id and approve link, and its audit receipt moves from the reservation event to that outcome event so a replay returns the receipt the first call returned.
 The audit redaction allowlist admits `order_id` only as a 17 to 32 character provider id and `approve_url` only on the sandbox origin, so the append-only chain names the created order without accepting arbitrary links.
 
-`capture(policy, { executionId, args: { id } }, { agent, customer })` reads the provider order, evaluates policy on its amount, requires a ledger row whose order id, amount and merchant match, and requires provider status `APPROVED`.
+`capture(policy, { executionId, args: { id } }, { agent, customer })` first answers an execution UUID that the ledger already binds from its capture and order rows, whose amount was checked equal to the provider's when the capture was reserved, so a settled capture replays during a provider outage or after the resolver cache expires; a first attempt reads the provider order, evaluates policy on its amount, requires a ledger row whose order id, amount and merchant match, and requires provider status `APPROVED`.
 One live capture attempt per order is enforced by a database advisory lock and a partial unique index: a second execution UUID is denied with `order_capture_reserved`, and the same UUID replays the receipt.
 
 ## Retry semantics
@@ -70,7 +70,7 @@ node scripts/test-audit-postgres.mjs --orders
 pnpm demo shopping
 ```
 
-The database tests exercise forged totals, policy denials, pre-approval capture denial, unbound orders, two concurrent captures behind a held advisory lock, same-identifier replay with identical receipts, unknown-outcome recovery, definitive rejection, a rejected retry that keeps the row unknown, overlapping calls with one identifier, a duplicate-request rejection that reaches the overlapping first attempt, database-side redaction of order fields, application privilege limits and restricted-reader checks.
+The database tests exercise forged totals, policy denials, pre-approval capture denial, unbound orders, two concurrent captures behind a held advisory lock, same-identifier replay with identical receipts, settled captures replayed from the ledger while provider reads fail, unknown-outcome recovery, definitive rejection, a rejected retry that keeps the row unknown, overlapping calls with one identifier, a duplicate-request rejection that reaches the overlapping first attempt, database-side redaction of order fields, application privilege limits and restricted-reader checks.
 Live sandbox order creation, approve-link rendering and provider idempotency windows remain unverified.
 
 ## Follow-up

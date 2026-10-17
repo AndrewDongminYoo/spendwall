@@ -74,7 +74,7 @@ const validators = new Map(
 
 export class ContextResolver {
   private readonly rest: ContextRest;
-  private readonly merchant: JsonObject;
+  readonly merchant: JsonObject;
   constructor(
     options: RestOptions & { merchant: { id: string; email: string } },
   ) {
@@ -98,34 +98,58 @@ export class ContextResolver {
     this.rest.invalidate(`order:${orderIdentifier(id)}`);
   }
 
+  private inputs(input: unknown, serverContext: unknown) {
+    const request = object(snapshot(input));
+    if (
+      Object.keys(request).length !== 2 ||
+      typeof request.tool !== 'string' ||
+      !Object.hasOwn(request, 'args')
+    )
+      fail('invalid_arguments');
+    if (!Object.hasOwn(resolverRegistry, request.tool))
+      fail('unsupported_tool');
+    const tool = request.tool as ToolName;
+    const args = object(request.args);
+    if (!validators.get(tool)!(args).valid) fail('invalid_arguments');
+    const trusted = object(snapshot(serverContext));
+    if (
+      Object.keys(trusted).length !== 3 ||
+      !['agent', 'customer', 'agg'].every((key) => Object.hasOwn(trusted, key))
+    )
+      fail();
+    const agent = object(trusted.agent);
+    const customer = object(trusted.customer);
+    const agg = object(trusted.agg);
+    identifier(agent.id);
+    identifier(customer.id);
+    customer.email = email(customer.email);
+    return { tool, args, agent, customer, agg };
+  }
+
+  // The policy context of a call whose amount the caller already holds from a
+  // ledger row that was bound equal to the provider's facts when it was
+  // written: the same inputs as resolve() builds, without a provider read or a
+  // cache lease. Inputs that resolve() would deny throw a ResolutionError.
+  bound(
+    input: unknown,
+    serverContext: unknown,
+    amount: PolicyContext['amount'],
+  ): PolicyContext {
+    const context: PolicyContext = {
+      ...this.inputs(input, serverContext),
+      amount,
+      merchant: this.merchant,
+    };
+    snapshot(context);
+    return freeze(context);
+  }
+
   async resolve(input: unknown, serverContext: unknown): Promise<Resolution> {
     try {
-      const request = object(snapshot(input));
-      if (
-        Object.keys(request).length !== 2 ||
-        typeof request.tool !== 'string' ||
-        !Object.hasOwn(request, 'args')
-      )
-        fail('invalid_arguments');
-      if (!Object.hasOwn(resolverRegistry, request.tool))
-        fail('unsupported_tool');
-      const tool = request.tool as ToolName;
-      const args = object(request.args);
-      if (!validators.get(tool)!(args).valid) fail('invalid_arguments');
-      const trusted = object(snapshot(serverContext));
-      if (
-        Object.keys(trusted).length !== 3 ||
-        !['agent', 'customer', 'agg'].every((key) =>
-          Object.hasOwn(trusted, key),
-        )
-      )
-        fail();
-      const agent = object(trusted.agent);
-      const customer = object(trusted.customer);
-      const agg = object(trusted.agg);
-      identifier(agent.id);
-      identifier(customer.id);
-      customer.email = email(customer.email);
+      const { tool, args, agent, customer, agg } = this.inputs(
+        input,
+        serverContext,
+      );
       let assertCurrent = () => {};
       let amount;
       let resolvedCtx: JsonObject;

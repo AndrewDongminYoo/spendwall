@@ -828,6 +828,15 @@ export class OrderService {
       | undefined;
     try {
       client = await this.begin();
+      // A bound execution ID is answered from its ledger before any provider
+      // read, so a settled capture repeats its stored outcome while the
+      // provider is unavailable or the resolver cache has expired.
+      const bound = await this.replayCapture(client, policy, envelope, trusted);
+      if (bound) {
+        await client.query('COMMIT');
+        committed = true;
+        return bound;
+      }
       const resolution = await this.options.resolver.resolve(
         { tool: 'pay_order', args: envelope.args },
         trusted,
@@ -989,6 +998,85 @@ export class OrderService {
       client = undefined;
     }
     return this.submitCapture(policy, executionId, pending);
+  }
+
+  // Rebuilds the capture binding from the ledger alone and answers a settled
+  // row through replay(). The capture row names its order row, whose
+  // amount_value was checked equal to the provider's amount when the capture
+  // was reserved and is immutable since (migration 009 triggers), so every
+  // binding input equals the one the first attempt hashed and rows written
+  // before this path existed replay unchanged. Returns nothing when no row is
+  // bound to the execution ID, the row is unknown, the inputs would not
+  // resolve, or the policy no longer allows the call: the caller then resolves
+  // provider facts and records the outcome as before.
+  private async replayCapture(
+    client: PoolClient,
+    policy: LoadedPolicy,
+    envelope: { id: string; args: Record<string, unknown> },
+    trusted: unknown,
+  ): Promise<OrderResult<CompletedCapture> | undefined> {
+    const executionId = envelope.id;
+    const merchantRef = this.ref(
+      'merchant',
+      identifier(this.options.resolver.merchant.id),
+    );
+    const { rows } = await client.query<
+      Pick<
+        CaptureRow,
+        | 'key_id'
+        | 'binding_hash'
+        | 'status'
+        | 'capture_id'
+        | 'audit_id'
+        | 'audit_hash'
+      > &
+        Pick<OrderRow, 'request_id' | 'amount_value'>
+    >(
+      `SELECT c.key_id, c.binding_hash, c.status, c.capture_id, c.audit_id::text, c.audit_hash,
+        o.request_id::text, o.amount_value
+      FROM orders.captures c
+      JOIN orders.orders o ON o.merchant_ref=c.merchant_ref AND o.request_id=c.order_request
+      WHERE c.merchant_ref=$1 AND c.execution_id=$2::uuid`,
+      [merchantRef, executionId],
+    );
+    const previous = rows[0];
+    if (!previous) return undefined;
+    if (previous.key_id !== this.ref('key', 'continuity')) throw new Error();
+    const amount: Money = {
+      value: previous.amount_value,
+      currency_code: 'USD',
+    };
+    let context: PolicyContext;
+    let orderId: string;
+    try {
+      context = this.options.resolver.bound(
+        { tool: 'pay_order', args: envelope.args },
+        trusted,
+        { value: amount.value, currency: 'USD' },
+      );
+      orderId = orderIdentifier(context.args.id);
+    } catch {
+      return undefined;
+    }
+    const decision = this.evaluate(policy, context);
+    if (decision.decision !== 'allow') return undefined;
+    const binding = this.ref('capture', {
+      executionId,
+      orderRequest: previous.request_id,
+      orderId,
+      amount,
+      agent: identifier(context.agent.id),
+      policyVersion: policy.policyVersion,
+    });
+    return this.replay(policy, previous, binding, decision.matchedRules, () =>
+      freeze({
+        executionId,
+        orderId,
+        id: previous.capture_id!,
+        status: 'COMPLETED' as const,
+        amount,
+      }),
+    );
   }
 
   private async submitCapture(
