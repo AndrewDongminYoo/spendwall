@@ -14,7 +14,7 @@ import {
 import { agentOptions, runLive } from '../apps/agent-demo/src/agent.ts';
 
 const root = new URL('../', import.meta.url);
-test('recorded demo executes four scenarios and reports firewall outcomes', () => {
+test('recorded demo executes five scenarios and reports firewall outcomes', () => {
   const result = spawnSync(
     process.execPath,
     ['apps/agent-demo/src/index.ts', 'all'],
@@ -30,6 +30,9 @@ test('recorded demo executes four scenarios and reports firewall outcomes', () =
   assert.match(result.stdout, /approval: PASS.*payments=1/);
   assert.match(result.stdout, /injection: PASS.*payments=0/);
   assert.match(result.stdout, /velocity: PASS.*payments=2/);
+  assert.match(result.stdout, /shopping: PASS.*payments=1/);
+  assert.match(result.stdout, /order_not_approved/);
+  assert.match(result.stdout, /buyer_approval/);
   assert.match(result.stdout, /pending_approval/);
   assert.match(result.stdout, /ticket_scope/);
   assert.match(result.stdout, /velocity_limit/);

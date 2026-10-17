@@ -1,0 +1,13 @@
+agents:
+  demo-shopper:
+    tools:
+      allow: [create_order, pay_order]
+      deny: []
+rules:
+  - id: order_within_budget
+    when: amount.currency == "USD" && amount.usd <= 50
+    then: allow
+  - id: order_over_budget
+    when: amount.currency != "USD" || amount.usd > 50
+    then: deny
+default: deny

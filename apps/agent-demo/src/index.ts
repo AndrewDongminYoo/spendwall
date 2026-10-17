@@ -5,6 +5,11 @@ import { createDemo, readTicket, scenarios } from './firewall.ts';
 import type { Scenario } from './firewall.ts';
 import { replay, reviewPending } from './runner.ts';
 import { runLive } from './agent.ts';
+import {
+  createShoppingDemo,
+  readShoppingTicket,
+  replayShopping,
+} from './shopping.ts';
 
 const args = process.argv.slice(2);
 const name = args[0] ?? 'all';
@@ -16,7 +21,7 @@ if (
   (live && name === 'all')
 ) {
   console.error(
-    'Usage: pnpm demo [all|small|approval|injection|velocity] [--live]',
+    'Usage: pnpm demo [all|small|approval|injection|velocity|shopping] [--live]',
   );
   process.exitCode = 2;
 } else if (live && !process.env.ANTHROPIC_API_KEY) {
@@ -39,8 +44,16 @@ if (
   process.on('SIGTERM', onTerminate);
   const color = stdout.isTTY && !Object.hasOwn(process.env, 'NO_COLOR');
   const print = (decision: string, reason: string) => {
+    // Red: deny. Yellow: waiting on a human. Magenta: an unknown money outcome
+    // that needs recovery and must never read as success.
     const code =
-      decision === 'deny' ? 31 : decision === 'pending_approval' ? 33 : 32;
+      decision === 'deny'
+        ? 31
+        : decision === 'pending_approval'
+          ? 33
+          : decision === 'unknown'
+            ? 35
+            : 32;
     console.log(
       `${color ? `\x1b[${code}m` : ''}${decision}${color ? '\x1b[0m' : ''}: ${reason}`,
     );
@@ -54,6 +67,39 @@ if (
     await withDemoDatabase(async (url) => {
       for (const scenario of name === 'all' ? scenarios : [name as Scenario]) {
         cancellation.signal.throwIfAborted();
+        if (scenario === 'shopping') {
+          const demo = await createShoppingDemo(
+            url,
+            await readShoppingTicket(),
+            (event) => print(event.decision, event.reason),
+          );
+          try {
+            cancellation.signal.throwIfAborted();
+            console.log(`\nTicket: ${scenario}`);
+            if (live) {
+              await runLive(
+                demo,
+                process.env.ANTHROPIC_API_KEY!,
+                (text) => console.log(text),
+                undefined,
+                cancellation.signal,
+              );
+              for (const id of demo.createdOrders())
+                console.log(
+                  `Order ${id}: ${demo.orderStatus(id)}; buyer approval and capture are exercised by the recorded replay.`,
+                );
+              console.log(
+                `${scenario}: LIVE OBSERVATION payments=${demo.payments.length}`,
+              );
+            } else {
+              await replayShopping(demo, cancellation.signal);
+              console.log(`${scenario}: PASS payments=${demo.payments.length}`);
+            }
+          } finally {
+            await demo.close();
+          }
+          continue;
+        }
         const demo = await createDemo(
           url,
           await readTicket(scenario),
