@@ -455,6 +455,27 @@ test(
         const rejectedAgain = await service.capture(policy, first, trusted());
         assert.equal(rejectedAgain.reason, 'provider_rejected');
         assert.deepEqual(rejectedAgain.receipt, rejected.receipt);
+        const writesAfterRejection = x.provider.writes.length;
+        const rebound = loadPolicy(
+          (
+            await readFile(
+              new URL(
+                '../apps/agent-demo/shopping-policy.yaml',
+                import.meta.url,
+              ),
+              'utf8',
+            )
+          ).replace('amount.usd <= 50', 'amount.usd <= 60'),
+        );
+        const conflict = await service.capture(rebound, first, trusted());
+        assert.equal(
+          conflict.reason,
+          'request_conflict',
+          'a rejected execution ID is bound to its inputs like a completed one',
+        );
+        assert.equal(conflict.receipt, undefined);
+        assert.equal((await captureRow(first.executionId)).status, 'failed');
+        assert.equal(x.provider.writes.length, writesAfterRejection);
         const second = await service.capture(
           policy,
           captureInput(created.result.id),

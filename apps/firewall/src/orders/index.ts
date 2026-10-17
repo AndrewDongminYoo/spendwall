@@ -850,15 +850,19 @@ export class OrderService {
       if (captures.some((row) => row.key_id !== this.ref('key', 'continuity')))
         throw new Error();
       // A definitive failure frees the order; the same execution ID stays
-      // rejected and replays the receipt of the recorded rejection.
+      // rejected and replays the receipt of the recorded rejection, but only
+      // for the inputs it was bound to, as the completed and unknown rows below.
       const rejected = captures.find(
         (row) => row.execution_id === executionId && row.status === 'failed',
       );
-      if (rejected)
+      if (rejected) {
+        if (rejected.binding_hash !== binding)
+          return this.deny(policy, 'request_conflict');
         return this.deny(policy, 'provider_rejected', decision, {
           id: rejected.audit_id,
           row_hash: rejected.audit_hash,
         });
+      }
       const existing = captures.find((row) => row.status !== 'failed');
       if (existing && existing.execution_id !== executionId)
         return await denyWith('order_capture_reserved');
