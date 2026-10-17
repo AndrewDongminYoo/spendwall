@@ -1,6 +1,7 @@
 // `Gllbn` is a fragment of a base64 synthetic Basic credential; `reconcil` is a
-// deliberate partial-match stem in a rejection assertion.
-// cspell:ignore Gllbn reconcil
+// deliberate partial-match stem in a rejection assertion; `clien` and `rivate`
+// are truncated credentials that must not match.
+// cspell:ignore Gllbn reconcil clien rivate
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import {
@@ -198,6 +199,108 @@ test('short token expiry drives renewal and concurrent callers share one refresh
   manager.invalidate('private-token-1');
   assert.equal(await manager.get(), 'private-token-2');
   assert.equal(f.seen.tokens, 2);
+});
+
+const escapeFirst = (text) =>
+  `\\u${text.charCodeAt(0).toString(16).padStart(4, '0')}${text.slice(1)}`;
+const escapeAllUpper = (text) =>
+  [...text]
+    .map(
+      (char) =>
+        `\\u${char.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')}`,
+    )
+    .join('');
+const percentAll = (text, upper = true) =>
+  [...text]
+    .map((char) => {
+      const hex = char.charCodeAt(0).toString(16).padStart(2, '0');
+      return `%${upper ? hex.toUpperCase() : hex}`;
+    })
+    .join('');
+const nest = (text, times) => {
+  let out = text;
+  for (let i = 0; i < times; i++) out = JSON.stringify(out);
+  return out;
+};
+
+function assertHidden(manager, value, secret) {
+  assert.ok(
+    !JSON.stringify(value).includes(secret),
+    `precondition: ${JSON.stringify(value)} carries ${secret} literally`,
+  );
+  assert.equal(manager.isSensitive(value), true, JSON.stringify(value));
+}
+
+test('known credentials are found behind JSON and percent escapes', async (t) => {
+  const f = await fixture(t);
+  const manager = createTokenManager(f);
+  const token = await manager.get();
+  assert.equal(token, 'private-token-1');
+  for (const secret of [
+    token,
+    env.PAYPAL_CLIENT_ID,
+    env.PAYPAL_CLIENT_SECRET,
+  ]) {
+    const unclosed = `Result: "${escapeFirst(secret)}`;
+    for (const value of [
+      unclosed,
+      `Result: ${escapeAllUpper(secret)}`,
+      nest(unclosed, 2),
+      nest(unclosed, 3),
+      `token=${percentAll(secret)}`,
+      `token=${percentAll(secret, false)}`,
+      `token=${encodeURIComponent(escapeFirst(secret))}`,
+      `token=%5c${escapeFirst(secret).slice(1)}`,
+      `token=${encodeURIComponent(nest(unclosed, 2))}`,
+      { data: { items: [{ note: unclosed }] } },
+      [1, ['x', nest(escapeFirst(secret), 2)]],
+    ])
+      assertHidden(manager, value, secret);
+  }
+});
+
+test('every listed JSON escape is decoded before credential matching', () => {
+  const secret = 'a/b"c\\d\be\ff\ng\rh\ti';
+  const manager = createTokenManager({
+    env: { PAYPAL_CLIENT_ID: 'unused-client', PAYPAL_CLIENT_SECRET: secret },
+  });
+  assertHidden(
+    manager,
+    `x ${JSON.stringify(secret).replace('/', '\\/')}`,
+    secret,
+  );
+  assertHidden(manager, `x ${encodeURIComponent(secret)}`, secret);
+});
+
+test('escape decoding that does not settle within its bound is denied', async (t) => {
+  const f = await fixture(t);
+  const manager = createTokenManager(f);
+  await manager.get();
+  assert.equal(manager.isSensitive(`%${'25'.repeat(100)}`), true);
+  assert.equal(manager.isSensitive({ note: [`%${'25'.repeat(100)}`] }), true);
+});
+
+test('ordinary escaped text without a known credential is not sensitive', async (t) => {
+  const f = await fixture(t);
+  const manager = createTokenManager(f);
+  await manager.get();
+  for (const value of [
+    'café',
+    'caf\\u00e9',
+    '100%25',
+    'a\\nb',
+    'Authorization: Bearer A21AAunknown.credential-shaped',
+    'malformed %zz %4 \\u12 \\x \\',
+    nest('\\u0078yz', 3),
+    { note: 'private-token-', nested: ['fake-clien', '%70rivate'] },
+  ])
+    assert.equal(manager.isSensitive(value), false, JSON.stringify(value));
+});
+
+test('values that JSON cannot serialize keep their earlier result without secrets', () => {
+  const manager = createTokenManager({ env: {} });
+  for (const value of [undefined, () => 'x', Symbol('x')])
+    assert.equal(manager.isSensitive(value), false, typeof value);
 });
 
 test('refund binding is durable before POST and duplicates survive concurrency and restart', async (t) => {
