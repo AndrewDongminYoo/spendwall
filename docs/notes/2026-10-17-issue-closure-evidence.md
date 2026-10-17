@@ -47,12 +47,6 @@ The check marks in roadmap issue #29 are not evidence; it marks several issues d
 - The approval flow runs end to end with curl alone: `tests/approval-api-postgres.test.mjs:239` drives actual `curl` subprocesses for registration, listing, detail and decision.
 - A hash mismatch returns 409 before any refresh or payment: `tests/approval-api-postgres.test.mjs:1045`.
 
-### #22 README, judge guide and threat model
-
-- A clean clone in a new container ran the demo within ten minutes: `docs/judge-guide.md:102` records a fresh public clone at `652ee1f`, frozen install and all four scenarios in 47 seconds on 2026-10-16.
-  The `shopping` scenario added by #60 is later than that run.
-- The judge guide, threat model and README exist as `docs/judge-guide.md`, `docs/threat-model.md` and `README.md`.
-
 ### #24 Devpost draft
 
 - The operator reported on 2026-10-17 that the Devpost draft was saved, before the 11/6 deadline.
@@ -91,6 +85,8 @@ Limit: the UI conditions are read from source; no component test renders them.
 - #18 Studio audit queries: the server chooses one of three deterministic projections (`docs/dashboard.md:83`) and a repeated synthetic run replaces one widget (`tests/dashboard-runner.test.mjs:24`).
   Repeatability with a configured live model is not verified (`docs/dashboard.md:105`).
 - #19 webhook reconciliation: forged signatures are refused (`tests/webhooks.test.mjs:120`), but a refund made directly in the PayPal dashboard has not been observed as unmediated (`README.md:60`).
+- #22 README, judge guide and threat model: the documents exist (`README.md`, `docs/judge-guide.md`, `docs/threat-model.md`), and `docs/judge-guide.md:102` records a fresh-container clone running the then four default scenarios in 47 seconds at `652ee1f`.
+  The default demo now also runs `shopping` (`apps/agent-demo/src/firewall.ts:22`), so the ten-minute fresh-container check has to be repeated for the current five scenarios.
 - #23 demo video: no recording, captions or upload are in the repository.
 - #25 final rehearsal and submission: the history secret scan (`docs/notes/2026-10-16-history-secret-scan.md`) and a bounded live rehearsal (`docs/notes/2026-10-16-live-rehearsal.md`) are recorded; the hosted demo URL (`README.md:55`), the AG Studio license, the video and the final submission remain.
 - #28 dispute policy: acceptance is forced to `require_approval` and the response deadline is classified (`docs/dispute-policy.md:6`, `docs/dispute-policy.md:52`), but no deadline notification is sent (`docs/dispute-policy.md:8`).
