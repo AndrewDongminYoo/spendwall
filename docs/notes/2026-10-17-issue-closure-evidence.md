@@ -54,14 +54,6 @@ The issue has no checkboxes; its three listed rules are tested.
 
 ## Closed with a stated limit
 
-### #17 AG Studio dashboard
-
-- Rendering with live data: the dashboard reads the audit PostgreSQL database (`tests/dashboard-postgres.test.mjs:16`), and the #45 PR body records browser verification of populated and empty states, refresh, the custom widget fill and a 390 px layout.
-- Custom widget and theme: `apps/dashboard/src/studio.tsx:77` defines the theme, and `docs/dashboard.md:111` describes the registered custom widget; `docs/assets/dashboard-demo.png` shows the rendered page.
-
-Limit: the browser verification is a recorded session, not a repeatable test.
-The page runs under AG Studio's unlicensed local evaluation (`docs/dashboard.md:116`); the license is a #25 item.
-
 ### #21 natural-language policy preview
 
 - Output that fails validation never enables the apply action: the server refuses invalid model output (`tests/policy-preview-http.test.mjs:106`, `tests/policy-preview.test.mjs:28`).
@@ -70,6 +62,7 @@ The page runs under AG Studio's unlicensed local evaluation (`docs/dashboard.md:
 - The dry-run matches the re-evaluation of stored inputs: `tests/policy-preview-postgres.test.mjs:313` replays actual encrypted records and asserts the changed, unchanged and unavailable counts; `tests/policy-preview-postgres.test.mjs:68` asserts that the replay uses the exact original inputs.
 
 Limit: the UI conditions are read from source; no component test renders them.
+The #49 PR body left the operator's visual approval pending; the operator approved closing #21 with this limit on 2026-10-17.
 
 ## Left open
 
@@ -79,6 +72,9 @@ Limit: the UI conditions are read from source; no component test renders them.
   `isSensitive` searches the serialized result for the raw secret (`apps/firewall/src/token.ts:43`), so an upstream result that carries the token in escaped or encoded form passes; #48 states that escaped credential output is outside its verified guarantees, and draft #39 holds the unresolved sanitization attempt.
 - #15 Flutter approver: push, biometric approval and a sandbox refund on a physical device remain pending (`README.md:96`).
   The second criterion, disabled buttons for expired or processed items, was not assessed in this note.
+- #17 AG Studio dashboard: both checkboxes are met.
+  The dashboard reads the audit PostgreSQL database (`tests/dashboard-postgres.test.mjs:16`), the #45 PR body records browser verification of populated and empty states, refresh, the custom widget fill and a 390 px layout, `apps/dashboard/src/studio.tsx:77` defines the theme, and `docs/dashboard.md:111` describes the registered custom widget.
+  The issue's own caution item still requires a trial license that covers the December 1–15 judging window; #45 deferred the trial and kept the issue open for license acquisition and expiry verification, and the page runs under unlicensed local evaluation (`docs/dashboard.md:116`).
 - #18 Studio audit queries: the server chooses one of three deterministic projections (`docs/dashboard.md:83`) and a repeated synthetic run replaces one widget (`tests/dashboard-runner.test.mjs:24`).
   Repeatability with a configured live model is not verified (`docs/dashboard.md:105`).
 - #19 webhook reconciliation: forged signatures are refused (`tests/webhooks.test.mjs:120`), but a refund made directly in the PayPal dashboard has not been observed as unmediated (`README.md:60`).
