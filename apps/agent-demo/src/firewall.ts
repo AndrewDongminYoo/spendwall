@@ -105,6 +105,7 @@ export async function createDemo(
     '002-velocity.sql',
     '003-approvals.sql',
     '007-reconciliation.sql',
+    '011-approval-guards.sql',
   ]);
   const app = database.app;
   let executor: RefundExecutor | undefined;

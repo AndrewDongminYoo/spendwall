@@ -53,7 +53,12 @@ async function fixture(t, summary) {
   const owner = new pg.Pool({ connectionString: url });
   await owner.query('DROP SCHEMA IF EXISTS approvals CASCADE');
   await owner.query('DROP SCHEMA IF EXISTS audit CASCADE');
-  for (const file of ['001-audit.sql', '002-velocity.sql', '003-approvals.sql'])
+  for (const file of [
+    '001-audit.sql',
+    '002-velocity.sql',
+    '003-approvals.sql',
+    '011-approval-guards.sql',
+  ])
     await owner.query(
       await readFile(new URL('../migrations/' + file, import.meta.url), 'utf8'),
     );
