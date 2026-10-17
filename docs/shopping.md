@@ -3,7 +3,7 @@
 ## Local baseline
 
 Issue [#26](https://github.com/AndrewDongminYoo/spendwall/issues/26) adds a buyer-side money-in path: an agent searches a catalog, the firewall creates a PayPal order through Orders v2, a human approves on PayPal's buyer page, and the firewall captures only after that approval is verified.
-`OrderService` composes the existing `ContextResolver`, CEL policy evaluation, the audit log and a PostgreSQL ledger in `migrations/009-orders.sql`.
+`OrderService` composes the existing `ContextResolver`, CEL policy evaluation, the audit log and a PostgreSQL ledger in `migrations/009-orders.sql` and `migrations/010-orders-insert-guard.sql`.
 Product search is a local catalog fixture, not Channel3.
 The W0 proxy and the refund demo remain separate compositions and do not gain this protection automatically.
 
@@ -37,8 +37,16 @@ Resolution rules for `create_order` follow [tool-risk.md](tool-risk.md): USD onl
 ## Ledger and capture binding
 
 Apply `migrations/009-orders.sql` as the trusted database owner after `001-audit.sql` and `002-velocity.sql`; it layers the Orders v2 fields onto the audit redaction allowlist as a wrapper over the current `audit.redact`, so upgraded databases get the same allowlist without rewriting earlier rows or hashes.
+Then apply `migrations/010-orders-insert-guard.sql` as the same owner.
 The application login inserts rows and may update only status, attempts, order id, approve link, capture id and the audit receipt columns; deletes and other rewrites are refused.
+Insert triggers from `010` admit, for every role, only a reservation row: status `unknown`, no order id, approve link or capture id, and one counted attempt; the server clock replaces any supplied `created_at`.
+The row's audit receipt must name an `allow` event for the matching tool (`create_order` for an order, `pay_order` for a capture), with the same row hash, appended in the inserting transaction itself and not in a savepoint, so a receipt copied from an earlier event cannot reserve an order or a capture slot.
 Row triggers keep those updates forward-only for every role, as the approvals schema does: the binding and amount never change, attempts never decrease, an unknown row settles once into a terminal status under a new audit receipt, and a settled row is never rewritten.
+Settle triggers from `010` bind that new receipt, for every role, to the outcome event `OrderService` appends: an `allow` event for the matching tool, with the same row hash, appended in the settling transaction itself and not in a savepoint, naming the row's request or execution UUID as its upstream result, with a provider status of the settled class (2xx for `created` or `completed`, a 4xx other than 408 or 429 for `failed`) and the row's own agent and policy version.
+A `created` order must also match the event's order id and approve link, and a settled capture must match its parent order's id.
+The redaction keeps no capture id, so the `capture_id` that a capture settles with is not bound to its outcome event.
+Updates that keep a row `unknown` stay attempt-only and need no new event.
+The remaining limit: a role that can append audit events can still forge a reservation or a settlement, but only by appending fresh `allow` events with the matching identifiers in the same transaction, which leaves them in the tamper-evident chain.
 Hosted-dashboard and webhook-receiver readiness checks reject access to the `orders` schema.
 
 Construct `OrderService(pool, { identityKey, resolver, tokens })` in trusted server code.

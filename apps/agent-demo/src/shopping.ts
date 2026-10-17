@@ -110,6 +110,7 @@ export async function createShoppingDemo(
   const database = await openDemoDatabase(ownerUrl, [
     '001-audit.sql',
     '009-orders.sql',
+    '010-orders-insert-guard.sql',
   ]);
   try {
     const provider = recordedOrders();

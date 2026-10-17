@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { OrderOutcomeUnknownError } from '../apps/firewall/src/orders/index.ts';
 import { prepareEvent } from '../apps/firewall/src/audit/event.ts';
-import { verifyAudit } from '../apps/firewall/src/audit/index.ts';
+import { AuditLog, verifyAudit } from '../apps/firewall/src/audit/index.ts';
 import { checkHostedReader } from '../apps/firewall/src/dashboard/hosted-reader.ts';
 import { checkWebhookReceiver } from '../apps/firewall/src/webhooks/reconciliation.ts';
 import { loadPolicy } from '../packages/policy/src/index.ts';
@@ -20,9 +20,10 @@ import {
 } from './helpers/order-fixture.mjs';
 
 const url = process.env.AUDIT_TEST_DATABASE_URL;
-const migration = await readFile(
-  new URL('../migrations/009-orders.sql', import.meta.url),
-  'utf8',
+const migrations = await Promise.all(
+  ['009-orders.sql', '010-orders-insert-guard.sql'].map((file) =>
+    readFile(new URL(`../migrations/${file}`, import.meta.url), 'utf8'),
+  ),
 );
 const lockSql =
   "SELECT pg_advisory_xact_lock(hashtextextended('spendwall/orders/v1',0))";
@@ -53,7 +54,7 @@ test(
       await f.close();
     });
     await f.owner.query('DROP SCHEMA IF EXISTS orders CASCADE');
-    await f.owner.query(migration);
+    for (const migration of migrations) await f.owner.query(migration);
     const counts = async () =>
       (
         await f.app.query(
@@ -1173,6 +1174,381 @@ test(
         );
         const verification = await verifyAudit(f.app);
         assert.equal(verification.ok, true);
+      },
+    );
+    await t.test(
+      'application inserts only reserve unknown rows under a fresh allow receipt',
+      async () => {
+        // A fresh order keeps its capture slot free, so only the insert guard
+        // can refuse a capture row for it.
+        const created = await service.create(
+          policy,
+          createInput(orderArgs(7)),
+          trusted(),
+        );
+        assert.equal(created.decision, 'allow');
+        const order = (
+          await f.app.query('SELECT * FROM orders.orders WHERE order_id=$1', [
+            created.result.id,
+          ])
+        ).rows[0];
+        const templates = {
+          orders: () => ({
+            merchant_ref: order.merchant_ref,
+            request_id: randomUUID(),
+            key_id: order.key_id,
+            agent_id: order.agent_id,
+            binding_hash: order.binding_hash,
+            args_hash: order.args_hash,
+            policy_version: order.policy_version,
+            amount_value: order.amount_value,
+            amount_currency: 'USD',
+            status: 'unknown',
+            attempts: 1,
+          }),
+          captures: () => ({
+            merchant_ref: order.merchant_ref,
+            execution_id: randomUUID(),
+            order_request: order.request_id,
+            key_id: order.key_id,
+            agent_id: order.agent_id,
+            binding_hash: order.binding_hash,
+            policy_version: order.policy_version,
+            status: 'unknown',
+            attempts: 1,
+          }),
+        };
+        const tools = { orders: 'create_order', captures: 'pay_order' };
+        // Each probe appends its receipt and inserts the row in one
+        // application transaction, then rolls both back.
+        const probe = async (table, overrides = {}, event = {}) => {
+          const client = await f.app.connect();
+          try {
+            await client.query('BEGIN');
+            const receipt = await new AuditLog(client).append({
+              agentId: order.agent_id,
+              tool: tools[table],
+              args: {},
+              resolvedCtx: {},
+              decision: 'allow',
+              matchedRules: [],
+              policyVersion: order.policy_version,
+              eventKind: 'tool_call',
+              latencyMs: 0,
+              ...event,
+            });
+            const row = {
+              ...templates[table](),
+              audit_id: receipt.id,
+              audit_hash: receipt.row_hash,
+              ...overrides,
+            };
+            const columns = Object.keys(row);
+            return (
+              await client.query(
+                `INSERT INTO orders.${table}(${columns.join(',')})
+                VALUES(${columns.map((_, i) => `$${i + 1}`).join(',')})
+                RETURNING status, attempts, created_at`,
+                Object.values(row),
+              )
+            ).rows[0];
+          } finally {
+            await client.query('ROLLBACK');
+            client.release();
+          }
+        };
+        const before = await counts();
+        // The valid reservation shape inserts, and the server clock replaces a
+        // caller-supplied creation time.
+        for (const table of ['orders', 'captures']) {
+          const row = await probe(table, {
+            created_at: '2000-01-01T00:00:00Z',
+          });
+          assert.equal(row.status, 'unknown');
+          assert.equal(row.attempts, 1);
+          assert.ok(
+            Math.abs(Date.now() - row.created_at.getTime()) < 60_000,
+            `${table} created_at must be server-generated`,
+          );
+        }
+        const link = 'https://www.sandbox.paypal.com/checkoutnow?token=forged';
+        for (const overrides of [
+          { status: 'created', order_id: 'X'.repeat(17), approve_url: link },
+          { status: 'failed' },
+          { order_id: 'X'.repeat(17) },
+          { approve_url: link },
+          { attempts: 0 },
+          { attempts: 2 },
+        ])
+          await assert.rejects(
+            probe('orders', overrides),
+            /Order reservation must start unknown/,
+            JSON.stringify(overrides),
+          );
+        for (const overrides of [
+          { status: 'completed', capture_id: 'X'.repeat(15) },
+          { status: 'failed' },
+          { capture_id: 'X'.repeat(15) },
+          { attempts: 0 },
+          { attempts: 2 },
+        ])
+          await assert.rejects(
+            probe('captures', overrides),
+            /Capture reservation must start unknown/,
+            JSON.stringify(overrides),
+          );
+        // A receipt freed by settlement (the row's receipt moved to the outcome
+        // event) is not UNIQUE-blocked, so only its age refuses the copy.
+        const stale = async (table) => {
+          const rows = (
+            await f.app.query(
+              `SELECT id::text AS audit_id, row_hash AS audit_hash FROM audit.audit_events e
+              WHERE tool=$1 AND decision='allow'
+                AND NOT EXISTS (SELECT FROM orders.${table} r WHERE r.audit_id=e.id)
+              ORDER BY id DESC LIMIT 1`,
+              [tools[table]],
+            )
+          ).rows;
+          assert.equal(rows.length, 1, `a freed ${tools[table]} receipt`);
+          return rows[0];
+        };
+        for (const [table, message] of [
+          ['orders', /Order reservation requires a fresh audit receipt/],
+          ['captures', /Capture reservation requires a fresh audit receipt/],
+        ]) {
+          const other = table === 'orders' ? 'pay_order' : 'create_order';
+          await assert.rejects(probe(table, await stale(table)), message);
+          await assert.rejects(probe(table, {}, { tool: other }), message);
+          await assert.rejects(probe(table, {}, { decision: 'deny' }), message);
+          await assert.rejects(
+            probe(table, { audit_hash: '0'.repeat(64) }),
+            message,
+          );
+        }
+        assert.deepEqual(await counts(), before);
+        // No refused forgery occupied the slot: the legitimate capture proceeds.
+        x.provider.approve(created.result.id);
+        x.resolver.invalidateOrder(created.result.id);
+        const capture = captureInput(created.result.id);
+        const captured = await service.capture(policy, capture, trusted());
+        assert.equal(captured.decision, 'allow', JSON.stringify(captured));
+        assert.equal(
+          (await captureRow(capture.executionId)).status,
+          'completed',
+        );
+        assert.equal((await verifyAudit(f.app)).ok, true);
+      },
+    );
+    await t.test(
+      'application settles a row only under a fresh outcome receipt bound to it',
+      async () => {
+        // A created order parents the forged captures; every probe rolls back,
+        // so its capture slot and the earlier rows stay untouched.
+        const created = await service.create(
+          policy,
+          createInput(orderArgs(11)),
+          trusted(),
+        );
+        assert.equal(created.decision, 'allow');
+        const order = (
+          await f.app.query('SELECT * FROM orders.orders WHERE order_id=$1', [
+            created.result.id,
+          ])
+        ).rows[0];
+        const tools = { orders: 'create_order', captures: 'pay_order' };
+        const keys = { orders: 'request_id', captures: 'execution_id' };
+        const orderId = 'S'.repeat(17);
+        const link = 'https://www.sandbox.paypal.com/checkoutnow?token=settled';
+        const reservation = (table, id) =>
+          table === 'orders'
+            ? {
+                merchant_ref: order.merchant_ref,
+                request_id: id,
+                key_id: order.key_id,
+                agent_id: order.agent_id,
+                binding_hash: order.binding_hash,
+                args_hash: order.args_hash,
+                policy_version: order.policy_version,
+                amount_value: order.amount_value,
+                amount_currency: 'USD',
+                status: 'unknown',
+                attempts: 1,
+              }
+            : {
+                merchant_ref: order.merchant_ref,
+                execution_id: id,
+                order_request: order.request_id,
+                key_id: order.key_id,
+                agent_id: order.agent_id,
+                binding_hash: order.binding_hash,
+                policy_version: order.policy_version,
+                status: 'unknown',
+                attempts: 1,
+              };
+        // The ledger columns each terminal status writes, and the outcome
+        // event OrderService appends for it.
+        const outcomes = {
+          created: {
+            set: { status: 'created', order_id: orderId, approve_url: link },
+            upstreamStatus: 201,
+            order: { status: 'CREATED', order_id: orderId, approve_url: link },
+          },
+          completed: {
+            set: { status: 'completed', capture_id: 'C'.repeat(17) },
+            upstreamStatus: 201,
+            order: { order_id: order.order_id, status: 'COMPLETED' },
+          },
+          failed: {
+            set: { status: 'failed' },
+            upstreamStatus: 422,
+            order: { order_id: order.order_id },
+          },
+        };
+        const event = (table, status, id, overrides = {}) => ({
+          agentId: order.agent_id,
+          tool: tools[table],
+          args: {},
+          resolvedCtx: { order: outcomes[status].order },
+          decision: 'allow',
+          matchedRules: [],
+          policyVersion: order.policy_version,
+          eventKind: 'tool_call',
+          latencyMs: 0,
+          upstreamStatus: outcomes[status].upstreamStatus,
+          upstreamResultRef: id,
+          ...overrides,
+        });
+        // Each probe reserves a row and settles it in one application
+        // transaction, then rolls both back. Without options the outcome
+        // event matches the row, so each option changes exactly one fact.
+        const settle = async (
+          table,
+          status,
+          { id = randomUUID(), overrides, receipt, hash } = {},
+        ) => {
+          const client = await f.app.connect();
+          try {
+            await client.query('BEGIN');
+            const reserved = await new AuditLog(client).append({
+              ...event(table, status, id),
+              resolvedCtx: {},
+              upstreamStatus: undefined,
+              upstreamResultRef: undefined,
+            });
+            const row = {
+              ...reservation(table, id),
+              audit_id: reserved.id,
+              audit_hash: reserved.row_hash,
+            };
+            const columns = Object.keys(row);
+            await client.query(
+              `INSERT INTO orders.${table}(${columns.join(',')})
+              VALUES(${columns.map((_, i) => `$${i + 1}`).join(',')})`,
+              Object.values(row),
+            );
+            const outcome =
+              receipt ??
+              (await new AuditLog(client).append(
+                event(table, status, id, overrides),
+              ));
+            const set = {
+              ...outcomes[status].set,
+              audit_id: outcome.id,
+              audit_hash: hash ?? outcome.row_hash,
+            };
+            const names = Object.keys(set);
+            return (
+              await client.query(
+                `UPDATE orders.${table} SET ${names.map((name, i) => `${name}=$${i + 3}`).join(',')}
+                WHERE merchant_ref=$1 AND ${keys[table]}=$2::uuid RETURNING status`,
+                [order.merchant_ref, id, ...Object.values(set)],
+              )
+            ).rows[0].status;
+          } finally {
+            await client.query('ROLLBACK');
+            client.release();
+          }
+        };
+        // An outcome event committed by an earlier transaction, naming the
+        // UUID a later probe reserves, is stale and nothing else.
+        const stale = {};
+        for (const [table, status] of [
+          ['orders', 'created'],
+          ['captures', 'completed'],
+        ]) {
+          const id = randomUUID();
+          stale[table] = {
+            id,
+            receipt: await new AuditLog(f.app).append(event(table, status, id)),
+          };
+        }
+        const before = await counts();
+        const settles = [
+          ['orders', 'created'],
+          ['orders', 'failed'],
+          ['captures', 'completed'],
+          ['captures', 'failed'],
+        ];
+        // The matching outcome settles, so each refusal below is caused by
+        // the one fact it changes. This is also the remaining limit: a role
+        // that appends such an event can settle.
+        for (const [table, status] of settles)
+          assert.equal(await settle(table, status), status);
+        const messages = {
+          orders: /Order outcome requires a fresh matching audit receipt/,
+          captures: /Capture outcome requires a fresh matching audit receipt/,
+        };
+        const refused = (table, status, options) =>
+          assert.rejects(
+            settle(table, status, options),
+            messages[table],
+            `${table} ${status} ${JSON.stringify(options)}`,
+          );
+        for (const [table, status] of settles) {
+          const other = table === 'orders' ? 'pay_order' : 'create_order';
+          for (const overrides of [
+            { tool: other },
+            { decision: 'deny' },
+            { upstreamResultRef: randomUUID() },
+            { agentId: 'agent:forged' },
+            { policyVersion: 'f'.repeat(64) },
+          ])
+            await refused(table, status, { overrides });
+          await refused(table, status, { hash: '0'.repeat(64) });
+          // The provider status class must match the settled status.
+          for (const upstreamStatus of status === 'failed'
+            ? [201, 408, 429, 500]
+            : [422, 302])
+            await refused(table, status, { overrides: { upstreamStatus } });
+        }
+        for (const [table, status] of [
+          ['orders', 'created'],
+          ['captures', 'completed'],
+        ])
+          await refused(table, status, stale[table]);
+        // A created order must name the event's order id and approve link.
+        for (const changed of [
+          { order_id: 'T'.repeat(17) },
+          { approve_url: `${link}-other` },
+        ])
+          await refused('orders', 'created', {
+            overrides: {
+              resolvedCtx: {
+                order: { ...outcomes.created.order, ...changed },
+              },
+            },
+          });
+        // A capture outcome must name the parent order, not another one.
+        for (const status of ['completed', 'failed'])
+          await refused('captures', status, {
+            overrides: {
+              resolvedCtx: {
+                order: { ...outcomes[status].order, order_id: 'T'.repeat(17) },
+              },
+            },
+          });
+        assert.deepEqual(await counts(), before);
+        assert.equal((await verifyAudit(f.app)).ok, true);
       },
     );
     await t.test(
