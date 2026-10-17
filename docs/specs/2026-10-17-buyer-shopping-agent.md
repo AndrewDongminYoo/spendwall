@@ -28,7 +28,9 @@ Product search is a local catalog fixture; no Channel3 integration, FCM push or 
   Overlapping calls with one identifier settle once; the later call reuses the settled row's receipt when the provider's replayed response names the same order or capture.
 - `require_approval` is denied: the human approval step is PayPal's buyer approval page, not the firewall approval service.
 - `migrations/009-orders.sql` extends the audit redaction allowlist as a wrapper over the current `audit.redact`, the same layering `002-velocity.sql` used, so `001-audit.sql` stays unchanged and upgraded databases receive the order fields.
-- Application credentials can insert rows and update only status, order id, approve link, capture id and the audit receipt columns; they cannot delete or rewrite history.
+- Application credentials can insert rows and update only status, attempts, order id, approve link, capture id and the audit receipt columns; they cannot delete or rewrite history.
+  Row triggers keep those updates forward-only for every role, as the approvals schema does: the binding and amount never change, attempts never decrease, an `unknown` row settles once into a terminal status under a new audit receipt, and a settled row is never rewritten.
+- The resolved provider order status is not a policy variable; `OrderService.capture` enforces `APPROVED` in code after policy evaluation, and the status is recorded under `resolved_ctx.order` for inspection only.
   Hosted readers and webhook receivers must reject access to the `orders` schema.
 
 ## Non-goals and limits

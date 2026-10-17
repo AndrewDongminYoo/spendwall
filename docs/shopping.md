@@ -23,11 +23,13 @@ Payment responses are synthetic; nothing contacts PayPal.
 The [example policy](../apps/agent-demo/shopping-policy.yaml) allows `create_order` and `pay_order` for `demo-shopper` up to USD 50 and denies the rest.
 Replace these synthetic values in trusted policy configuration before integrating another environment.
 
-| Field          | Source and meaning                                                                                                                 |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `amount`       | For `create_order`, the total recomputed from unit cost, quantity, exact per-unit tax, shipping and discount; never a caller total |
-| `amount`       | For `pay_order`, the provider's current order amount, which must also equal the ledger amount                                      |
-| `order.status` | Resolved provider status for `pay_order`; capture requires `APPROVED`                                                              |
+| Field    | Source and meaning                                                                                                                 |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `amount` | For `create_order`, the total recomputed from unit cost, quantity, exact per-unit tax, shipping and discount; never a caller total |
+| `amount` | For `pay_order`, the provider's current order amount, which must also equal the ledger amount                                      |
+
+The resolved provider order status is not a policy variable: a CEL condition that references `order.status` fails to evaluate and denies.
+`OrderService.capture` checks that status in code after policy evaluation and denies a non-`APPROVED` order with `order_not_approved`; the status is recorded under `resolved_ctx.order` in the audit event for inspection only.
 
 Resolution rules for `create_order` follow [tool-risk.md](tool-risk.md): USD only, `itemTotal` reconciled against `itemCost × quantity`, per-unit tax exact in cents, discount at most the item total, and no caller-supplied `shippingAddress`, `notes`, `returnUrl` or `cancelUrl`.
 `require_approval` is denied because the human step is PayPal's own buyer approval, not the firewall approval service.
@@ -35,7 +37,8 @@ Resolution rules for `create_order` follow [tool-risk.md](tool-risk.md): USD onl
 ## Ledger and capture binding
 
 Apply `migrations/009-orders.sql` as the trusted database owner after `001-audit.sql` and `002-velocity.sql`; it layers the Orders v2 fields onto the audit redaction allowlist as a wrapper over the current `audit.redact`, so upgraded databases get the same allowlist without rewriting earlier rows or hashes.
-The application login inserts rows and may update only status, order id, approve link, capture id and the audit receipt columns; deletes and other rewrites are refused.
+The application login inserts rows and may update only status, attempts, order id, approve link, capture id and the audit receipt columns; deletes and other rewrites are refused.
+Row triggers keep those updates forward-only for every role, as the approvals schema does: the binding and amount never change, attempts never decrease, an unknown row settles once into a terminal status under a new audit receipt, and a settled row is never rewritten.
 Hosted-dashboard and webhook-receiver readiness checks reject access to the `orders` schema.
 
 Construct `OrderService(pool, { identityKey, resolver, tokens })` in trusted server code.
