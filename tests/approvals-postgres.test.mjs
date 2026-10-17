@@ -16,7 +16,7 @@ import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { ApprovalService } from '../apps/firewall/src/approvals/index.ts';
 import { RefundExecutor } from '../apps/firewall/src/refunds.ts';
 import { foldHistory } from '../apps/firewall/src/velocity/aggregate.ts';
-import { verifyAudit } from '../apps/firewall/src/audit/index.ts';
+import { AuditLog, verifyAudit } from '../apps/firewall/src/audit/index.ts';
 import { evaluatePolicy, loadPolicy } from '../packages/policy/src/index.ts';
 
 const url = process.env.AUDIT_TEST_DATABASE_URL;
@@ -56,7 +56,12 @@ async function fixture(t) {
   const owner = new pg.Pool({ connectionString: url });
   await owner.query('DROP SCHEMA IF EXISTS approvals CASCADE');
   await owner.query('DROP SCHEMA IF EXISTS audit CASCADE');
-  for (const name of ['001-audit.sql', '002-velocity.sql', '003-approvals.sql'])
+  for (const name of [
+    '001-audit.sql',
+    '002-velocity.sql',
+    '003-approvals.sql',
+    '011-approval-guards.sql',
+  ])
     await owner.query(
       await readFile(new URL('../migrations/' + name, import.meta.url), 'utf8'),
     );
@@ -225,6 +230,61 @@ async function pending(f, input = request()) {
   assert.match(p.approval_id, /^[a-f0-9-]{36}$/);
   return { id: p.approval_id, input };
 }
+// Commits one application-role transaction, so the deferred guards run at COMMIT.
+async function inTransaction(f, fn) {
+  const client = await f.app.connect();
+  try {
+    await client.query('BEGIN');
+    await fn(client);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+// Appends a lifecycle event for the approval with the facts of its reservation.
+async function forge(db, id, eventKind, decision, extra = {}) {
+  const source = (
+    await db.query(
+      "SELECT agent_id,args_redacted,resolved_ctx,policy_version FROM audit.audit_events WHERE approval_id=$1 AND event_kind='tool_call'",
+      [id],
+    )
+  ).rows[0];
+  const { velocity, ...resolvedCtx } = source.resolved_ctx;
+  return new AuditLog(db).append({
+    agentId: source.agent_id,
+    tool: 'create_refund',
+    args: source.args_redacted,
+    resolvedCtx,
+    matchedRules: [],
+    policyVersion: source.policy_version,
+    approvalId: id,
+    latencyMs: 0,
+    eventKind,
+    decision,
+    velocity,
+    ...extra,
+  });
+}
+// Inserts a request row for an orphaned reservation, pending unless a state is given.
+function insertRow(db, source, state = {}) {
+  const claimed = state.approval === 'approved';
+  return db.query(
+    `INSERT INTO approvals.requests(approval_id,reservation_id,owner_ref,adapter_ref,binding_ref,request_sealed,created_at,expires_at,approval_state,execution_state,execution_id,started_at)
+    VALUES($1,$2::bigint,repeat('a',64),repeat('b',64),repeat('c',64),repeat('x',40),$3::timestamptz,$3::timestamptz+interval '15 minutes',$4,$5,$6,$7)`,
+    [
+      source.approval_id,
+      source.id,
+      source.ts,
+      state.approval ?? 'pending',
+      state.execution ?? null,
+      claimed ? randomUUID() : null,
+      claimed ? source.ts : null,
+    ],
+  );
+}
 
 test('Postgres approval boundary', { skip: !url }, async (t) => {
   await t.test(
@@ -233,14 +293,25 @@ test('Postgres approval boundary', { skip: !url }, async (t) => {
       const f = await fixture(t),
         { id, input } = await pending(f);
       // The owner creates a valid nearly-expired fixture without changing audit history.
-      const row = (
-        await f.owner.query(
-          `WITH old AS (DELETE FROM approvals.requests WHERE approval_id=$1 RETURNING *), boundary AS MATERIALIZED (SELECT date_trunc('milliseconds',clock_timestamp())+interval '1 second' AS expires)
+      // Only the disposable owner can skip the creation receipt check for this re-insert.
+      await f.owner.query(
+        'ALTER TABLE approvals.requests DISABLE TRIGGER approval_insert_receipt',
+      );
+      let row;
+      try {
+        row = (
+          await f.owner.query(
+            `WITH old AS (DELETE FROM approvals.requests WHERE approval_id=$1 RETURNING *), boundary AS MATERIALIZED (SELECT date_trunc('milliseconds',clock_timestamp())+interval '1 second' AS expires)
       INSERT INTO approvals.requests(approval_id,reservation_id,owner_ref,adapter_ref,binding_ref,request_sealed,created_at,expires_at)
       SELECT approval_id,reservation_id,owner_ref,adapter_ref,binding_ref,request_sealed,boundary.expires-interval '15 minutes',boundary.expires FROM old,boundary RETURNING expires_at`,
-          [id],
-        )
-      ).rows[0];
+            [id],
+          )
+        ).rows[0];
+      } finally {
+        await f.owner.query(
+          'ALTER TABLE approvals.requests ENABLE TRIGGER approval_insert_receipt',
+        );
+      }
       let intercepted = false;
       const pool = {
         connect: async () => {
@@ -456,6 +527,252 @@ test('Postgres approval boundary', { skip: !url }, async (t) => {
       );
     },
   );
+  await t.test(
+    'the database admits a new approval only as a pending row with a fresh creation event',
+    async (t) => {
+      const f = await fixture(t);
+      await f.owner.query(
+        `REVOKE INSERT ON approvals.requests FROM ${pg.escapeIdentifier(f.group)}`,
+      );
+      await assert.rejects(
+        f.service.request(policy, request()),
+        /Approval unavailable/,
+      );
+      await f.owner.query(
+        `GRANT INSERT ON approvals.requests TO ${pg.escapeIdentifier(f.group)}`,
+      );
+      const source = (
+        await f.app.query(
+          "SELECT id::text,approval_id,ts FROM audit.audit_events WHERE event_kind='tool_call' AND decision='require_approval'",
+        )
+      ).rows[0];
+      const id = source.approval_id;
+      const created = (db) =>
+        forge(db, id, 'approval_created', 'require_approval');
+      for (const state of [
+        { approval: 'approved', execution: 'in_flight' },
+        { approval: 'approved', execution: 'succeeded' },
+      ])
+        await assert.rejects(
+          inTransaction(f, async (client) => {
+            await insertRow(client, source, state);
+            await created(client);
+          }),
+          /Approval must start pending/,
+        );
+      await assert.rejects(
+        inTransaction(f, (client) => insertRow(client, source)),
+        /Approval creation requires a fresh audit event/,
+      );
+      for (const [kind, decision, extra] of [
+        ['tool_call', 'require_approval', {}],
+        ['approval_created', 'deny', {}],
+        ['approval_created', 'require_approval', { tool: 'create_order' }],
+      ])
+        await assert.rejects(
+          inTransaction(f, async (client) => {
+            await insertRow(client, source);
+            await forge(client, id, kind, decision, extra);
+          }),
+          /Approval creation requires a fresh audit event/,
+        );
+      // A tool_call for this approval under another tool is not its reservation.
+      const otherTool = await forge(
+        f.app,
+        id,
+        'tool_call',
+        'require_approval',
+        {
+          tool: 'create_order',
+        },
+      );
+      await assert.rejects(
+        inTransaction(f, async (client) => {
+          await insertRow(client, { ...source, id: otherTool.id });
+          await created(client);
+        }),
+        /Approval requires its velocity reservation/,
+      );
+      const stale = await created(f.app);
+      await assert.rejects(
+        inTransaction(f, (client) => insertRow(client, source)),
+        /Approval creation requires a fresh audit event/,
+      );
+      await assert.rejects(
+        inTransaction(f, async (client) => {
+          await insertRow(client, { ...source, id: stale.id });
+          await created(client);
+        }),
+        /Approval requires its velocity reservation/,
+      );
+      assert.equal(
+        (await f.app.query('SELECT count(*) FROM approvals.requests')).rows[0]
+          .count,
+        '0',
+      );
+      // A role that can append audit events can still create a row, but only with a fresh event.
+      await inTransaction(f, async (client) => {
+        await insertRow(client, source);
+        await created(client);
+      });
+      assert.equal(
+        (await f.app.query('SELECT approval_state FROM approvals.requests'))
+          .rows[0].approval_state,
+        'pending',
+      );
+    },
+  );
+  await t.test(
+    'a decision needs a fresh approval_decided event with its decision',
+    async (t) => {
+      const f = await fixture(t),
+        { id } = await pending(f);
+      const deny =
+        "UPDATE approvals.requests SET approval_state='denied' WHERE approval_id=$1";
+      const missing =
+        /Approval transition requires a fresh matching audit event/;
+      await assert.rejects(
+        inTransaction(f, (client) => client.query(deny, [id])),
+        missing,
+      );
+      for (const [kind, decision, extra] of [
+        ['approval_decided', 'allow', {}],
+        ['approval_executed', 'deny', {}],
+        ['approval_decided', 'deny', { tool: 'create_order' }],
+      ])
+        await assert.rejects(
+          inTransaction(f, async (client) => {
+            await client.query(deny, [id]);
+            await forge(client, id, kind, decision, extra);
+          }),
+          missing,
+        );
+      await assert.rejects(
+        inTransaction(f, async (client) => {
+          await client.query(
+            "UPDATE approvals.requests SET approval_state='approved',execution_state='in_flight',execution_id=$2,started_at=clock_timestamp() WHERE approval_id=$1",
+            [id, randomUUID()],
+          );
+          await forge(client, id, 'approval_decided', 'deny');
+        }),
+        missing,
+      );
+      await forge(f.app, id, 'approval_decided', 'deny');
+      await assert.rejects(
+        inTransaction(f, (client) => client.query(deny, [id])),
+        missing,
+      );
+      assert.equal(
+        (await f.app.query('SELECT approval_state FROM approvals.requests'))
+          .rows[0].approval_state,
+        'pending',
+      );
+      await inTransaction(f, async (client) => {
+        await client.query(deny, [id]);
+        await forge(client, id, 'approval_decided', 'deny');
+      });
+      assert.equal(
+        (await f.app.query('SELECT approval_state FROM approvals.requests'))
+          .rows[0].approval_state,
+        'denied',
+      );
+    },
+  );
+  await t.test(
+    'an outcome needs a fresh approval_executed event naming the execution',
+    async (t) => {
+      const f = await fixture(t),
+        { id, input } = await pending(f);
+      f.setMode('lost');
+      assert.equal(
+        (await f.service.approve(id, policy, input)).execution_state,
+        'unknown',
+      );
+      // The recovery re-claim writes no event; the outcome that follows is bound.
+      await inTransaction(f, (client) =>
+        client.query(
+          "UPDATE approvals.requests SET execution_state='in_flight' WHERE approval_id=$1",
+          [id],
+        ),
+      );
+      const execution = (
+        await f.app.query('SELECT execution_id FROM approvals.requests')
+      ).rows[0].execution_id;
+      const settle = (state) =>
+        inTransaction(f, (client) =>
+          client.query(
+            'UPDATE approvals.requests SET execution_state=$2 WHERE approval_id=$1',
+            [id, state],
+          ),
+        );
+      const missing =
+        /Approval transition requires a fresh matching audit event/;
+      await assert.rejects(settle('failed'), missing);
+      for (const [state, kind, decision, extra] of [
+        ['failed', 'approval_decided', 'deny', {}],
+        ['failed', 'approval_executed', 'allow', {}],
+        [
+          'succeeded',
+          'approval_executed',
+          'allow',
+          { upstreamStatus: 200, upstreamResultRef: randomUUID() },
+        ],
+        [
+          'succeeded',
+          'approval_executed',
+          'allow',
+          { upstreamStatus: 201, upstreamResultRef: execution },
+        ],
+        [
+          'succeeded',
+          'approval_executed',
+          'deny',
+          { upstreamStatus: 200, upstreamResultRef: execution },
+        ],
+        [
+          'succeeded',
+          'approval_executed',
+          'allow',
+          {
+            upstreamStatus: 200,
+            upstreamResultRef: execution,
+            tool: 'create_order',
+          },
+        ],
+      ])
+        await assert.rejects(
+          inTransaction(f, async (client) => {
+            await client.query(
+              'UPDATE approvals.requests SET execution_state=$2 WHERE approval_id=$1',
+              [id, state],
+            );
+            await forge(client, id, kind, decision, extra);
+          }),
+          missing,
+        );
+      const confirmed = { upstreamStatus: 200, upstreamResultRef: execution };
+      await forge(f.app, id, 'approval_executed', 'allow', confirmed);
+      await assert.rejects(settle('succeeded'), missing);
+      assert.equal(
+        (await f.app.query('SELECT execution_state FROM approvals.requests'))
+          .rows[0].execution_state,
+        'in_flight',
+      );
+      // A role that can append audit events can still settle, but only with a fresh matching event.
+      await inTransaction(f, async (client) => {
+        await client.query(
+          "UPDATE approvals.requests SET execution_state='succeeded' WHERE approval_id=$1",
+          [id],
+        );
+        await forge(client, id, 'approval_executed', 'allow', confirmed);
+      });
+      assert.equal(
+        (await f.app.query('SELECT execution_state FROM approvals.requests'))
+          .rows[0].execution_state,
+        'succeeded',
+      );
+    },
+  );
 
   await t.test(
     'a definite failed result retains capacity and cannot execute again',
@@ -529,6 +846,63 @@ test('Postgres approval boundary', { skip: !url }, async (t) => {
       assert.equal(row.created_at.getTime(), source.ts.getTime());
       assert.equal(row.expires_at - row.created_at, 15 * 60 * 1000);
       assert.equal((await verifyAudit(f.app)).count, 2);
+      assert.equal(f.seen.posts.length, 0);
+    },
+  );
+  await t.test(
+    'a creation retry after the deadline creates and expires the row in one transaction',
+    async (t) => {
+      const f = await fixture(t),
+        input = request();
+      await f.owner.query(
+        `REVOKE INSERT ON approvals.requests FROM ${pg.escapeIdentifier(f.group)}`,
+      );
+      await assert.rejects(
+        f.service.request(policy, input),
+        /Approval unavailable/,
+      );
+      const source = (
+        await f.app.query(
+          "SELECT approval_id,ts FROM audit.audit_events WHERE event_kind='tool_call' AND decision='require_approval'",
+        )
+      ).rows[0];
+      await f.owner.query(
+        `GRANT INSERT ON approvals.requests TO ${pg.escapeIdentifier(f.group)}`,
+      );
+      // The deferred insert guard must judge the inserted tuple, not the row it became.
+      f.setTime(source.ts.getTime() + 15 * 60 * 1000);
+      const late = await f.service.request(policy, input);
+      f.setTime(undefined);
+      assert.equal(late.approval_id, source.approval_id);
+      assert.equal(late.status, 'expired');
+      assert.equal(
+        (await f.app.query('SELECT approval_state FROM approvals.requests'))
+          .rows[0].approval_state,
+        'expired',
+      );
+      assert.deepEqual(
+        (
+          await f.app.query(
+            'SELECT event_kind,decision FROM audit.audit_events WHERE approval_id=$1 ORDER BY id',
+            [source.approval_id],
+          )
+        ).rows,
+        [
+          { event_kind: 'tool_call', decision: 'require_approval' },
+          { event_kind: 'approval_created', decision: 'require_approval' },
+          { event_kind: 'approval_decided', decision: 'deny' },
+        ],
+      );
+      assert.equal(
+        (
+          await f.app.query(
+            "SELECT count(DISTINCT xmin::text) FROM audit.audit_events WHERE approval_id=$1 AND event_kind<>'tool_call'",
+            [source.approval_id],
+          )
+        ).rows[0].count,
+        '1',
+      );
+      assert.equal((await verifyAudit(f.app)).count, 3);
       assert.equal(f.seen.posts.length, 0);
     },
   );

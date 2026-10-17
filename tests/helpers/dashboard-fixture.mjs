@@ -80,6 +80,7 @@ export async function dashboardFixture(
       '001-audit.sql',
       '002-velocity.sql',
       '003-approvals.sql',
+      '011-approval-guards.sql',
     ])
       await owner.query(
         await readFile(
