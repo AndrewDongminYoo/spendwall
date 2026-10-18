@@ -9,9 +9,25 @@ const fixture: {
   readFileSync(new URL('../recordings/payments.json', import.meta.url), 'utf8'),
 );
 
-export function recordedPayments() {
+// A synthetic dispute that the boundary serves read-only. Accepting a claim or
+// any other dispute write is an unrecorded request.
+export type SyntheticDispute = {
+  id: string;
+  sellerTransactionId: string;
+  amount: Money;
+  gross: Money;
+  dueAt: string;
+};
+
+export function recordedPayments(
+  options: { disputes?: readonly SyntheticDispute[] } = {},
+) {
   const writes: { capture: string; executionId: string; amount: Money }[] = [];
   const refunds = new Map<string, Record<string, unknown>>();
+  const disputes = new Map(
+    (options.disputes ?? []).map((dispute) => [dispute.id, dispute]),
+  );
+  let disputeReads = 0;
   const fetchImpl: typeof fetch = async (input, init) => {
     const url = new URL(String(input));
     if (url.origin !== 'https://api-m.sandbox.paypal.com')
@@ -28,6 +44,38 @@ export function recordedPayments() {
       });
     const parts = url.pathname.split('/');
     const capture = parts[4];
+    const dispute =
+      url.pathname.startsWith('/v1/customer/disputes/') && parts.length === 5
+        ? disputes.get(parts[4]!)
+        : undefined;
+    if (dispute && (!init?.method || init.method === 'GET')) {
+      disputeReads++;
+      return json({
+        dispute_id: dispute.id,
+        status: 'WAITING_FOR_SELLER_RESPONSE',
+        dispute_life_cycle_stage: 'CHARGEBACK',
+        dispute_amount: dispute.amount,
+        seller_response_due_date: dispute.dueAt,
+        disputed_transactions: [
+          {
+            seller_transaction_id: dispute.sellerTransactionId,
+            transaction_status: 'COMPLETED',
+            gross_amount: dispute.gross,
+            seller: { merchant_id: fixture.merchantId },
+          },
+        ],
+        allowed_response_options: {
+          accept_claim: { accept_claim_types: ['REFUND'] },
+        },
+        links: [
+          {
+            rel: 'accept-claim',
+            method: 'POST',
+            href: `${url.origin}/v1/customer/disputes/${dispute.id}/accept-claim`,
+          },
+        ],
+      });
+    }
     if (parts[3] === 'captures' && capture && fixture.captures[capture]) {
       const amount = fixture.captures[capture];
       if (parts[5] === 'refund' && init?.method === 'POST') {
@@ -108,5 +156,10 @@ export function recordedPayments() {
     }
     throw new Error('Unrecorded payment request.');
   };
-  return { fetchImpl, writes, merchantId: fixture.merchantId };
+  return {
+    fetchImpl,
+    writes,
+    merchantId: fixture.merchantId,
+    disputeReads: () => disputeReads,
+  };
 }

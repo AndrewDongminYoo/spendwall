@@ -12,12 +12,48 @@ import {
   reviewPending,
 } from '../apps/agent-demo/src/runner.ts';
 import { agentOptions, runLive } from '../apps/agent-demo/src/agent.ts';
+import {
+  readDisputeTicket,
+  syntheticSaleCustomer,
+} from '../apps/agent-demo/src/dispute.ts';
+import { recordedPayments } from '../apps/agent-demo/src/payments.ts';
 
 const root = new URL('../', import.meta.url);
-test('recorded demo executes five scenarios and reports firewall outcomes', () => {
+// `pnpm demo` with no argument and `pnpm demo all` both run exactly the five
+// default scenarios; the opt-in dispute scenario is part of neither.
+for (const args of [[], ['all']]) {
+  test(`recorded demo ${args.length ? 'all' : 'without an argument'} executes five scenarios and reports firewall outcomes`, () => {
+    const result = spawnSync(
+      process.execPath,
+      ['apps/agent-demo/src/index.ts', ...args],
+      {
+        cwd: root,
+        encoding: 'utf8',
+        timeout: 480_000,
+        env: { PATH: process.env.PATH, HOME: process.env.HOME, NO_COLOR: '1' },
+      },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /small: PASS.*payments=1/);
+    assert.match(result.stdout, /approval: PASS.*payments=1/);
+    assert.match(result.stdout, /injection: PASS.*payments=0/);
+    assert.match(result.stdout, /velocity: PASS.*payments=2/);
+    assert.match(result.stdout, /shopping: PASS.*payments=1/);
+    assert.match(result.stdout, /order_not_approved/);
+    assert.match(result.stdout, /buyer_approval/);
+    assert.match(result.stdout, /pending_approval/);
+    assert.match(result.stdout, /ticket_scope/);
+    assert.match(result.stdout, /velocity_limit/);
+    assert.doesNotMatch(result.stdout, /\u001b\[/);
+    assert.equal(result.stdout.match(/^\w+: PASS /gm)?.length, 5);
+    assert.doesNotMatch(result.stdout, /^dispute:/m);
+  });
+}
+
+test('opt-in dispute scenario records one due_soon deadline alert', () => {
   const result = spawnSync(
     process.execPath,
-    ['apps/agent-demo/src/index.ts', 'all'],
+    ['apps/agent-demo/src/index.ts', 'dispute'],
     {
       cwd: root,
       encoding: 'utf8',
@@ -26,17 +62,71 @@ test('recorded demo executes five scenarios and reports firewall outcomes', () =
     },
   );
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /small: PASS.*payments=1/);
-  assert.match(result.stdout, /approval: PASS.*payments=1/);
-  assert.match(result.stdout, /injection: PASS.*payments=0/);
-  assert.match(result.stdout, /velocity: PASS.*payments=2/);
-  assert.match(result.stdout, /shopping: PASS.*payments=1/);
-  assert.match(result.stdout, /order_not_approved/);
-  assert.match(result.stdout, /buyer_approval/);
-  assert.match(result.stdout, /pending_approval/);
-  assert.match(result.stdout, /ticket_scope/);
-  assert.match(result.stdout, /velocity_limit/);
-  assert.doesNotMatch(result.stdout, /\u001b\[/);
+  assert.match(result.stdout, /^dispute: PASS alerts=1$/m);
+  assert.match(result.stdout, /Tracker outcome: due_soon/);
+  assert.match(result.stdout, /signature verification is outside the demo/);
+  assert.match(result.stdout, /alert drain is not run/);
+  assert.equal(result.stdout.match(/: PASS /g)?.length, 1);
+});
+
+test('synthetic saleCustomer maps only the ticket sale', async () => {
+  const ticket = await readDisputeTicket();
+  const saleCustomer = syntheticSaleCustomer(ticket);
+  const expected = { id: ticket.customerId, email: 'customer@example.test' };
+  assert.deepEqual(saleCustomer(ticket.sellerTransactionId), expected);
+  saleCustomer(ticket.sellerTransactionId).id = 'changed';
+  assert.deepEqual(saleCustomer(ticket.sellerTransactionId), expected);
+  assert.equal(saleCustomer('DEMO-SALE-99999'), undefined);
+  assert.equal(saleCustomer(ticket.disputeId), undefined);
+});
+
+test('synthetic payment boundary serves a dispute read-only', async () => {
+  const ticket = await readDisputeTicket();
+  const payment = recordedPayments({
+    disputes: [
+      {
+        id: ticket.disputeId,
+        sellerTransactionId: ticket.sellerTransactionId,
+        amount: ticket.amount,
+        gross: ticket.gross,
+        dueAt: '2026-10-18T12:00:00.000Z',
+      },
+    ],
+  });
+  const url = `https://api-m.sandbox.paypal.com/v1/customer/disputes/${ticket.disputeId}`;
+  const record = await (await payment.fetchImpl(url, { method: 'GET' })).json();
+  assert.equal(record.dispute_id, ticket.disputeId);
+  assert.equal(record.seller_response_due_date, '2026-10-18T12:00:00.000Z');
+  assert.equal(
+    record.disputed_transactions[0].seller_transaction_id,
+    ticket.sellerTransactionId,
+  );
+  assert.equal(payment.disputeReads(), 1);
+  await assert.rejects(
+    payment.fetchImpl(`${url}/accept-claim`, { method: 'POST', body: '{}' }),
+    /Unrecorded payment request/,
+  );
+  await assert.rejects(
+    payment.fetchImpl(url.replace(ticket.disputeId, 'DEMO-DISPUTE-99999')),
+    /Unrecorded payment request/,
+  );
+  assert.equal(payment.disputeReads(), 1);
+  assert.equal(payment.writes.length, 0);
+});
+
+test('dispute scenario rejects live mode before provisioning resources', () => {
+  const result = spawnSync(
+    process.execPath,
+    ['apps/agent-demo/src/index.ts', 'dispute', '--live'],
+    {
+      cwd: root,
+      encoding: 'utf8',
+      timeout: 5000,
+      env: { PATH: process.env.PATH, ANTHROPIC_API_KEY: 'synthetic-api-key' },
+    },
+  );
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /Usage:/);
 });
 
 test('unknown scenarios fail before provisioning resources', () => {
