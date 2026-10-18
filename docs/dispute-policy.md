@@ -115,7 +115,7 @@ The application role has `SELECT` and `INSERT`, plus `UPDATE` on `state`, `attem
 
 The Flutter approver shows an opened dispute push as a read-only, dismissible notice built only from the `dispute_id`/`stage` data; it makes no server call, offers no dispute action and stores nothing (see the [approver README](../apps/approver/README.md#dispute-deadline-notice)).
 
-Out of scope: a server dispute list or detail API for the app, wiring into the W0 proxy or agent demo, email, physical-device delivery and live sandbox disputes.
+Out of scope: a server dispute list or detail API for the app, wiring into the W0 proxy, alert delivery in the agent demo, email, physical-device delivery and live sandbox disputes.
 
 ## Dispute tracking
 
@@ -126,7 +126,8 @@ It adds `disputes.events`, which the [webhook receiver](webhooks.md#dispute-even
 
 Construct the tracker with the application pool, the merchant's `DeviceAuthority`, a `ContextResolver` for the same merchant, the loaded dispute policy, one review agent ID and a required `saleCustomer(sellerTransactionId)` lookup.
 The lookup must return `{ id, email }` from the deployment's own authenticated customer records, or `undefined`.
-No code in this repository implements it, so a deployment that supplies none stores verified events but re-evaluates no dispute; construction without a lookup, or with a resolver and `DeviceAuthority` for different merchants, is refused.
+No production code in this repository implements it; the agent demo's [opt-in dispute scenario](../apps/agent-demo/README.md#opt-in-dispute-deadline-scenario) uses a fixed synthetic mapping as a stand-in for a merchant's customer system.
+A deployment that supplies no lookup stores verified events but re-evaluates no dispute; construction without a lookup, or with a resolver and `DeviceAuthority` for different merchants, is refused.
 The review agent must be one that the policy allows for `accept_dispute_claim` and that has approver device grants; any other agent produces `policy_denied` and no alert.
 `start()` runs one `tick()` every 60 seconds, `tick()` claims at most ten due rows of the tracker's merchant, each under a 30-second lease and at most once per tick, and `close()` stops new ticks and waits for the running one.
 As in the alert outbox, the due check and the lease use the database clock, which also sets the trigger's check times; each claim returns that instant, and the evaluation schedules from it, so an application clock that differs from the database neither delays a check nor shortens another instance's lease.
@@ -162,6 +163,7 @@ node --test tests/dispute-policy.test.mjs tests/context-resolver.test.mjs tests/
 node scripts/test-audit-postgres.mjs --dispute-alerts
 node scripts/test-audit-postgres.mjs --dispute-tracking
 node scripts/dispute-demo.mjs
+pnpm demo dispute
 ```
 
 Tests exercise real policy loading and resolver code with controlled provider responses, changed ownership and money, unknown/terminal states, mutable inputs, cache invalidation, deadline boundaries and fingerprint changes.
@@ -172,6 +174,7 @@ Before any future execution, it must create durable audited approval state bound
 Do not reuse the refund executor or refund approval rows for dispute acceptance.
 The alert tests use synthetic FCM responses and a disposable PostgreSQL database; they do not establish physical-device delivery or display.
 The tracking tests use synthetic events, provider responses and customer lookups; they do not establish real webhook delivery, the dispute event resource shape, the equality of a dispute's `seller_transaction_id` and the Orders capture ID, or which statuses PayPal makes acceptable.
+Outside those tests, the agent demo's [opt-in dispute scenario](../apps/agent-demo/README.md#opt-in-dispute-deadline-scenario) runs the path from a stored event to a recorded alert row with synthetic data; it does not run the alert drain and has the same limits as the tracking tests.
 The original issue remains open for that integration, a trusted `saleCustomer` implementation, real webhook delivery, physical-device deadline delivery and display, and live sandbox disputes.
 
 The supported response fields are grounded in the [pinned official PayPal schema](https://github.com/paypal/paypal-rest-api-specifications/blob/90e8041ffe02d80c452d2b476bedd59a8d219bdc/openapi/customer_disputes_v1.json) and the repository's captured MCP catalog.

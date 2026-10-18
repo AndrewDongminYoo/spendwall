@@ -1,0 +1,15 @@
+{
+  "id": "dispute",
+  "customerId": "demo-customer",
+  "disputeId": "DEMO-DISPUTE-00001",
+  "sellerTransactionId": "DEMO-SALE-00001",
+  "amount": {
+    "value": "25.00",
+    "currency_code": "USD"
+  },
+  "gross": {
+    "value": "60.00",
+    "currency_code": "USD"
+  },
+  "deadlineHours": 12
+}

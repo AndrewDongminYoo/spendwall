@@ -6,6 +6,11 @@ import type { Scenario } from './firewall.ts';
 import { replay, reviewPending } from './runner.ts';
 import { runLive } from './agent.ts';
 import {
+  createDisputeDemo,
+  readDisputeTicket,
+  replayDispute,
+} from './dispute.ts';
+import {
   createShoppingDemo,
   readShoppingTicket,
   replayShopping,
@@ -14,14 +19,16 @@ import {
 const args = process.argv.slice(2);
 const name = args[0] ?? 'all';
 const live = args[1] === '--live';
+// Opt-in only: `all` runs the five default scenarios and never this one.
+const dispute = name === 'dispute';
 if (
   args.length > 2 ||
   (args[1] !== undefined && !live) ||
-  (name !== 'all' && !scenarios.includes(name as Scenario)) ||
-  (live && name === 'all')
+  (name !== 'all' && !dispute && !scenarios.includes(name as Scenario)) ||
+  (live && (name === 'all' || dispute))
 ) {
   console.error(
-    'Usage: pnpm demo [all|small|approval|injection|velocity|shopping] [--live]',
+    'Usage: pnpm demo [all|small|approval|injection|velocity|shopping] [--live]\n       pnpm demo dispute',
   );
   process.exitCode = 2;
 } else if (live && !process.env.ANTHROPIC_API_KEY) {
@@ -62,9 +69,27 @@ if (
     console.log(
       live
         ? 'LIVE CLAUDE / SYNTHETIC PAYMENTS'
-        : 'RECORDED AGENT CALLS / SYNTHETIC PAYMENTS / SCRIPTED HUMAN APPROVAL',
+        : dispute
+          ? 'SYNTHETIC DISPUTE EVENT / SYNTHETIC PAYMENTS / NO CLAIM ACCEPTANCE'
+          : 'RECORDED AGENT CALLS / SYNTHETIC PAYMENTS / SCRIPTED HUMAN APPROVAL',
     );
     await withDemoDatabase(async (url) => {
+      if (dispute) {
+        const demo = await createDisputeDemo(url, await readDisputeTicket());
+        try {
+          cancellation.signal.throwIfAborted();
+          console.log('\nTicket: dispute');
+          const alerts = await replayDispute(
+            demo,
+            (line) => console.log(line),
+            cancellation.signal,
+          );
+          console.log(`dispute: PASS alerts=${alerts}`);
+        } finally {
+          await demo.close();
+        }
+        return;
+      }
       for (const scenario of name === 'all' ? scenarios : [name as Scenario]) {
         cancellation.signal.throwIfAborted();
         if (scenario === 'shopping') {
