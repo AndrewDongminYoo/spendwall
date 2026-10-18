@@ -58,7 +58,7 @@ export class ApprovalDelivery {
       await client.query('BEGIN');
       opened = true;
       await client.query("SET LOCAL statement_timeout='5s'");
-      await client.query(`WITH expired AS (SELECT id FROM approvals.deliveries WHERE state IN ('ready','sending') AND (expires_at<=clock_timestamp() OR attempts>=100) FOR UPDATE SKIP LOCKED LIMIT 100)
+      await client.query(`WITH expired AS (SELECT id FROM approvals.deliveries WHERE state IN ('ready','sending') AND (expires_at<=clock_timestamp() OR attempts>=100) AND (state='ready' OR leased_until<=clock_timestamp()) FOR UPDATE SKIP LOCKED LIMIT 100)
         UPDATE approvals.deliveries SET state='skipped',claim_id=NULL,leased_until=NULL WHERE id IN (SELECT id FROM expired)`);
       const result = await client.query<Delivery>(
         `WITH candidate AS (

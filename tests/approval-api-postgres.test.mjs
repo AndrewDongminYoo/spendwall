@@ -838,6 +838,83 @@ test(
         );
       },
     );
+    for (const bound of ['attempt', 'age'])
+      await t.test(
+        `a concurrent drain ends a sending delivery at its ${bound} bound only after the lease`,
+        async (t) => {
+          const f = await fixture(t);
+          assert.equal((await f.register()).status, 201);
+          const live = await f.pending();
+          const abandoned = await f.pending();
+          // An abandoned final attempt whose lease has elapsed.
+          await f.pool.query(
+            `UPDATE approvals.deliveries SET state='sending',attempts=100,claim_id=gen_random_uuid(),
+            leased_until=clock_timestamp()-interval '1 second' WHERE approval_id=$1`,
+            [abandoned.id],
+          );
+          if (bound === 'attempt')
+            await f.pool.query(
+              'UPDATE approvals.deliveries SET attempts=99 WHERE approval_id=$1',
+              [live.id],
+            );
+          let during;
+          f.beforePush(async () => {
+            if (bound === 'age') {
+              await f.owner.query(
+                'ALTER TABLE approvals.deliveries DISABLE TRIGGER USER',
+              );
+              try {
+                await f.owner.query(
+                  "UPDATE approvals.deliveries SET expires_at=clock_timestamp()-interval '1 second' WHERE approval_id=$1",
+                  [live.id],
+                );
+              } finally {
+                await f.owner.query(
+                  'ALTER TABLE approvals.deliveries ENABLE TRIGGER USER',
+                );
+              }
+            }
+            await f.worker().drain();
+            during = (
+              await f.pool.query(
+                'SELECT state FROM approvals.deliveries WHERE approval_id=$1',
+                [live.id],
+              )
+            ).rows[0].state;
+          });
+          await f.worker().drain();
+          assert.equal(during, 'sending');
+          assert.deepEqual(
+            f.seen.notifications.map(
+              (notification) => notification.body.message.data.approval_id,
+            ),
+            [live.id],
+          );
+          const rows = (
+            await f.pool.query(
+              'SELECT approval_id,state,attempts,claim_id FROM approvals.deliveries',
+            )
+          ).rows;
+          assert.deepEqual(
+            rows.find((row) => row.approval_id === live.id),
+            {
+              approval_id: live.id,
+              state: 'sent',
+              attempts: bound === 'attempt' ? 100 : 1,
+              claim_id: null,
+            },
+          );
+          assert.deepEqual(
+            rows.find((row) => row.approval_id === abandoned.id),
+            {
+              approval_id: abandoned.id,
+              state: 'skipped',
+              attempts: 100,
+              claim_id: null,
+            },
+          );
+        },
+      );
     await t.test(
       'curl concurrent decisions keep one execution and a pending page stays scoped',
       async (t) => {
