@@ -120,6 +120,7 @@ class PushInbox {
   }
 
   void _hint(Map<String, dynamic> data) {
+    if (_controller?.disputeHint(data) ?? false) return;
     final id = notificationApprovalId(data);
     if (id == null) return;
     _pending = id;

@@ -158,6 +158,89 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a dispute notice is read-only and dismisses', (tester) async {
+    controller.disputeHint({'dispute_id': 'PP-D-27803', 'stage': 'due_soon'});
+    await tester.pumpWidget(ApproverApp(controller: controller));
+    final notice = find.byKey(const Key('dispute-notice'));
+    expect(notice, findsOneWidget);
+    expect(
+      find.descendant(of: notice, matching: find.text('PP-D-27803')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: notice, matching: find.text('Due within 24 hours')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: notice, matching: find.byType(FilledButton)),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: notice, matching: find.byType(OutlinedButton)),
+      findsNothing,
+    );
+    expect(find.text('Approve refund'), findsNothing);
+    expect(find.text('Deny request'), findsNothing);
+    controller.disputeHint({'dispute_id': 'PP-D-27803', 'stage': 'overdue'});
+    await tester.pump();
+    expect(
+      find.descendant(of: notice, matching: find.text('Overdue')),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Dismiss notice'));
+    await tester.pump();
+    expect(find.byKey(const Key('dispute-notice')), findsNothing);
+    expect(find.text('Connect your device'), findsOneWidget);
+    expect(api.reads, 0);
+    expect(api.pages, 0);
+    expect(auth.confirmations, 0);
+  });
+
+  testWidgets('a dispute notice opened while scrolled down is shown', (
+    tester,
+  ) async {
+    await detail(tester);
+    final scrollable = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(
+      find.text('Load optional reference'),
+      200,
+      scrollable: scrollable,
+    );
+    expect(
+      tester.state<ScrollableState>(scrollable).position.pixels,
+      greaterThan(0),
+    );
+    controller.disputeHint({'dispute_id': 'PP-D-27803', 'stage': 'overdue'});
+    await tester.pump();
+    await tester.pump();
+    expect(tester.state<ScrollableState>(scrollable).position.pixels, 0);
+    expect(
+      find.byKey(const Key('dispute-notice')).hitTestable(),
+      findsOneWidget,
+    );
+    expect(find.text('PP-D-27803').hitTestable(), findsOneWidget);
+  });
+
+  testWidgets('a long dispute ID with large text does not overflow', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 700);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    controller.disputeHint({'dispute_id': 'A' * 255, 'stage': 'overdue'});
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+        child: ApproverApp(controller: controller),
+      ),
+    );
+    expect(find.byKey(const Key('dispute-notice')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a recovered completed outcome can be opened from the queue', (
     tester,
   ) async {

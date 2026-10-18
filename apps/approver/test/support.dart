@@ -41,7 +41,7 @@ class ControlledGateway implements ApprovalGateway {
   Future<void> Function()? beforeDecision;
   Future<void> Function()? beforeEnrollment;
   Object? readError;
-  int reads = 0;
+  int reads = 0, pages = 0;
   @override
   Future<Enrollment> enroll(
     String deviceId,
@@ -53,11 +53,14 @@ class ControlledGateway implements ApprovalGateway {
   }
 
   @override
-  Future<ApprovalPage> pending(String token, {String? cursor}) async =>
-      ApprovalPage(
-        current['status'] == 'pending' ? [Approval.parse(current)!] : [],
-        null,
-      );
+  Future<ApprovalPage> pending(String token, {String? cursor}) async {
+    pages++;
+    return ApprovalPage(
+      current['status'] == 'pending' ? [Approval.parse(current)!] : [],
+      null,
+    );
+  }
+
   @override
   Future<Approval> detail(String token, String id) async {
     reads++;

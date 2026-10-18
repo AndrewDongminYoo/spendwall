@@ -112,7 +112,9 @@ The database guard starts every row `ready` with no attempts, server-set creatio
 Identity columns cannot be rewritten, attempts never decrease and `sent` or `skipped` rows are final.
 The application role has `SELECT` and `INSERT`, plus `UPDATE` on `state`, `attempts`, `next_attempt_at`, `claim_id` and `leased_until` only; it cannot delete or truncate rows, and `PUBLIC` has no access.
 
-Out of scope: Flutter app handling of the `dispute_id`/`stage` payload, a periodic scheduler that re-evaluates disputes and calls `record`, wiring into the W0 proxy or agent demo, email, physical-device delivery and live sandbox disputes.
+The Flutter approver shows an opened dispute push as a read-only, dismissible notice built only from the `dispute_id`/`stage` data; it makes no server call, offers no dispute action and stores nothing (see the [approver README](../apps/approver/README.md#dispute-deadline-notice)).
+
+Out of scope: a server dispute list or detail API for the app, a periodic scheduler that re-evaluates disputes and calls `record`, wiring into the W0 proxy or agent demo, email, physical-device delivery and live sandbox disputes.
 
 ## Verification and integration limits
 
@@ -128,7 +130,7 @@ They do not establish live PayPal response completeness, approval delivery or ac
 Calling `evaluatePolicy` directly bypasses this mandatory floor; an integration must compose `DisputePolicy` after caller authentication and tool authorization.
 Before any future execution, it must create durable audited approval state bound to the exact request, verify current provider facts/capabilities, reserve exposure and implement provider-specific idempotency and recovery.
 Do not reuse the refund executor or refund approval rows for dispute acceptance.
-The alert tests use synthetic FCM responses and a disposable PostgreSQL database; they do not establish physical-device delivery or app display.
-The original issue remains open for that integration, physical-device deadline delivery, app display and live sandbox disputes.
+The alert tests use synthetic FCM responses and a disposable PostgreSQL database; they do not establish physical-device delivery or display.
+The original issue remains open for that integration, the scheduler, physical-device deadline delivery and display, and live sandbox disputes.
 
 The supported response fields are grounded in the [pinned official PayPal schema](https://github.com/paypal/paypal-rest-api-specifications/blob/90e8041ffe02d80c452d2b476bedd59a8d219bdc/openapi/customer_disputes_v1.json) and the repository's captured MCP catalog.

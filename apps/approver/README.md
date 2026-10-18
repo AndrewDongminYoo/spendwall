@@ -71,12 +71,23 @@ Before sending a decision, it persists an unresolved marker so a restart cannot 
 Refresh also reads each unresolved request by ID, keeping its result accessible in the queue even after the server removes it from pending requests.
 The marker clears only after its non-pending detail is opened or refreshed in the detail view.
 An uncertain outcome permits read-only refresh; an unknown or failed execution needs administrator reconciliation.
-Notifications carry only an approval ID and generic visible text; they never authorize a decision.
+Approval notifications carry only an approval ID and generic visible text; they never authorize a decision.
 A stale or duplicate notification opens the authenticated current state.
+
+## Dispute deadline notice
+
+The [dispute deadline alert outbox](../../docs/dispute-policy.md#deadline-alert-outbox) for [issue 28](https://github.com/AndrewDongminYoo/spendwall/issues/28) sends a push whose data has exactly `dispute_id` and `stage` (`due_soon` or `overdue`).
+Opening that push, or launching the app from it, shows a read-only "Dispute response due" notice with the dispute ID and the deadline stage that the server classified when it created the alert.
+The app validates the ID with the server's rule and ignores any other payload shape; an approval push is never read as a dispute notice and the reverse.
+The notice states that the deadline must be handled outside this app and can only be dismissed.
+It needs no session, makes no server or network request, asks for no biometrics, offers no dispute action and is not persisted, so it disappears after dismissal or an app restart.
+The app ignores a dispute push received while it is in the foreground; it does not start a refresh or show the notice.
+There is no server dispute list API, no scheduler that re-evaluates disputes and no physical-device verification of this notice.
 
 ## Remaining acceptance
 
 Keep issue 15 open until an authorized physical device receives a real push, opens the request, authenticates biometrically and observes the bound sandbox refund result.
 Also verify expired/completed request actions, notification permission denial, app restart, backgrounding during authentication and push registration rotation on both native platforms.
 Firebase/APNs configuration, the private device-to-server path and physical-device acceptance remain unverified.
+Delivery and opening of a real dispute deadline push on a physical device are also unverified; issue 28 stays open for that, the scheduler and live sandbox disputes.
 Actual deployment and trial issuance remain deferred.
