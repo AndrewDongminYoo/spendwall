@@ -51,6 +51,7 @@ The repository does not create cloud resources or install to a physical device d
 
 The API currently listens on loopback and rejects non-local Host/Origin values.
 A physical-device connection needs a separately approved private routing arrangement that preserves those server checks.
+The [synthetic recording runbook](../../docs/recording-approval.md) provides a separate server composition and documents the still-pending Firebase/APNs and private HTTPS prerequisites. Its automated HTTP/fake-notifier fixture does not verify this app on a phone.
 Do not expose the API publicly or change its bind address to make a demo work.
 The app normally accepts only an HTTPS origin without a path, query, fragment or user information.
 For an explicitly local debug run, `--dart-define=ALLOW_LOOPBACK_HTTP=true` also permits HTTP on `localhost`, `127.0.0.1` or `::1`.
