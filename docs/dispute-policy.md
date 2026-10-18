@@ -72,7 +72,7 @@ An omitted deadline produces `not_provided`; a malformed present deadline does n
 
 Deadline classification is recomputed at review time, even for cached provider facts.
 It is advisory: an overdue claim still needs human review, never automatic acceptance.
-No scheduler re-evaluates disputes and no email is sent; the deadline alert outbox below only records stages that a review has already classified.
+No email is sent; the deadline alert outbox below only records stages that a review has already classified, and the [dispute tracker](#dispute-tracking) is the only component that re-evaluates disputes and passes reviews to it.
 
 ## Deadline alert outbox
 
@@ -80,7 +80,8 @@ No scheduler re-evaluates disputes and no email is sent; the deadline alert outb
 Apply `migrations/012-dispute-deadline-alerts.sql` as the trusted owner after `004-approval-api.sql`; it reuses the approver device registry.
 Construct it with the application pool, the approval API's `DeviceAuthority` and an `FcmSender`.
 
-`record(result, agentId)` takes a `DisputePolicy` result and the trusted agent identity that the review used.
+`record(result, agentId, client?)` takes a `DisputePolicy` result and the trusted agent identity that the review used.
+With a `client`, the insert runs on that client inside the caller's transaction and the client is not released; without one, `record` takes a pool connection.
 It records nothing for a `deny` result, a result without `review`, or a `scheduled` or `not_provided` deadline.
 An agent identity that differs from the review context's agent is refused, and so is a review whose context merchant differs from the merchant of the `DeviceAuthority` that the outbox uses.
 For `due_soon` and `overdue` it inserts one `ready` row for each active device of that agent's owner and returns the number of new rows.
@@ -114,14 +115,52 @@ The application role has `SELECT` and `INSERT`, plus `UPDATE` on `state`, `attem
 
 The Flutter approver shows an opened dispute push as a read-only, dismissible notice built only from the `dispute_id`/`stage` data; it makes no server call, offers no dispute action and stores nothing (see the [approver README](../apps/approver/README.md#dispute-deadline-notice)).
 
-Out of scope: a server dispute list or detail API for the app, a periodic scheduler that re-evaluates disputes and calls `record`, wiring into the W0 proxy or agent demo, email, physical-device delivery and live sandbox disputes.
-The scheduler's proposed design is in the [dispute tracking spec](specs/2026-10-18-dispute-tracking.md).
+Out of scope: a server dispute list or detail API for the app, wiring into the W0 proxy or agent demo, email, physical-device delivery and live sandbox disputes.
+
+## Dispute tracking
+
+`DisputeTracker` (`apps/firewall/src/disputes/tracking.ts`) re-evaluates disputes that verified webhook events discovered and passes each `due_soon` or `overdue` review to `record`.
+The contract is the [dispute tracking spec](specs/2026-10-18-dispute-tracking.md).
+Apply `migrations/013-dispute-tracking.sql` as the trusted owner after `007-reconciliation.sql` and `012-dispute-deadline-alerts.sql`.
+It adds `disputes.events`, which the [webhook receiver](webhooks.md#dispute-events) inserts into, and `disputes.tracked`, which only an event trigger creates or advances.
+
+Construct the tracker with the application pool, the merchant's `DeviceAuthority`, a `ContextResolver` for the same merchant, the loaded dispute policy, one review agent ID and a required `saleCustomer(sellerTransactionId)` lookup.
+The lookup must return `{ id, email }` from the deployment's own authenticated customer records, or `undefined`.
+No code in this repository implements it, so a deployment that supplies none stores verified events but re-evaluates no dispute; construction without a lookup, or with a resolver and `DeviceAuthority` for different merchants, is refused.
+The review agent must be one that the policy allows for `accept_dispute_claim` and that has approver device grants; any other agent produces `policy_denied` and no alert.
+`start()` runs one `tick()` every 60 seconds, `tick()` claims at most ten due rows of the tracker's merchant, each under a 30-second lease and at most once per tick, and `close()` stops new ticks and waits for the running one.
+As in the alert outbox, the due check and the lease use the database clock, which also sets the trigger's check times; each claim returns that instant, and the evaluation schedules from it, so an application clock that differs from the database neither delays a check nor shortens another instance's lease.
+The optional `now` clock replaces it in tests.
+
+Each check looks up the customer, invalidates the cached dispute, resolves `get_dispute` and, when the dispute can be accepted, evaluates `accept_dispute_claim` with the fixed note `Spendwall_deadline_review`, which is never sent to PayPal.
+Both resolutions share one cache entry, so a check normally makes one provider GET.
+The tracker never accepts a claim, follows a provider link or calls a mutating PayPal API.
+
+| Outcome                             | Next check                                                                         |
+| ----------------------------------- | ---------------------------------------------------------------------------------- |
+| `scheduled`                         | The earlier of `dueAt - 24h` and now + 24 hours                                    |
+| `due_soon` (alert recorded)         | `dueAt`                                                                            |
+| `overdue` (alert recorded)          | None; tracking ends                                                                |
+| `not_provided` or `policy_denied`   | Now + 24 hours                                                                     |
+| `not_acceptable`                    | As `scheduled` before `dueAt - 24h`, hourly until `dueAt`, then now + 24 hours     |
+| `unmapped` or `dispute_unavailable` | Backoff from one minute, doubling, capped at one hour; these are the only failures |
+
+An evaluation or settlement that throws, for example because `record` refuses the review, rolls back any alert and is recorded as `dispute_unavailable` for that row only; the tick continues with the next due row.
+
+Tracking ends as `resolved` on a verified `CUSTOMER.DISPUTE.RESOLVED` event or a provider `RESOLVED` status, `overdue` after `record` accepts an overdue review, `exhausted` on a failed check at least seven days after the failure streak started, and `expired` 180 days after the first event, which is checked before any provider read.
+Settlement locks the row only if its claim and event version are unchanged, records any alert on the same client and writes the outcome in the same transaction.
+An event stored after the claim makes the read stale: the tracker records no alert, clears only its claim and leaves the trigger's schedule, so the next tick reads the dispute again.
+
+The application group can read `disputes.tracked` and update only its schedule, failure, outcome, ending and claim columns; it cannot insert or delete tracked rows or read events.
+A database guard keeps identity columns immutable, lets only the event trigger change `event_version`, keeps an ended row final and resets the failure streak only with a successful outcome.
+The hosted dashboard reader's readiness check also refuses any `disputes` privilege, as it does for the `orders` schema.
 
 ## Verification and integration limits
 
 ```sh
-node --test tests/dispute-policy.test.mjs tests/context-resolver.test.mjs tests/dispute-alerts.test.mjs
+node --test tests/dispute-policy.test.mjs tests/context-resolver.test.mjs tests/dispute-alerts.test.mjs tests/dispute-tracking.test.mjs
 node scripts/test-audit-postgres.mjs --dispute-alerts
+node scripts/test-audit-postgres.mjs --dispute-tracking
 node scripts/dispute-demo.mjs
 ```
 
@@ -132,6 +171,7 @@ Calling `evaluatePolicy` directly bypasses this mandatory floor; an integration 
 Before any future execution, it must create durable audited approval state bound to the exact request, verify current provider facts/capabilities, reserve exposure and implement provider-specific idempotency and recovery.
 Do not reuse the refund executor or refund approval rows for dispute acceptance.
 The alert tests use synthetic FCM responses and a disposable PostgreSQL database; they do not establish physical-device delivery or display.
-The original issue remains open for that integration, the scheduler, physical-device deadline delivery and display, and live sandbox disputes.
+The tracking tests use synthetic events, provider responses and customer lookups; they do not establish real webhook delivery, the dispute event resource shape, the equality of a dispute's `seller_transaction_id` and the Orders capture ID, or which statuses PayPal makes acceptable.
+The original issue remains open for that integration, a trusted `saleCustomer` implementation, real webhook delivery, physical-device deadline delivery and display, and live sandbox disputes.
 
 The supported response fields are grounded in the [pinned official PayPal schema](https://github.com/paypal/paypal-rest-api-specifications/blob/90e8041ffe02d80c452d2b476bedd59a8d219bdc/openapi/customer_disputes_v1.json) and the repository's captured MCP catalog.
