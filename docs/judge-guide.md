@@ -118,9 +118,10 @@ This is a bounded installation measurement on one busy host, not a guarantee on 
 An earlier fresh-container run on October 16, 2026, at `652ee1f921ff872a65734e1f28c0ab98f0937742`, completed the then four default scenarios in 47 seconds after two harness attempts had failed on host-network loopback and a disabled inner bridge.
 That run predates the `shopping` scenario, so it does not measure the current default demo.
 
-The [repository-history secret scan](notes/2026-10-16-history-secret-scan.md) records a snapshot at `f226b6a` with 30 advertised refs and 122 reachable commits.
+The October 16, 2026, [repository-history secret scan](notes/2026-10-16-history-secret-scan.md) records a snapshot at `f226b6a` with 30 advertised refs and 122 reachable commits.
 Gitleaks reported zero findings after deleted-history and merge-only detection controls, with explicit Git output formatting to make the commit coverage count agree.
 That text-history result excludes media inspection and does not establish that every secret format is detected or that later commits are covered.
+A [repeat scan on October 18, 2026](notes/2026-10-18-history-secret-scan.md), at `f7feeb3` with 46 refs and 185 reachable commits, also reported zero findings; it did not repeat the detection controls.
 
 ## Remaining submission work
 
