@@ -98,7 +98,8 @@ export class DisputeDeadlineAlerts {
       await client.query("SET LOCAL statement_timeout='5s'");
       const merchant = this.devices.merchantRef();
       await client.query(
-        `WITH expired AS (SELECT id FROM approvals.dispute_alerts WHERE merchant_ref=$1 AND state IN ('ready','sending') AND (expires_at<=clock_timestamp() OR attempts>=100) FOR UPDATE SKIP LOCKED LIMIT 100)
+        `WITH expired AS (SELECT id FROM approvals.dispute_alerts WHERE merchant_ref=$1 AND state IN ('ready','sending') AND (expires_at<=clock_timestamp() OR attempts>=100)
+          AND (state='ready' OR leased_until<=clock_timestamp()) FOR UPDATE SKIP LOCKED LIMIT 100)
         UPDATE approvals.dispute_alerts SET state='skipped',claim_id=NULL,leased_until=NULL WHERE id IN (SELECT id FROM expired)`,
         [merchant],
       );

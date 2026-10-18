@@ -99,7 +99,7 @@ It claims only rows of its own merchant.
 | `skipped` | Unregistered, revoked or re-enrolled device, expired or out of tries |
 
 A retryable FCM failure returns the row to `ready` with exponential backoff capped at 60 seconds, extended to the provider's `Retry-After` and at least one minute for HTTP 429.
-An explicit FCM `UNREGISTERED` error, an inactive device, a changed device generation or owner, 100 attempts, or expiry ends the row as `skipped`.
+An explicit FCM `UNREGISTERED` error, an inactive device, a changed device generation or owner, 100 attempts, or expiry ends the row as `skipped`; a `sending` row reaches that bound only after its lease has elapsed, so a concurrent drain never overwrites an outcome that is still being sent.
 A row expires 72 hours after it is recorded, whatever its `due_at`; a deadline that has already passed is not a reason to skip, so an `overdue` alert is still delivered.
 `close()` stops new drains and waits for the running one.
 

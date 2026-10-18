@@ -437,6 +437,79 @@ test('dispute deadline alerts in PostgreSQL', { skip: !url }, async (t) => {
       );
     },
   );
+  for (const bound of ['attempt', 'age'])
+    await t.test(
+      `a concurrent drain ends a sending alert at its ${bound} bound only after the lease`,
+      async (t) => {
+        const f = await fixture(t);
+        const alerts = f.worker();
+        await alerts.record(await f.review(), 'support');
+        const deviceA = f.devices.deviceRef('deviceA');
+        const deviceC = f.devices.deviceRef('deviceC');
+        // deviceC: an abandoned final attempt whose lease has elapsed.
+        await f.pool.query(
+          `UPDATE approvals.dispute_alerts SET state='sending',attempts=100,claim_id=gen_random_uuid(),
+          leased_until=clock_timestamp()-interval '1 second' WHERE device_ref=$1`,
+          [deviceC],
+        );
+        if (bound === 'attempt')
+          await f.pool.query(
+            'UPDATE approvals.dispute_alerts SET attempts=99 WHERE device_ref=$1',
+            [deviceA],
+          );
+        let during;
+        f.beforePush(async () => {
+          if (bound === 'age') {
+            await f.owner.query(
+              'ALTER TABLE approvals.dispute_alerts DISABLE TRIGGER USER',
+            );
+            await f.owner.query(
+              "UPDATE approvals.dispute_alerts SET created_at=created_at-interval '73 hours',expires_at=expires_at-interval '73 hours' WHERE device_ref=$1",
+              [deviceA],
+            );
+            await f.owner.query(
+              'ALTER TABLE approvals.dispute_alerts ENABLE TRIGGER USER',
+            );
+          }
+          await f.worker().drain();
+          during = (
+            await f.pool.query(
+              'SELECT state FROM approvals.dispute_alerts WHERE device_ref=$1',
+              [deviceA],
+            )
+          ).rows[0].state;
+        });
+        await alerts.drain();
+        assert.equal(during, 'sending');
+        assert.deepEqual(
+          f.notifications.map((message) => message.token),
+          ['synthetic-token-A'],
+        );
+        const states = (
+          await f.pool.query(
+            'SELECT device_ref,state,attempts,claim_id FROM approvals.dispute_alerts',
+          )
+        ).rows;
+        assert.deepEqual(
+          states.find((row) => row.device_ref === deviceA),
+          {
+            device_ref: deviceA,
+            state: 'sent',
+            attempts: bound === 'attempt' ? 100 : 1,
+            claim_id: null,
+          },
+        );
+        assert.deepEqual(
+          states.find((row) => row.device_ref === deviceC),
+          {
+            device_ref: deviceC,
+            state: 'skipped',
+            attempts: 100,
+            claim_id: null,
+          },
+        );
+      },
+    );
   await t.test(
     "a drain claims and expires only its own merchant's alerts",
     async (t) => {
