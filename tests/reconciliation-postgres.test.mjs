@@ -142,7 +142,10 @@ test(
         target.password = 'receiver-test-only';
         const receiver = new pg.Pool({ connectionString: target.toString() });
         try {
-          await checkWebhookReceiver(receiver);
+          // Without migration 013, dispute events are acknowledged as ignored.
+          assert.deepEqual(await checkWebhookReceiver(receiver), {
+            disputeTracking: false,
+          });
           await assert.rejects(checkWebhookReceiver(f.owner), /receiver/i);
           await assert.rejects(checkWebhookReceiver(f.app), /receiver/i);
           await reconciliation.receive(receiver, event(2));

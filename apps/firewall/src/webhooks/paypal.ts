@@ -3,14 +3,32 @@ import { createHash } from 'node:crypto';
 import type { TokenOptions } from '../token.ts';
 import { createTokenManager } from '../token.ts';
 import { identifier, object, snapshot } from '../context/json.ts';
+import { disputeIdentifier } from '../context/dispute.ts';
 
 export type VerifiedRefund = {
+  kind?: 'refund';
   eventId: string;
   refundId: string;
   captureId: string;
   usdCents: number;
   payload: unknown;
 };
+export const disputeEventTypes = Object.freeze([
+  'CUSTOMER.DISPUTE.CREATED',
+  'CUSTOMER.DISPUTE.UPDATED',
+  'CUSTOMER.DISPUTE.RESOLVED',
+] as const);
+export type DisputeEventType = (typeof disputeEventTypes)[number];
+// A trigger and lookup key for dispute tracking, never a fact source.
+export type VerifiedDispute = {
+  kind: 'dispute';
+  eventId: string;
+  eventType: DisputeEventType;
+  disputeId: string;
+  sellerTransactionId: string;
+  payload: unknown;
+};
+export type VerifiedEvent = VerifiedRefund | VerifiedDispute;
 export type WebhookOptions = TokenOptions & {
   webhookId: string;
   merchantId: string;
@@ -135,7 +153,7 @@ export class PayPalWebhookVerifier {
   async verify(
     inputHeaders: IncomingHttpHeaders,
     input: string,
-  ): Promise<VerifiedRefund | null> {
+  ): Promise<VerifiedEvent | null> {
     const transmission = headers(inputHeaders);
     let event;
     try {
@@ -165,6 +183,32 @@ export class PayPalWebhookVerifier {
       throw new WebhookError(401);
     if (verification.verification_status !== 'SUCCESS')
       throw new WebhookError(503);
+    if ((disputeEventTypes as readonly string[]).includes(event.event_type)) {
+      // The event resource shape is unverified; anything else is rejected.
+      let disputeId: string, sellerTransactionId: string;
+      try {
+        const resource = object(event.resource);
+        disputeId = disputeIdentifier(resource.dispute_id);
+        if (
+          !Array.isArray(resource.disputed_transactions) ||
+          resource.disputed_transactions.length !== 1
+        )
+          throw new Error();
+        sellerTransactionId = disputeIdentifier(
+          object(resource.disputed_transactions[0]).seller_transaction_id,
+        );
+      } catch {
+        throw new WebhookError(422);
+      }
+      return {
+        kind: 'dispute',
+        eventId: String(event.id),
+        eventType: event.event_type as DisputeEventType,
+        disputeId,
+        sellerTransactionId,
+        payload: event,
+      };
+    }
     if (event.event_type !== 'PAYMENT.CAPTURE.REFUNDED') return null;
     let refundId: string, captureId: string, cents: number;
     try {
@@ -214,6 +258,7 @@ export class PayPalWebhookVerifier {
       throw new WebhookError(422);
     }
     return {
+      kind: 'refund',
       eventId: String(event.id),
       refundId,
       captureId,

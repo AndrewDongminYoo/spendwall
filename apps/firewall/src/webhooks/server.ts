@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { PayPalWebhookVerifier, VerifiedRefund } from './paypal.ts';
+import type { PayPalWebhookVerifier, VerifiedEvent } from './paypal.ts';
 import { WebhookError } from './paypal.ts';
 
 function reply(res: ServerResponse, code: number, body: unknown) {
@@ -48,7 +48,8 @@ async function body(req: IncomingMessage): Promise<string> {
 }
 export async function startWebhookServer(options: {
   verifier: Pick<PayPalWebhookVerifier, 'verify'>;
-  receive: (event: VerifiedRefund) => Promise<void>;
+  // Resolves to 'ignored' for a verified event that the deployment does not store.
+  receive: (event: VerifiedEvent) => Promise<void | 'ignored'>;
   port?: number;
 }) {
   const port = options.port ?? 0;
@@ -84,8 +85,10 @@ export async function startWebhookServer(options: {
             req.headers,
             await body(req),
           );
-          if (event) await options.receive(event);
-          reply(res, 200, { status: event ? 'received' : 'ignored' });
+          const outcome = event ? await options.receive(event) : 'ignored';
+          reply(res, 200, {
+            status: outcome === 'ignored' ? 'ignored' : 'received',
+          });
         } finally {
           active--;
         }

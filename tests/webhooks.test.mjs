@@ -202,20 +202,147 @@ test('refund envelope rejects noncompleted, ambiguous and foreign capture links'
     );
   }
 });
+export const disputeEvent = (type = 'CUSTOMER.DISPUTE.CREATED', n = 1) => ({
+  id: `WH-SYNTHETIC-DISPUTE-${n}`,
+  event_type: type,
+  resource_type: 'dispute',
+  create_time: '2026-10-16T08:00:00Z',
+  resource: {
+    dispute_id: 'PP-D-SYNTHETIC',
+    status: 'WAITING_FOR_SELLER_RESPONSE',
+    seller_response_due_date: '2026-10-17T12:00:00Z',
+    dispute_amount: { value: '25.00', currency_code: 'USD' },
+    disputed_transactions: [
+      {
+        seller_transaction_id: 'SALE12345678901234',
+        buyer: { name: 'Untrusted_name', email: 'buyer@example.invalid' },
+      },
+    ],
+  },
+});
 test('other event types are ignored only after successful verification', async () => {
-  const { verifier, calls } = fixture();
-  const event = { ...refundEvent(), event_type: 'CUSTOMER.DISPUTE.CREATED' };
+  for (const type of ['RISK.DISPUTE.CREATED', 'PAYMENT.CAPTURE.COMPLETED']) {
+    const { verifier, calls } = fixture();
+    const event = { ...disputeEvent(), event_type: type };
+    assert.equal(
+      await verifier.verify(webhookHeaders, JSON.stringify(event)),
+      null,
+    );
+    assert.equal(calls.length, 2);
+    const failed = fixture({
+      verification: () => Response.json({ verification_status: 'FAILURE' }),
+    });
+    await assert.rejects(
+      failed.verifier.verify(webhookHeaders, JSON.stringify(event)),
+    );
+  }
+});
+test('verified dispute events are lookup keys without a provider read', async () => {
+  for (const type of [
+    'CUSTOMER.DISPUTE.CREATED',
+    'CUSTOMER.DISPUTE.UPDATED',
+    'CUSTOMER.DISPUTE.RESOLVED',
+  ]) {
+    const { verifier, calls } = fixture();
+    const event = disputeEvent(type);
+    const result = await verifier.verify(webhookHeaders, JSON.stringify(event));
+    assert.deepEqual(
+      { ...result, payload: undefined },
+      {
+        kind: 'dispute',
+        eventId: event.id,
+        eventType: type,
+        disputeId: 'PP-D-SYNTHETIC',
+        sellerTransactionId: 'SALE12345678901234',
+        payload: undefined,
+      },
+    );
+    assert.deepEqual(result.payload, event);
+    // Only the token and signature postback; no dispute GET for any type.
+    assert.deepEqual(
+      calls.map((call) => new URL(call.url).pathname),
+      ['/v1/oauth2/token', '/v1/notifications/verify-webhook-signature'],
+    );
+  }
   assert.equal(
-    await verifier.verify(webhookHeaders, JSON.stringify(event)),
-    null,
+    (
+      await fixture().verifier.verify(
+        webhookHeaders,
+        JSON.stringify(refundEvent()),
+      )
+    ).kind,
+    'refund',
   );
-  assert.equal(calls.length, 2);
-  const failed = fixture({
-    verification: () => Response.json({ verification_status: 'FAILURE' }),
-  });
-  await assert.rejects(
-    failed.verifier.verify(webhookHeaders, JSON.stringify(event)),
-  );
+});
+test('forged dispute events are rejected before their resource is read', async () => {
+  for (const [status, code] of [
+    ['FAILURE', 401],
+    ['PENDING', 503],
+  ]) {
+    const { verifier, calls } = fixture({
+      verification: () => Response.json({ verification_status: status }),
+    });
+    const event = disputeEvent();
+    delete event.resource.dispute_id;
+    await assert.rejects(
+      verifier.verify(webhookHeaders, JSON.stringify(event)),
+      (error) => error.code === code,
+    );
+    assert.equal(calls.length, 2);
+  }
+});
+test('dispute events without exactly one dispute and sale identifier are rejected', async () => {
+  for (const change of [
+    (e) => {
+      delete e.resource.dispute_id;
+    },
+    (e) => {
+      e.resource.dispute_id = 'PP-D/../other';
+    },
+    (e) => {
+      e.resource.dispute_id = ['PP-D-SYNTHETIC'];
+    },
+    (e) => {
+      e.resource.dispute_id = 'x'.repeat(256);
+    },
+    (e) => {
+      e.resource.disputed_transactions.push({
+        seller_transaction_id: 'SALE00000000000000',
+      });
+    },
+    (e) => {
+      e.resource.disputed_transactions = [];
+    },
+    (e) => {
+      e.resource.disputed_transactions = {
+        seller_transaction_id: 'SALE12345678901234',
+      };
+    },
+    (e) => {
+      delete e.resource.disputed_transactions[0].seller_transaction_id;
+    },
+    (e) => {
+      e.resource.disputed_transactions[0].seller_transaction_id = 'SALE_1';
+    },
+    (e) => {
+      e.resource.disputed_transactions[0].seller_transaction_id = 12345;
+    },
+    (e) => {
+      e.resource = 'PP-D-SYNTHETIC';
+    },
+    (e) => {
+      delete e.resource;
+    },
+  ]) {
+    const { verifier, calls } = fixture();
+    const event = disputeEvent();
+    change(event);
+    await assert.rejects(
+      verifier.verify(webhookHeaders, JSON.stringify(event)),
+      (error) => error.code === 422,
+    );
+    assert.equal(calls.length, 2);
+  }
 });
 test('a stalled verifier request is aborted before capture lookup', async () => {
   const { verifier, calls } = fixture({

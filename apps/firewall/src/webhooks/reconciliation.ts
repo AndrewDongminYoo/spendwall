@@ -8,9 +8,16 @@ import { canonical } from '../refunds.ts';
 import { identifier, snapshot } from '../context/json.ts';
 
 type Database = Pick<Pool | PoolClient, 'query'>;
-export async function checkWebhookReceiver(db: Database): Promise<void> {
+// Reports whether dispute tracking (migration 013) is installed; without it,
+// the receiver acknowledges dispute events as ignored.
+export async function checkWebhookReceiver(
+  db: Database,
+): Promise<{ disputeTracking: boolean }> {
   try {
-    const result = await db.query<{ restricted: boolean }>(`
+    const result = await db.query<{
+      restricted: boolean;
+      dispute_tracking: boolean;
+    }>(`
       WITH principals AS (SELECT oid FROM pg_roles
         WHERE rolname=current_user OR pg_has_role(current_user,oid,'MEMBER'))
       SELECT NOT (
@@ -20,28 +27,41 @@ export async function checkWebhookReceiver(db: Database): Promise<void> {
           WHERE r.rolname <> current_user AND pg_has_role(current_user,r.oid,'MEMBER')
           AND r.rolname <> 'spendwall_webhook_' || left(encode(sha256(convert_to(current_database(),'UTF8')),'hex'),40))
         OR EXISTS (SELECT FROM pg_database CROSS JOIN principals r WHERE datname=current_database() AND pg_has_role(r.oid,datdba,'USAGE'))
-        OR EXISTS (SELECT FROM pg_namespace n CROSS JOIN principals r WHERE nspname IN ('audit','approvals','approver','agent_auth','policy_replay','reconciliation','invoice_policy','orders')
+        OR EXISTS (SELECT FROM pg_namespace n CROSS JOIN principals r WHERE nspname IN ('audit','approvals','approver','agent_auth','policy_replay','reconciliation','invoice_policy','orders','disputes')
           AND (pg_has_role(r.oid,nspowner,'USAGE') OR has_schema_privilege(r.oid,n.oid,'CREATE')))
         OR EXISTS (SELECT FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
           CROSS JOIN principals r
-          WHERE n.nspname IN ('audit','approvals','approver','agent_auth','policy_replay','reconciliation','invoice_policy','orders')
+          WHERE n.nspname IN ('audit','approvals','approver','agent_auth','policy_replay','reconciliation','invoice_policy','orders','disputes')
           AND ((c.relkind IN ('r','p','v','m','f') AND (
             has_table_privilege(r.oid,c.oid,'UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
             OR has_any_column_privilege(r.oid,c.oid,'UPDATE,REFERENCES')
             OR EXISTS (SELECT FROM pg_attribute a WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped
-              AND ((has_column_privilege(r.oid,c.oid,a.attnum,'SELECT') AND NOT (n.nspname='reconciliation' AND c.relname='refund_events'))
-                OR (has_column_privilege(r.oid,c.oid,a.attnum,'INSERT') AND NOT (n.nspname='reconciliation' AND c.relname='refund_events'
-                  AND a.attname IN ('adapter_ref','event_ref','payload_hash','key_id','merchant_ref','refund_ref','capture_ref','usd_cents')))))))
+              AND ((has_column_privilege(r.oid,c.oid,a.attnum,'SELECT') AND NOT ((n.nspname='reconciliation' AND c.relname='refund_events')
+                  OR (n.nspname='disputes' AND c.relname='events')))
+                OR (has_column_privilege(r.oid,c.oid,a.attnum,'INSERT') AND NOT ((n.nspname='reconciliation' AND c.relname='refund_events'
+                  AND a.attname IN ('adapter_ref','event_ref','payload_hash','key_id','merchant_ref','refund_ref','capture_ref','usd_cents'))
+                  OR (n.nspname='disputes' AND c.relname='events'
+                  AND a.attname IN ('adapter_ref','merchant_ref','event_ref','payload_hash','event_type','dispute_id','seller_transaction_id'))))))))
             OR (c.relkind='S' AND has_sequence_privilege(r.oid,c.oid,'SELECT,USAGE,UPDATE'))))
         OR EXISTS (SELECT FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
           CROSS JOIN principals r
-          WHERE n.nspname IN ('audit','approvals','approver','agent_auth','policy_replay','reconciliation','invoice_policy','orders')
+          WHERE n.nspname IN ('audit','approvals','approver','agent_auth','policy_replay','reconciliation','invoice_policy','orders','disputes')
           AND p.prosecdef AND has_function_privilege(r.oid,p.oid,'EXECUTE'))
       ) AND has_schema_privilege('reconciliation','USAGE')
         AND has_table_privilege('reconciliation.refund_events','SELECT')
         AND NOT EXISTS (SELECT FROM unnest(ARRAY['adapter_ref','event_ref','payload_hash','key_id','merchant_ref','refund_ref','capture_ref','usd_cents']) AS field
-          WHERE NOT has_column_privilege('reconciliation.refund_events',field,'INSERT')) AS restricted`);
-    if (result.rows[0]?.restricted !== true) throw new Error();
+          WHERE NOT has_column_privilege('reconciliation.refund_events',field,'INSERT'))
+        -- Once dispute tracking is installed, the receiver must be able to store its events.
+        AND CASE WHEN NOT EXISTS (SELECT FROM pg_namespace WHERE nspname='disputes') THEN true ELSE
+          has_schema_privilege('disputes','USAGE')
+          AND has_table_privilege('disputes.events','SELECT')
+          AND NOT EXISTS (SELECT FROM unnest(ARRAY['adapter_ref','merchant_ref','event_ref','payload_hash','event_type','dispute_id','seller_transaction_id']) AS field
+            WHERE NOT has_column_privilege('disputes.events',field,'INSERT')) END AS restricted,
+        EXISTS (SELECT FROM pg_namespace WHERE nspname='disputes') AS dispute_tracking`);
+    const row = result.rows[0];
+    if (row?.restricted !== true || typeof row.dispute_tracking !== 'boolean')
+      throw new Error();
+    return { disputeTracking: row.dispute_tracking };
   } catch {
     throw new Error('Webhook receiver database permissions unavailable.');
   }
