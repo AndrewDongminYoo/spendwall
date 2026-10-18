@@ -105,7 +105,7 @@ async function fixture(t) {
   const devices = new DeviceAuthority(pool, {
     identityKey: key,
     signingKey,
-    merchantId: 'merchantA',
+    merchantId: 'MERCHANT12345',
     devices: () => active,
   });
   const notifications = [];
@@ -158,12 +158,12 @@ async function fixture(t) {
     devices,
     notifications,
     worker,
-    otherMerchant: () =>
+    otherMerchant: (granted = []) =>
       new DeviceAuthority(pool, {
         identityKey: key,
         signingKey,
         merchantId: 'merchantB',
-        devices: () => [],
+        devices: () => granted,
       }),
     review: async (at = deadline - 86_400_000, decision = 'allow') => {
       dispute.setClock(at);
@@ -510,6 +510,31 @@ test('dispute deadline alerts in PostgreSQL', { skip: !url }, async (t) => {
         );
       },
     );
+  await t.test(
+    "a review is recorded only for its own merchant's devices",
+    async (t) => {
+      const f = await fixture(t);
+      const devices = f.otherMerchant([
+        {
+          deviceId: 'deviceD',
+          agentId: 'support',
+          enrollmentHash: hash(credential(5)),
+        },
+      ]);
+      await devices.enroll('deviceD', 'synthetic-token-D', credential(5));
+      const soon = await f.review();
+      assert.equal(soon.review.context.merchant.id, 'MERCHANT12345');
+      await assert.rejects(
+        f.worker(undefined, devices).record(soon, 'support'),
+      );
+      assert.equal(
+        (await f.owner.query('SELECT count(*) FROM approvals.dispute_alerts'))
+          .rows[0].count,
+        '0',
+      );
+      assert.equal(await f.worker().record(soon, 'support'), 2);
+    },
+  );
   await t.test(
     "a drain claims and expires only its own merchant's alerts",
     async (t) => {

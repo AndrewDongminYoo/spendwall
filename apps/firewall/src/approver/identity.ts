@@ -109,6 +109,9 @@ export class DeviceAuthority {
   merchantRef() {
     return this.keys.reference('merchant', this.merchant);
   }
+  servesMerchant(id: string) {
+    return identifier(id) === this.merchant;
+  }
   private aad(ref: string, owner: string, generation: number) {
     return `approver-device.v1:${ref}:${owner}:${generation}`;
   }

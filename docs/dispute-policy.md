@@ -82,7 +82,7 @@ Construct it with the application pool, the approval API's `DeviceAuthority` and
 
 `record(result, agentId)` takes a `DisputePolicy` result and the trusted agent identity that the review used.
 It records nothing for a `deny` result, a result without `review`, or a `scheduled` or `not_provided` deadline.
-An agent identity that differs from the review context's agent is refused.
+An agent identity that differs from the review context's agent is refused, and so is a review whose context merchant differs from the merchant of the `DeviceAuthority` that the outbox uses.
 For `due_soon` and `overdue` it inserts one `ready` row for each active device of that agent's owner and returns the number of new rows.
 A row is unique per merchant, dispute, stage, device and device generation, so repeating a stage is a no-op and a later `overdue` review adds a second, separate alert after `due_soon`.
 Rows keep the classified `due_at` and the review `bindingHash` as a record of what was classified; neither is sent.

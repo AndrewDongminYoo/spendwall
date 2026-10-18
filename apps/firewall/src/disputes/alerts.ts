@@ -51,6 +51,8 @@ export class DisputeDeadlineAlerts {
     if (stage !== 'due_soon' && stage !== 'overdue') return 0;
     const agent = identifier(agentId);
     if (object(review.context.agent).id !== agent) fail();
+    const merchant = identifier(object(review.context.merchant).id);
+    if (!this.devices.servesMerchant(merchant)) fail();
     const disputeId = disputeIdentifier(
       object(review.resolvedCtx.dispute).dispute_id,
     );
