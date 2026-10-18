@@ -115,6 +115,7 @@ The application role has `SELECT` and `INSERT`, plus `UPDATE` on `state`, `attem
 The Flutter approver shows an opened dispute push as a read-only, dismissible notice built only from the `dispute_id`/`stage` data; it makes no server call, offers no dispute action and stores nothing (see the [approver README](../apps/approver/README.md#dispute-deadline-notice)).
 
 Out of scope: a server dispute list or detail API for the app, a periodic scheduler that re-evaluates disputes and calls `record`, wiring into the W0 proxy or agent demo, email, physical-device delivery and live sandbox disputes.
+The scheduler's proposed design is in the [dispute tracking spec](specs/2026-10-18-dispute-tracking.md).
 
 ## Verification and integration limits
 
