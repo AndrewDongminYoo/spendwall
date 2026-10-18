@@ -65,7 +65,7 @@ The recorded adversarial calls establish firewall enforcement for those inputs; 
 
 ### Observed live run
 
-The [October 16 live rehearsal](../../docs/notes/2026-10-16-live-rehearsal.md) exercised all four fixtures with actual Claude responses and synthetic payments.
+The [October 16 live rehearsal](../../docs/notes/2026-10-16-live-rehearsal.md) exercised the four refund fixtures with actual Claude responses and synthetic payments.
 The approval case waited without a payment and was denied noninteractively; the velocity case allowed two refunds and denied the third.
 The injection case differed from recorded replay: the model did not request the two out-of-ticket refunds, but it did refund the one in-scope capture.
 That observation does not exercise the firewall's out-of-ticket denial path; retain the recorded replay for that deterministic check.

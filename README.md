@@ -23,7 +23,7 @@ pnpm install --frozen-lockfile
 pnpm demo
 ```
 
-Expect four `PASS` lines: `small` with one synthetic payment, `approval` with one, `injection` with zero, and `velocity` with two.
+Expect five `PASS` lines: `small` with one synthetic payment, `approval` with one, `injection` with zero, `velocity` with two, and `shopping` with one.
 Approval is explicitly scripted in this mode; it does not represent mobile or biometric approval.
 The runner starts and removes its own disposable PostgreSQL container.
 It does not use the Compose database or captures created by `pnpm seed`.

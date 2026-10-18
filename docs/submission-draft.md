@@ -23,7 +23,7 @@ Its local demo combines ticket scope, trusted payment context, deterministic pol
 Missing trustworthy context results in denial.
 The policy decision path does not use an LLM.
 
-The default demo runs four recorded scenarios with synthetic payment responses: a small refund, a refund requiring approval, out-of-ticket refund attempts and a repeated-refund limit.
+The default demo runs five recorded scenarios with synthetic payment responses: a small refund, a refund requiring approval, out-of-ticket refund attempts, a repeated-refund limit and a buyer-side shopping order captured after scripted buyer approval.
 It executes real firewall modules and PostgreSQL operations, but it does not move PayPal funds.
 Human approval is scripted in this mode; the agent can request a refund and check status, but cannot approve its own request.
 An optional live Claude mode uses the same synthetic payment boundary.

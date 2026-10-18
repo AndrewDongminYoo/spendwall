@@ -34,6 +34,7 @@ small: PASS payments=1
 approval: PASS payments=1
 injection: PASS payments=0
 velocity: PASS payments=2
+shopping: PASS payments=1
 ```
 
 These are synthetic payment-write counts, not PayPal settlements.
@@ -41,9 +42,10 @@ The runner asserts the decisions and writes before printing `PASS`.
 The approval scenario checks that no payment occurs while pending, then uses a separately held scripted human capability.
 The injection fixture attempts out-of-ticket refunds; both are denied.
 The velocity fixture permits two small refunds and rejects the third using persisted history.
+The [shopping](shopping.md) fixture denies an agent-supplied price, creates one catalog order with its approve link, denies capture before buyer approval, then captures once after a scripted buyer approval on the synthetic PayPal page.
 
-Use `pnpm demo small`, `pnpm demo approval`, `pnpm demo injection` or `pnpm demo velocity` to isolate a scenario.
-Each invocation creates a uniquely named disposable PostgreSQL container and temporary refund ledgers, then removes its own resources on completion or handled interruption.
+Use `pnpm demo small`, `pnpm demo approval`, `pnpm demo injection`, `pnpm demo velocity` or `pnpm demo shopping` to isolate a scenario.
+Each invocation creates a uniquely named disposable PostgreSQL container, plus temporary refund ledgers when it runs a refund scenario, then removes its own resources on completion or handled interruption.
 Do not use the synthetic ledger lifecycle as production recovery guidance.
 
 ### If a run fails
@@ -99,19 +101,23 @@ No live payment request was made for either rehearsal.
 
 ## Rehearsal evidence
 
-On October 16, 2026, a new Linux ARM64 validation container ran a fresh public clone at `652ee1f921ff872a65734e1f28c0ab98f0937742`, frozen install and all four scenarios in **47 seconds**.
-Node 24.21.0, pnpm 11.24.0, Git and a dedicated Docker daemon were ready before the timer started.
-The pnpm store and inner Docker image store were empty; the measurement includes dependency downloads and the PostgreSQL image pull.
-The four observed results were `small: PASS payments=1`, `approval: PASS payments=1`, `injection: PASS payments=0`, and `velocity: PASS payments=2`.
+On October 18, 2026 (KST; 23:54:34 to 23:57:06 UTC on October 17), a new Linux ARM64 `node:24.21.0-bookworm` validation container ran a fresh public clone at `fdb83d165279396ec56b62c6d24b601a35008dd5`, frozen install and all five default scenarios in **152 seconds**.
+Node 24.21.0, pnpm 11.24.0, Git 2.39.5 and a dedicated Docker daemon were ready before the timer started.
+The pnpm store directory did not exist and the inner Docker image store held no images, so the measurement includes every package download (the frozen install added 210 packages in 44.1 seconds) and the PostgreSQL image pull.
+The five observed results were `small: PASS payments=1`, `approval: PASS payments=1`, `injection: PASS payments=0`, `velocity: PASS payments=2` and `shopping: PASS payments=1`.
+The host was a Mac mini (Apple silicon) running Docker Desktop with 10 CPUs and about 7.7 GiB of memory in its VM; its load average was about 11 during the run.
 The documentation PR changes no runtime files relative to that revision.
 
-The validation harness used a privileged disposable container with its own Docker daemon and no host Docker socket or credentials mounted.
+The validation harness used a privileged disposable container with its own Docker daemon (Debian `docker.io` 20.10.24) and no host Docker socket or credentials mounted.
 That is test infrastructure, not a requirement for judges or a proposed deployment configuration.
-Two earlier harness attempts failed because host-network loopback was unavailable and then because a disabled inner bridge prevented port publication; neither was counted as a successful run.
-The successful run used normal inner bridge networking.
-This is a bounded installation measurement, not a guarantee on other networks or machines.
+The inner daemon started with its default bridge networking.
+An earlier version of this harness exited before the timer started, because listing the absent pnpm store directory failed under the shell's strict pipeline error option; it ran no clone or demo and was not counted as a run.
+This is a bounded installation measurement on one busy host, not a guarantee on other networks or machines.
 
-The [repository-history secret scan](notes/2026-10-16-history-secret-scan.md) records a later snapshot at `f226b6a` with 30 advertised refs and 122 reachable commits.
+An earlier fresh-container run on October 16, 2026, at `652ee1f921ff872a65734e1f28c0ab98f0937742`, completed the then four default scenarios in 47 seconds after two harness attempts had failed on host-network loopback and a disabled inner bridge.
+That run predates the `shopping` scenario, so it does not measure the current default demo.
+
+The [repository-history secret scan](notes/2026-10-16-history-secret-scan.md) records a snapshot at `f226b6a` with 30 advertised refs and 122 reachable commits.
 Gitleaks reported zero findings after deleted-history and merge-only detection controls, with explicit Git output formatting to make the commit coverage count agree.
 That text-history result excludes media inspection and does not establish that every secret format is detected or that later commits are covered.
 
