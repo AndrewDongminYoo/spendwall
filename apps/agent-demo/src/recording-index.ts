@@ -1,10 +1,9 @@
-import { readFileSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { FcmSender } from '../../firewall/src/approver/fcm.ts';
-import type { DeviceGrant } from '../../firewall/src/approver/identity.ts';
 import { withDemoDatabase } from './database.ts';
 import { createRecordingDemo } from './recording.ts';
+import { readRecordingConfig } from './recording-config.ts';
 
 const args = process.argv.slice(2);
 if (
@@ -18,34 +17,7 @@ if (
   process.exitCode = 2;
 } else {
   const configFile = args[0];
-  const readConfig = () => {
-    const config = JSON.parse(readFileSync(configFile, 'utf8'));
-    if (
-      !config ||
-      typeof config !== 'object' ||
-      Array.isArray(config) ||
-      Object.keys(config).some(
-        (key) =>
-          !['identityKey', 'signingKey', 'devices', 'port'].includes(key),
-      ) ||
-      typeof config.identityKey !== 'string' ||
-      !/^[a-f0-9]{64}$/i.test(config.identityKey) ||
-      typeof config.signingKey !== 'string' ||
-      !/^[a-f0-9]{64}$/i.test(config.signingKey) ||
-      !Array.isArray(config.devices) ||
-      (config.port !== undefined &&
-        (!Number.isInteger(config.port) ||
-          config.port < 0 ||
-          config.port > 65535))
-    )
-      throw new Error('Recording configuration unavailable.');
-    return config as {
-      identityKey: string;
-      signingKey: string;
-      devices: DeviceGrant[];
-      port?: number;
-    };
-  };
+  const readConfig = () => readRecordingConfig(configFile);
   const cancellation = new AbortController();
   let interrupted = 0;
   const onInterrupt = () => {

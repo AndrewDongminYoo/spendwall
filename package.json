@@ -18,7 +18,7 @@
     "test:approval-api": "node scripts/test-audit-postgres.mjs --approval-api",
     "demo": "node apps/agent-demo/src/index.ts",
     "demo:recording": "node apps/agent-demo/src/recording-index.ts",
-    "test:recording": "node --test tests/recording-demo.test.mjs",
+    "test:recording": "node --test tests/recording-config.test.mjs tests/recording-demo.test.mjs",
     "dashboard": "node scripts/dashboard.mjs",
     "dashboard:preview": "node scripts/dashboard-preview.mjs"
   },

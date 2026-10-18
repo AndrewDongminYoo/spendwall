@@ -1,11 +1,21 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
-import { spawn, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { withDemoDatabase } from '../apps/agent-demo/src/database.ts';
 import { createRecordingDemo } from '../apps/agent-demo/src/recording.ts';
@@ -377,3 +387,103 @@ test('recording CLI rejects unsupported options before creating resources', () =
   assert.equal(result.status, 2);
   assert.match(result.stderr, /Usage:/);
 });
+
+for (const mode of [0o644, 0o640, 0o604, 0o620, 0o601]) {
+  test(`recording CLI refuses unsafe config mode ${mode.toString(8)} before creating resources`, async (t) => {
+    const directory = await mkdtemp(join(tmpdir(), 'spendwall-config-mode-'));
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    const configFile = join(directory, 'config.json');
+    const config = {
+      identityKey: '1'.repeat(64),
+      signingKey: '2'.repeat(64),
+      devices: [],
+    };
+    await writeFile(configFile, JSON.stringify(config), { mode: 0o600 });
+    await chmod(configFile, mode);
+    const result = spawnSync(
+      process.execPath,
+      ['apps/agent-demo/src/recording-index.ts', configFile],
+      {
+        cwd: new URL('../', import.meta.url),
+        encoding: 'utf8',
+        timeout: 10_000,
+        // Missing Docker is deliberate: rejection must occur before the banner
+        // or any attempt to provision a database.
+        env: { PATH: directory },
+      },
+    );
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /^Recording unavailable\./);
+    for (const secret of [config.identityKey, config.signingKey])
+      assert.equal((result.stdout + result.stderr).includes(secret), false);
+    assert.equal((await stat(configFile)).mode & 0o777, mode);
+  });
+}
+
+for (const change of ['permissions', 'symlink', 'directory']) {
+  test(
+    `devices reload refuses changed config ${change} and cleans its container`,
+    { timeout: 25_000 },
+    async (t) => {
+      const directory = await mkdtemp(
+        join(tmpdir(), 'spendwall-config-reload-'),
+      );
+      t.after(() => rm(directory, { recursive: true, force: true }));
+      const configFile = join(directory, 'config.json');
+      const config = {
+        identityKey: '1'.repeat(64),
+        signingKey: '2'.repeat(64),
+        devices: [],
+      };
+      await writeFile(configFile, JSON.stringify(config), { mode: 0o600 });
+      const child = spawn(
+        process.execPath,
+        ['apps/agent-demo/src/recording-index.ts', configFile],
+        {
+          cwd: new URL('../', import.meta.url),
+          env: { PATH: process.env.PATH, HOME: process.env.HOME },
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
+      );
+      const exited = new Promise((resolve, reject) => {
+        child.on('exit', resolve);
+        child.on('error', reject);
+      });
+      t.after(async () => {
+        if (child.exitCode === null) child.kill('SIGTERM');
+        await exited;
+      });
+      let output = '',
+        errors = '';
+      child.stdout.on('data', (part) => (output += part));
+      child.stderr.on('data', (part) => (errors += part));
+      const deadline = Date.now() + 15_000;
+      while (!/Approval API: http:\/\/127\.0\.0\.1:\d+/.test(output)) {
+        assert.equal(child.exitCode, null, errors);
+        assert.ok(Date.now() < deadline, 'Recording server did not start.');
+        await delay(20);
+      }
+      if (change === 'permissions') await chmod(configFile, 0o644);
+      else {
+        const original = join(directory, 'original.json');
+        await rename(configFile, original);
+        if (change === 'symlink') await symlink(original, configFile);
+        else await mkdir(configFile, { mode: 0o700 });
+      }
+      assert.equal(await exited, 1, errors);
+      assert.doesNotMatch(output, /pending_approval|SYNTHETIC REFUND RESULT/);
+      assert.match(errors, /^Recording unavailable\./);
+      for (const secret of [config.identityKey, config.signingKey])
+        assert.equal((output + errors).includes(secret), false);
+      const containers = execFileSync(
+        'docker',
+        ['ps', '-aq', '--filter', `label=spendwall.demo.pid=${child.pid}`],
+        { encoding: 'utf8' },
+      );
+      assert.equal(containers.trim(), '');
+      if (change === 'permissions')
+        assert.equal((await stat(configFile)).mode & 0o777, 0o644);
+    },
+  );
+}
