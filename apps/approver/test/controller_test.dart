@@ -254,6 +254,57 @@ void main() {
   );
 
   test(
+    'a dispute push shows a dismissible notice without approval calls',
+    () async {
+      await connect();
+      final reads = api.reads, pages = api.pages, saved = store.value;
+      expect(
+        controller.disputeHint({
+          'dispute_id': 'PP-D-27803',
+          'stage': 'overdue',
+        }),
+        isTrue,
+      );
+      expect(controller.working, isFalse);
+      expect(controller.dispute?.disputeId, 'PP-D-27803');
+      expect(controller.dispute?.stage, 'overdue');
+      expect(controller.disputeHint({'approval_id': approvalId}), isFalse);
+      expect(
+        controller.disputeHint({'dispute_id': 'PP_D', 'stage': 'overdue'}),
+        isFalse,
+      );
+      expect(controller.dispute?.disputeId, 'PP-D-27803');
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.selected?.id, approvalId);
+      controller.dismissDispute();
+      expect(controller.dispute, isNull);
+      await Future<void>.delayed(Duration.zero);
+      expect(api.reads, reads);
+      expect(api.pages, pages);
+      expect(api.decisions, isEmpty);
+      expect(auth.confirmations, 0);
+      expect(store.value, saved);
+      expect(store.value, isNot(contains('PP-D-27803')));
+    },
+  );
+
+  test(
+    'a dispute notice survives a missing session and disconnection',
+    () async {
+      expect(
+        controller.disputeHint({'dispute_id': 'PP-D-1', 'stage': 'due_soon'}),
+        isTrue,
+      );
+      await controller.restore();
+      await controller.disconnect();
+      expect(controller.dispute?.disputeId, 'PP-D-1');
+      expect(api.reads, 0);
+      expect(api.pages, 0);
+      expect(store.value, isNull);
+    },
+  );
+
+  test(
     'a rotated push registration refuses the saved credential on restart',
     () async {
       await connect();

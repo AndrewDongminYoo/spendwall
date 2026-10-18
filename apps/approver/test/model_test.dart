@@ -78,4 +78,57 @@ void main() {
     );
     expect(notificationApprovalId({'approval_id': 123}), isNull);
   });
+
+  test('dispute push data parses only the server dispute payload', () {
+    for (final stage in ['due_soon', 'overdue']) {
+      final notice = notificationDisputeNotice({
+        'dispute_id': 'PP-D-27803',
+        'stage': stage,
+      });
+      expect(notice?.disputeId, 'PP-D-27803');
+      expect(notice?.stage, stage);
+    }
+    expect(
+      notificationDisputeNotice({'dispute_id': 'A' * 255, 'stage': 'overdue'}),
+      isNotNull,
+    );
+    for (final invalid in <Map<String, dynamic>>[
+      {'dispute_id': 'PP-D-1', 'stage': 'overdue', 'approve': true},
+      {'dispute_id': 'PP-D-1'},
+      {'stage': 'overdue'},
+      {},
+      {'dispute_id': 27803, 'stage': 'overdue'},
+      {'dispute_id': null, 'stage': 'overdue'},
+      {'dispute_id': 'PP-D-1', 'stage': 1},
+      {'dispute_id': 'PP-D-1', 'stage': null},
+      {'dispute_id': '', 'stage': 'overdue'},
+      {'dispute_id': 'A' * 256, 'stage': 'overdue'},
+      {'dispute_id': 'PP_D_1', 'stage': 'overdue'},
+      {'dispute_id': '../disputes', 'stage': 'overdue'},
+      {'dispute_id': 'PP D 1', 'stage': 'overdue'},
+      {'dispute_id': 'PP-D-1\n', 'stage': 'overdue'},
+      {'dispute_id': 'PP-D-1', 'stage': 'scheduled'},
+      {'dispute_id': 'PP-D-1', 'stage': 'not_provided'},
+      {'dispute_id': 'PP-D-1', 'stage': 'OVERDUE'},
+    ]) {
+      expect(notificationDisputeNotice(invalid), isNull, reason: '$invalid');
+    }
+  });
+
+  test('approval and dispute push payloads never parse as each other', () {
+    expect(notificationDisputeNotice({'approval_id': approvalId}), isNull);
+    expect(
+      notificationApprovalId({'dispute_id': 'PP-D-1', 'stage': 'overdue'}),
+      isNull,
+    );
+    expect(
+      notificationDisputeNotice({'dispute_id': approvalId, 'stage': 'due_soon'})
+          ?.disputeId,
+      approvalId,
+    );
+    expect(
+      notificationApprovalId({'approval_id': approvalId, 'stage': 'due_soon'}),
+      isNull,
+    );
+  });
 }

@@ -46,6 +46,9 @@ class ApproverController extends ChangeNotifier {
   List<String>? summary;
   bool summarizing = false;
   String? message, nextCursor;
+
+  /// Read-only notice from an opened dispute push; never stored or sent.
+  DisputeNotice? dispute;
   bool get uncertain => _unresolved.contains(selected?.id);
   bool get biometricAvailable => _supported;
   String get endpoint => _session?['endpoint'] as String? ?? '';
@@ -350,6 +353,21 @@ class ApproverController extends ChangeNotifier {
           'Push registration changed. Enroll again with a new credential.';
       _emit();
     }
+  }
+
+  /// Shows a dispute push as a notice and reports whether the data was one.
+  /// It does not need a session and makes no API call.
+  bool disputeHint(Map<String, dynamic> data) {
+    final notice = notificationDisputeNotice(data);
+    if (notice == null) return false;
+    dispute = notice;
+    _emit();
+    return true;
+  }
+
+  void dismissDispute() {
+    dispute = null;
+    _emit();
   }
 
   void back() {

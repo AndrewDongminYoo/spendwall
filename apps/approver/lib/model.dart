@@ -13,6 +13,29 @@ String? notificationApprovalId(Map<String, dynamic> data) =>
     ? (data['approval_id'] as String).toLowerCase()
     : null;
 
+// Mirrors the server's disputeIdentifier rule (apps/firewall/src/context/dispute.ts).
+final _disputeId = RegExp(r'^[A-Za-z0-9-]{1,255}$');
+
+/// A dispute deadline alert read from push data; it grants no authority.
+class DisputeNotice {
+  const DisputeNotice._(this.disputeId, this.stage);
+  final String disputeId;
+
+  /// The stage the server classified when it recorded the alert:
+  /// `due_soon` or `overdue`.
+  final String stage;
+}
+
+DisputeNotice? notificationDisputeNotice(Map<String, dynamic> data) {
+  final id = data['dispute_id'], stage = data['stage'];
+  return data.length == 2 &&
+          id is String &&
+          _disputeId.hasMatch(id) &&
+          (stage == 'due_soon' || stage == 'overdue')
+      ? DisputeNotice._(id, stage as String)
+      : null;
+}
+
 Uri? serverOrigin(String value, {bool allowLoopbackHttp = false}) {
   final uri = Uri.tryParse(value);
   if (uri == null ||

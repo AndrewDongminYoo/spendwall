@@ -17,6 +17,8 @@ class _ApproverAppState extends State<ApproverApp> with WidgetsBindingObserver {
   final _endpoint = TextEditingController();
   final _device = TextEditingController();
   final _credential = TextEditingController();
+  final _scroll = ScrollController();
+  DisputeNotice? _shownDispute;
   Timer? _timer;
   bool _paused = false;
   ApproverController get c => widget.controller;
@@ -24,7 +26,21 @@ class _ApproverAppState extends State<ApproverApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _shownDispute = c.dispute;
+    c.addListener(_revealDispute);
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => c.tick());
+  }
+
+  // A new dispute notice is inserted at the top of the scroll view, so move
+  // there; otherwise a user scrolled down a long view would not see it.
+  void _revealDispute() {
+    final notice = c.dispute;
+    if (identical(notice, _shownDispute)) return;
+    _shownDispute = notice;
+    if (notice == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scroll.hasClients) _scroll.jumpTo(0);
+    });
   }
 
   @override
@@ -43,10 +59,12 @@ class _ApproverAppState extends State<ApproverApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     _timer?.cancel();
+    c.removeListener(_revealDispute);
     WidgetsBinding.instance.removeObserver(this);
     _endpoint.dispose();
     _device.dispose();
     _credential.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -120,12 +138,19 @@ class _ApproverAppState extends State<ApproverApp> with WidgetsBindingObserver {
                     ),
                   Expanded(
                     child: SingleChildScrollView(
+                      controller: _scroll,
                       padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
-                      child: c.connected
-                          ? (c.selected == null
-                                ? _queue(context)
-                                : _detail(context, c.selected!))
-                          : _enroll(context),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (c.dispute != null) _dispute(context, c.dispute!),
+                          c.connected
+                              ? (c.selected == null
+                                    ? _queue(context)
+                                    : _detail(context, c.selected!))
+                              : _enroll(context),
+                        ],
+                      ),
                     ),
                   ),
                   if (c.selected != null) _actions(context),
@@ -153,6 +178,39 @@ class _ApproverAppState extends State<ApproverApp> with WidgetsBindingObserver {
         const SizedBox(height: 4),
         SelectableText(value),
       ],
+    ),
+  );
+  Widget _dispute(BuildContext context, DisputeNotice d) => Card(
+    key: const Key('dispute-notice'),
+    margin: const EdgeInsets.only(bottom: 24),
+    child: Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Dispute response due',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 16),
+          _fact('Dispute ID', d.disputeId),
+          _fact(
+            'Deadline when this alert was created',
+            d.stage == 'overdue' ? 'Overdue' : 'Due within 24 hours',
+          ),
+          const Text(
+            'Handle this dispute outside this app. Check the current deadline there; this notice cannot respond to or accept a dispute.',
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: c.dismissDispute,
+              child: const Text('Dismiss notice'),
+            ),
+          ),
+        ],
+      ),
     ),
   );
   Widget _enroll(BuildContext context) => Column(
