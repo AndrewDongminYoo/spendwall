@@ -49,15 +49,16 @@ Decision: a new `disputes` schema with two append-or-advance tables, applied by 
 - `disputes.events` stores one row per scoped event: adapter and merchant references, a keyed event reference, a keyed payload digest, the event type, `dispute_id` and the event's single `seller_transaction_id`.
   It stores no payload, buyer data, amount, note or header.
   A uniqueness constraint on (adapter, merchant, event reference) serializes copies; a repeat with the same digest is acknowledged and a changed digest under the same event ID is rejected, as in refund reconciliation, which is why the receiver can also `SELECT` this table.
-- `disputes.tracked` stores one row per (merchant reference, `dispute_id`): `seller_transaction_id`, first and last event times, an `event_version` counter, `next_check_at`, consecutive failures, the last outcome, an `ended` reason, and `claim_id` and `leased_until` for the claim.
+- `disputes.tracked` stores one row per (merchant reference, `dispute_id`): `seller_transaction_id`, first and last event times, an `event_version` counter, `next_check_at`, consecutive failures, a `failing_since` failure-streak start time, the last outcome, an `ended` reason, and `claim_id` and `leased_until` for the claim.
   An insert into `disputes.events` inserts or advances this row through an `AFTER INSERT` trigger whose function is `SECURITY DEFINER`, owned by the trusted owner, with `EXECUTE` revoked from `PUBLIC` and every runtime role, so the receiver needs no privilege on `disputes.tracked`.
   The trigger increments `event_version`, sets `next_check_at` to the database clock, ends a row on a `CUSTOMER.DISPUTE.RESOLVED` event, and never changes identity columns or an ended row.
   Settlement binds to `event_version` rather than the last event time, because the database clock is the transaction start time, so an event transaction that commits after a claim can carry an earlier time than the one the claim observed.
 
 Out-of-order or repeated events need no ordering logic, because every evaluation reads current provider state; an event only brings the next check forward.
 An event for an ended row is stored as evidence but does not reopen it.
-A database guard keeps identity columns immutable, `event_version` changed only by the trigger and never decreasing, `ended` rows final and failure counts non-decreasing except on a successful evaluation; no runtime role can delete rows.
-Only the `unmapped` and `dispute_unavailable` outcomes count as failures; every other outcome in decision 5 is a successful evaluation and resets the count to zero.
+A database guard keeps identity columns immutable, `event_version` changed only by the trigger and never decreasing, `ended` rows final, failure counts non-decreasing except on a successful evaluation, and `failing_since` set only when it is null and cleared only on a successful evaluation; no runtime role can delete rows.
+Only the `unmapped` and `dispute_unavailable` outcomes count as failures; every other outcome in decision 5 is a successful evaluation and resets the count to zero and `failing_since` to null.
+The first failure after a success, or on a new row, sets `failing_since` to the evaluation time, and later failures in the same streak keep it.
 
 Tracking ends with one of these reasons:
 
@@ -65,7 +66,7 @@ Tracking ends with one of these reasons:
 | ----------- | ------------------------------------------------------------------------ |
 | `resolved`  | A verified `RESOLVED` event, or a `get_dispute` resolution of `RESOLVED` |
 | `overdue`   | `record` has accepted an `overdue` review for the dispute                |
-| `exhausted` | 7 days of consecutive failed evaluations                                 |
+| `exhausted` | A failed evaluation at least 7 days after `failing_since`                |
 | `expired`   | 180 days after the first event                                           |
 
 ### 3. Trusted context
@@ -101,7 +102,7 @@ Each re-evaluation of a claimed row:
 1. Looks up the trusted customer; on failure it records `unmapped`.
 2. Calls `invalidateDispute(id)`, then resolves `get_dispute` with the trusted context; a failed resolution records `dispute_unavailable`.
    A `RESOLVED` status ends tracking; otherwise a `can_accept` value of `false` in the resolved context records `not_acceptable` and skips step 3.
-3. Evaluates `accept_dispute_claim` with the fixed server-owned note `Spendwall_deadline_review` through `DisputePolicy` and passes the result to `record`.
+3. Evaluates `accept_dispute_claim` with the fixed server-owned note `Spendwall_deadline_review` through `DisputePolicy` and, only after the locked version check below passes, passes the result to `record`.
    The note satisfies the catalog pattern and enters the review's `bindingHash`, but it is never sent to PayPal.
 
 Steps 2 and 3 share the resolver's `dispute:<id>` cache entry, so one check normally makes one provider GET, and never more than one GET per tool resolution.
@@ -126,12 +127,18 @@ The 24-hour cap re-reads a dispute whose deadline changed without an event we re
 A provider GET happens only when a row is due; the timer itself is a database query.
 
 The timer runs one tick per instance every 60 seconds, claims at most 10 due rows that are not ended per tick with `FOR UPDATE SKIP LOCKED`, and sets a 30-second persisted lease bound to a claim UUID, as the alert outbox does.
-The claim returns each row's `event_version`, and the outcome write is a single conditional `UPDATE` that matches both the claim UUID and that version, so a process whose lease expired cannot overwrite a newer claim and an evaluation cannot replace the schedule of an event that arrived after its claim.
-Under read committed, a settlement that waits behind an uncommitted event re-checks its condition after the event commits and then matches no row.
-When the outcome write matches no row, the tracker clears only `claim_id` and `leased_until` of a row that still has its claim UUID and is not ended, and leaves `next_check_at`, the failure count, the last outcome and `ended` as the trigger left them; the next tick re-reads the dispute and derives any ending again.
+The claim returns each row's `event_version`.
+After the provider read, settlement is one transaction: it locks the row with `SELECT ... FROM disputes.tracked WHERE id = $1 AND claim_id = $2 AND event_version = $3 AND NOT ended FOR UPDATE`, then calls `record` when the outcome is `due_soon` or `overdue`, then writes the outcome with a conditional `UPDATE` that matches the same claim UUID and version, and commits.
+So a process whose lease expired cannot overwrite a newer claim, and an evaluation can neither replace the schedule of an event that arrived after its claim nor record an alert from a read that such an event made stale.
+Under read committed, a locked `SELECT` that waits behind an uncommitted event re-checks its condition after the event commits and then matches no row.
+An event that arrives after the lock is taken waits on the row lock until settlement commits, and its trigger then sets `next_check_at` as usual.
+This creates no lock cycle, because `record` touches only `approvals.devices` and `approvals.dispute_alerts`.
+When the locked check matches no row, the tracker calls no `record`, clears only `claim_id` and `leased_until` of a row that still has its claim UUID and is not ended, and leaves `next_check_at`, the failure count, `failing_since`, the last outcome and `ended` as the trigger left them; the next tick re-reads the dispute and derives any ending again.
 An ended row keeps its stale claim, which is harmless because the claim query excludes ended rows.
-An alert that `record` accepted during such an evaluation stays, because it came from a real provider read and `record` is idempotent.
-If two processes do evaluate the same dispute after a lease expiry, `record` is idempotent per (merchant, dispute, stage, device, generation), so no duplicate alert results.
+A process whose row was claimed again after its lease expired fails the same check and records nothing; `record` stays idempotent per (merchant, dispute, stage, device, generation) as a backstop.
+`record` is called unchanged on its own pool connection, so this keeps the #71 alert outbox contract.
+Because the locking transaction holds one connection while `record` takes a second, the tracker settles claimed rows one at a time, and the locking transaction runs `SET LOCAL statement_timeout`, as the outbox claim does, so a stuck `record` cannot hold the receiver's event insert indefinitely.
+The version check orders `record` only against events that the receiver has already stored: a provider change whose webhook arrives after the lock is taken can still follow an alert that has committed, which is the outbox-key limitation in the open questions.
 `close()` stops new ticks and waits for the running one.
 
 ### 6. Failure and safety
@@ -142,7 +149,7 @@ If two processes do evaluate the same dispute after a lease expiry, `record` is 
 - Failed evaluations record no alert and retry with the backoff above until the `exhausted` bound.
 - The receiver database role gets `SELECT` and column-level `INSERT` on `disputes.events` only, and no privilege on `disputes.tracked`.
   `checkWebhookReceiver` is extended to allow exactly those privileges in the `disputes` schema, and continues to refuse any other privilege, including `EXECUTE` on a security-definer function such as the trigger function.
-- The application group (`audit.app_role()`) gets `USAGE` on the `disputes` schema, `SELECT` on `disputes.tracked`, and column-level `UPDATE` on its `next_check_at`, consecutive-failure, last-outcome, `ended`, `claim_id` and `leased_until` columns only, as `012-dispute-deadline-alerts.sql` grants for the alert outbox.
+- The application group (`audit.app_role()`) gets `USAGE` on the `disputes` schema, `SELECT` on `disputes.tracked`, and column-level `UPDATE` on its `next_check_at`, consecutive-failure, `failing_since`, last-outcome, `ended`, `claim_id` and `leased_until` columns only, as `012-dispute-deadline-alerts.sql` grants for the alert outbox.
   It gets no `INSERT` or `DELETE` on `disputes.tracked`, no privilege on `disputes.events` and no `EXECUTE` on the trigger function, so only verified events create tracked rows.
 - `PayPalWebhookVerifier.verify` returns a tagged result for a refund or a dispute event; a dispute event without exactly one `dispute_id` and one `seller_transaction_id` in the accepted identifier shapes is rejected with 422 before storage.
 
@@ -150,7 +157,7 @@ If two processes do evaluate the same dispute after a lease expiry, `record` is 
 
 The implementation must include:
 
-1. Deterministic-clock tests for `scheduled`, exactly `dueAt - 24h`, `due_soon`, exactly `dueAt`, `not_provided` and the 24-hour cap, asserting `next_check_at` and the number of provider GETs.
+1. Deterministic-clock tests for `scheduled`, exactly `dueAt - 24h`, `due_soon`, exactly `dueAt`, `not_provided` and the 24-hour cap, asserting `next_check_at` and the number of provider GETs, and for the `exhausted` bound: a failure exactly 7 days after `failing_since` ends tracking, and a success inside the streak clears `failing_since` so a later failure starts a new 7-day streak.
 2. Webhook tests for forged signatures, replayed events with the same payload, changed payloads under one event ID, `RISK.DISPUTE.CREATED` and unsupported types, malformed dispute resources, a `RESOLVED` event that ends tracking without a provider GET, and an event after `RESOLVED`; `tests/webhooks.test.mjs` currently asserts that `CUSTOMER.DISPUTE.CREATED` is ignored, and that assertion is replaced.
 3. Missing or invalid customer mapping, and a mapping whose transaction differs from the provider's, produce no alert and the recorded outcome; a tracker constructed without a lookup is refused.
 4. A readable dispute with `can_accept: false` records `not_acceptable`, resets the failure count, follows the `not_acceptable` schedule and never ends as `exhausted`; when it becomes acceptable inside the 24-hour window, the next check records a `due_soon` alert.
@@ -158,6 +165,8 @@ The implementation must include:
 6. A review agent that the policy does not admit produces `policy_denied` and no alert.
 7. Concurrent schedulers against one disposable PostgreSQL database claim each row once per lease and produce one alert per device and stage.
    A deterministic interleaving, in which the fake resolver inserts a `CUSTOMER.DISPUTE.UPDATED` event during its GET, leaves `next_check_at` at the trigger's value instead of the deadline-derived one and clears the claim; the next tick makes one more provider GET and, when the update moved `dueAt` inside 24 hours, records a `due_soon` alert.
+   A second interleaving, in which the GET returns a deadline that would be `due_soon` and the inserted event extends that deadline, records no alert; a later tick records `due_soon` at the new deadline.
+   A third interleaving inserts an event after settlement has taken the row lock: the insert waits until settlement commits, and `next_check_at` ends at the trigger's value.
 8. Real PostgreSQL permission checks, through `scripts/test-audit-postgres.mjs`, for the receiver grants and the application-group grants in decision 6 (including refused `INSERT` and `DELETE` on `disputes.tracked`, refused access to `disputes.events` and refused updates of identity columns and `event_version`), the trigger and the row guards.
 9. Existing project checks: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `trunk check --all --no-fix` and Compose configuration validation.
 
@@ -174,5 +183,5 @@ No test can show alerts for real customers until a deployment supplies `saleCust
 
 - Who supplies `saleCustomer` in a real deployment: a merchant's own customer system behind the composition, or a future customer store in this repository? Until one exists, no tracked dispute is re-evaluated outside tests.
 - A dispute whose acceptance the policy denies (for example a non-USD dispute), or that the resolver never reads as acceptable, never produces a review, so it never gets a deadline alert; should deadline alerts be independent of the acceptance decision?
-- The outbox key (merchant, dispute, stage, device, generation) allows one `overdue` alert per dispute, so a new seller deadline in a later lifecycle stage cannot alert again; tracking ends at `overdue` for that reason.
+- The outbox key (merchant, dispute, stage, device, generation) does not include `due_at`, so it allows one `due_soon` and one `overdue` alert per dispute: a deadline that moves after an alert has committed, whether by a later event, by webhook delivery lag behind the provider change, or by a new seller deadline in a later lifecycle stage, cannot alert again at that stage; tracking ends at `overdue` for that reason.
 - The 7-day failure bound, the 180-day tracking bound and the hourly `not_acceptable` check inside the 24-hour window are conservative defaults chosen for this PR, not provider requirements.
