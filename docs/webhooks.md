@@ -57,6 +57,7 @@ It never downloads a header-provided certificate URL or follows a payload-provid
 Only the exact successful verification result is accepted.
 
 Completed USD Payments v2 `PAYMENT.CAPTURE.REFUNDED` events proceed to a fixed-origin capture lookup that confirms the capture and merchant.
+Verified [dispute events](#dispute-events) are stored for dispute tracking.
 Other verified event types are acknowledged as ignored and are not reconciliation evidence.
 Unsupported or invalid refund shapes are rejected.
 Only keyed references, a keyed canonical payload digest, scope, amount and database receipt time are stored.
@@ -69,6 +70,22 @@ Do not expose the W0 proxy or hosted dashboard as a shortcut.
 Subscription creation, ingress deployment and a direct-dashboard test refund require their own authorized integration work.
 PayPal's mock simulator events do not support this postback verification path.
 See the [integration guide](https://developer.paypal.com/api/rest/webhooks/rest/) and [signature endpoint](https://developer.paypal.com/api/webhooks/v1/verify-webhook-signature-post), inspected on 2026-10-16.
+
+## Dispute events
+
+After a successful signature postback, `CUSTOMER.DISPUTE.CREATED`, `CUSTOMER.DISPUTE.UPDATED` and `CUSTOMER.DISPUTE.RESOLVED` events are stored as triggers for the [dispute tracker](dispute-policy.md#dispute-tracking).
+`RISK.DISPUTE.CREATED` is deprecated by PayPal and stays ignored.
+An event is a lookup key, not a fact source: the receiver makes no dispute GET, and deadlines, money and ownership come only from the tracker's provider read.
+A dispute event whose `resource` does not carry exactly one `dispute_id` and one `disputed_transactions[].seller_transaction_id` in the accepted identifier shapes is rejected with 422; the event resource shape is unverified against a real delivery.
+
+Apply `migrations/013-dispute-tracking.sql` as the trusted owner to store them.
+While the `disputes` schema does not exist, verified dispute events with an accepted resource shape are acknowledged as ignored; the receiver checks for the schema on every event, and a malformed dispute resource is still rejected with 422.
+`disputes.events` keeps the app and merchant references, a keyed event reference, a keyed payload digest, the event type, the dispute ID and the sale ID; no payload, buyer data, amount, note or header.
+The merchant reference is the one that the approver `DeviceAuthority` derives from the same identity key.
+Exact duplicates are acknowledged and a changed payload under the same event ID is rejected, as for refunds.
+A database trigger creates or advances the tracked dispute, and a `RESOLVED` event ends its tracking; an event for a dispute whose tracking has ended is kept as evidence only.
+The receiver group gets `USAGE` on the `disputes` schema, `SELECT` on `disputes.events` and `INSERT` on its stored columns only.
+Once the schema exists, the startup check also requires exactly those privileges and refuses any other `disputes` privilege, including access to tracked rows and `EXECUTE` on the trigger function.
 
 ## Record execution evidence
 
@@ -120,6 +137,7 @@ These fixtures do not establish actual PayPal signature or delivery behavior.
 ```sh
 node --test tests/webhooks.test.mjs tests/webhook-http.test.mjs
 node scripts/test-audit-postgres.mjs --reconciliation
+node scripts/test-audit-postgres.mjs --dispute-tracking
 pnpm check
 ```
 

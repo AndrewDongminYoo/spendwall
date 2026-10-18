@@ -7,6 +7,7 @@ import {
   checkWebhookReceiver,
 } from '../apps/firewall/src/webhooks/reconciliation.ts';
 import { startWebhookServer } from '../apps/firewall/src/webhooks/server.ts';
+import { DisputeEvents } from '../apps/firewall/src/disputes/tracking.ts';
 
 if (
   process.argv.length !== 4 ||
@@ -31,6 +32,11 @@ try {
     merchantId: config.merchantId,
     adapterRef: verifier.adapterRef,
   });
+  const disputes = new DisputeEvents({
+    identityKey: config.identityKey,
+    merchantId: config.merchantId,
+    adapterRef: verifier.adapterRef,
+  });
   pool = new pg.Pool({
     connectionString: config.databaseUrl,
     max: 4,
@@ -42,8 +48,12 @@ try {
   const server = await startWebhookServer({
     verifier,
     receive: async (event) => {
-      await checkWebhookReceiver(pool);
-      await reconciliation.receive(pool, event);
+      const { disputeTracking } = await checkWebhookReceiver(pool);
+      if (event.kind === 'dispute') {
+        // Without migration 013, dispute events stay ignored as before.
+        if (!disputeTracking) return 'ignored';
+        await disputes.receive(pool, event);
+      } else await reconciliation.receive(pool, event);
     },
     port: config.port ?? 4402,
   });

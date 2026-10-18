@@ -42,6 +42,7 @@ test('loopback webhook acknowledges only verified and durably received events', 
     },
     receive: async () => {
       if (mode === 'storage') throw new Error('private SQL');
+      if (mode === 'declined') return 'ignored';
       received++;
     },
   });
@@ -53,18 +54,23 @@ test('loopback webhook acknowledges only verified and durably received events', 
       body: '{}',
       ...options,
     });
-  assert.equal((await send()).status, 200);
+  const first = await send();
+  assert.equal(first.status, 200);
+  assert.deepEqual(await first.json(), { status: 'received' });
   assert.equal(received, 1);
   for (const [next, code] of [
     ['forged', 401],
     ['provider', 503],
     ['storage', 503],
     ['ignored', 200],
+    ['declined', 200],
   ]) {
     mode = next;
     const res = await send();
     assert.equal(res.status, code);
-    assert.equal((await res.text()).includes('private'), false);
+    const text = await res.text();
+    assert.equal(text.includes('private'), false);
+    if (code === 200) assert.deepEqual(JSON.parse(text), { status: 'ignored' });
     assert.equal(received, 1);
   }
   const before = verified;

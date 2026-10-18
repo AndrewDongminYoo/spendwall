@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { DeviceAuthority } from '../approver/identity.ts';
 import { FcmFailure } from '../approver/fcm.ts';
 import type { DisputeAlertStage } from '../approver/fcm.ts';
@@ -43,8 +43,14 @@ export class DisputeDeadlineAlerts {
     this.notifier = notifier;
   }
   // Records one alert per active device of the reviewing agent's owner and
-  // returns the number of new rows. A repeated stage is a no-op.
-  async record(result: DisputeResult, agentId: string): Promise<number> {
+  // returns the number of new rows. A repeated stage is a no-op. With a
+  // client, the insert runs in the caller's transaction and the client is
+  // not released.
+  async record(
+    result: DisputeResult,
+    agentId: string,
+    db?: Pick<PoolClient, 'query'>,
+  ): Promise<number> {
     const review = result?.decision === 'require_approval' && result.review;
     if (!review) return 0;
     const stage = review.deadline.status;
@@ -58,7 +64,7 @@ export class DisputeDeadlineAlerts {
     );
     const dueAt = disputeDeadline(review.deadline.dueAt);
     if (!/^[a-f0-9]{64}$/.test(review.bindingHash)) fail();
-    const client = await this.pool.connect();
+    const client = db ?? (await this.pool.connect());
     try {
       const inserted = await client.query(
         `INSERT INTO approvals.dispute_alerts(merchant_ref,dispute_id,stage,due_at,binding_hash,owner_ref,device_ref,generation)
@@ -75,7 +81,7 @@ export class DisputeDeadlineAlerts {
       );
       return inserted.rowCount ?? 0;
     } finally {
-      client.release();
+      if (!db) (client as PoolClient).release();
     }
   }
   drain() {
