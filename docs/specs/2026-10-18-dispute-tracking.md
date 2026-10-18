@@ -49,14 +49,14 @@ Decision: a new `disputes` schema with two append-or-advance tables, applied by 
 - `disputes.events` stores one row per scoped event: adapter and merchant references, a keyed event reference, a keyed payload digest, the event type, `dispute_id` and the event's single `seller_transaction_id`.
   It stores no payload, buyer data, amount, note or header.
   A uniqueness constraint on (adapter, merchant, event reference) serializes copies; a repeat with the same digest is acknowledged and a changed digest under the same event ID is rejected, as in refund reconciliation, which is why the receiver can also `SELECT` this table.
-- `disputes.tracked` stores one row per (merchant reference, `dispute_id`): `seller_transaction_id`, first and last event times, an `event_version` counter, `next_check_at`, consecutive failures, a `failing_since` failure-streak start time, the last outcome, an `ended` reason, and `claim_id` and `leased_until` for the claim.
+- `disputes.tracked` stores one row per (merchant reference, `dispute_id`): `seller_transaction_id`, first and last event times, an `event_version` counter, `next_check_at`, consecutive failures, a `failing_since` failure-streak start time, the last outcome, a nullable `ended` reason that stays null while tracking continues, and `claim_id` and `leased_until` for the claim.
   An insert into `disputes.events` inserts or advances this row through an `AFTER INSERT` trigger whose function is `SECURITY DEFINER`, owned by the trusted owner, with `EXECUTE` revoked from `PUBLIC` and every runtime role, so the receiver needs no privilege on `disputes.tracked`.
-  The trigger increments `event_version`, sets `next_check_at` to the database clock, ends a row on a `CUSTOMER.DISPUTE.RESOLVED` event, and never changes identity columns or an ended row.
+  The trigger increments `event_version`, sets `next_check_at` to the database clock, sets `ended` to `resolved` on a `CUSTOMER.DISPUTE.RESOLVED` event, and never changes identity columns or a row whose `ended` is not null.
   Settlement binds to `event_version` rather than the last event time, because the database clock is the transaction start time, so an event transaction that commits after a claim can carry an earlier time than the one the claim observed.
 
 Out-of-order or repeated events need no ordering logic, because every evaluation reads current provider state; an event only brings the next check forward.
-An event for an ended row is stored as evidence but does not reopen it.
-A database guard keeps identity columns immutable, `event_version` changed only by the trigger and never decreasing, `ended` rows final, failure counts non-decreasing except on a successful evaluation, and `failing_since` set only when it is null and cleared only on a successful evaluation; no runtime role can delete rows.
+An event for a row whose `ended` is not null is stored as evidence but does not reopen it.
+A database guard keeps identity columns immutable, `event_version` changed only by the trigger and never decreasing, `ended` unchanged once it is not null, failure counts non-decreasing except on a successful evaluation, and `failing_since` set only when it is null and cleared only on a successful evaluation; no runtime role can delete rows.
 Only the `unmapped` and `dispute_unavailable` outcomes count as failures; every other outcome in decision 5 is a successful evaluation and resets the count to zero and `failing_since` to null.
 The first failure after a success, or on a new row, sets `failing_since` to the evaluation time, and later failures in the same streak keep it.
 
@@ -126,18 +126,19 @@ A dispute that becomes acceptable inside the 24-hour window therefore reaches `d
 The 24-hour cap re-reads a dispute whose deadline changed without an event we received.
 A provider GET happens only when a row is due; the timer itself is a database query.
 
-The timer runs one tick per instance every 60 seconds, claims at most 10 due rows that are not ended per tick with `FOR UPDATE SKIP LOCKED`, and sets a 30-second persisted lease bound to a claim UUID, as the alert outbox does.
+The timer runs one tick per instance every 60 seconds, claims at most 10 due rows whose `ended` is null per tick with `FOR UPDATE SKIP LOCKED`, and sets a 30-second persisted lease bound to a claim UUID, as the alert outbox does.
 The claim returns each row's `event_version`.
-After the provider read, settlement is one transaction: it locks the row with `SELECT ... FROM disputes.tracked WHERE id = $1 AND claim_id = $2 AND event_version = $3 AND NOT ended FOR UPDATE`, then calls `record` when the outcome is `due_soon` or `overdue`, then writes the outcome with a conditional `UPDATE` that matches the same claim UUID and version, and commits.
+After the provider read, settlement is one transaction: it locks the row with `SELECT ... FROM disputes.tracked WHERE id = $1 AND claim_id = $2 AND event_version = $3 AND ended IS NULL FOR UPDATE`, then calls `record` on the same client when the outcome is `due_soon` or `overdue`, then writes the outcome with a conditional `UPDATE` that matches the same claim UUID and version, and commits.
 So a process whose lease expired cannot overwrite a newer claim, and an evaluation can neither replace the schedule of an event that arrived after its claim nor record an alert from a read that such an event made stale.
 Under read committed, a locked `SELECT` that waits behind an uncommitted event re-checks its condition after the event commits and then matches no row.
 An event that arrives after the lock is taken waits on the row lock until settlement commits, and its trigger then sets `next_check_at` as usual.
 This creates no lock cycle, because `record` touches only `approvals.devices` and `approvals.dispute_alerts`.
-When the locked check matches no row, the tracker calls no `record`, clears only `claim_id` and `leased_until` of a row that still has its claim UUID and is not ended, and leaves `next_check_at`, the failure count, `failing_since`, the last outcome and `ended` as the trigger left them; the next tick re-reads the dispute and derives any ending again.
-An ended row keeps its stale claim, which is harmless because the claim query excludes ended rows.
+When the locked check matches no row, the tracker calls no `record`, clears only `claim_id` and `leased_until` of a row that still has its claim UUID and whose `ended` is null, and leaves `next_check_at`, the failure count, `failing_since`, the last outcome and `ended` as the trigger left them; the next tick re-reads the dispute and derives any ending again.
+A row whose `ended` is not null keeps its stale claim, which is harmless because the claim query matches only rows whose `ended` is null.
 A process whose row was claimed again after its lease expired fails the same check and records nothing; `record` stays idempotent per (merchant, dispute, stage, device, generation) as a backstop.
-`record` is called unchanged on its own pool connection, so this keeps the #71 alert outbox contract.
-Because the locking transaction holds one connection while `record` takes a second, the tracker settles claimed rows one at a time, and the locking transaction runs `SET LOCAL statement_timeout`, as the outbox claim does, so a stuck `record` cannot hold the receiver's event insert indefinitely.
+This PR adds an optional client argument to `record`, a small additive change to the #71 alert outbox API: with a client, `record` runs its insert on that client inside the caller's transaction and does not release it; without one, it takes a pool connection as before, so other callers do not change.
+Settlement passes its own client, so the alert insert and the outcome write commit or roll back together, and a settlement that rolls back after `record` leaves no alert row.
+Settlement therefore never waits for a pool connection while it holds the row lock, so a shared pool with one connection cannot deadlock it, and the receiver's event insert waits only on settlement's own statements.
 The version check orders `record` only against events that the receiver has already stored: a provider change whose webhook arrives after the lock is taken can still follow an alert that has committed, which is the outbox-key limitation in the open questions.
 `close()` stops new ticks and waits for the running one.
 
@@ -167,6 +168,8 @@ The implementation must include:
    A deterministic interleaving, in which the fake resolver inserts a `CUSTOMER.DISPUTE.UPDATED` event during its GET, leaves `next_check_at` at the trigger's value instead of the deadline-derived one and clears the claim; the next tick makes one more provider GET and, when the update moved `dueAt` inside 24 hours, records a `due_soon` alert.
    A second interleaving, in which the GET returns a deadline that would be `due_soon` and the inserted event extends that deadline, records no alert; a later tick records `due_soon` at the new deadline.
    A third interleaving inserts an event after settlement has taken the row lock: the insert waits until settlement commits, and `next_check_at` ends at the trigger's value.
+   A settlement that rolls back after `record` has inserted a `due_soon` alert leaves no alert row, and a tracker whose pool allows one connection settles a `due_soon` row without waiting for a second connection.
+   Existing `DisputeDeadlineAlerts` tests keep passing with the pool-based `record` call.
 8. Real PostgreSQL permission checks, through `scripts/test-audit-postgres.mjs`, for the receiver grants and the application-group grants in decision 6 (including refused `INSERT` and `DELETE` on `disputes.tracked`, refused access to `disputes.events` and refused updates of identity columns and `event_version`), the trigger and the row guards.
 9. Existing project checks: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `trunk check --all --no-fix` and Compose configuration validation.
 
@@ -176,7 +179,7 @@ No test can show alerts for real customers until a deployment supplies `saleCust
 ## Out of scope
 
 - A customer store, a server dispute list or detail API, dashboard or app changes, email, and wiring into the W0 proxy or agent demo.
-- Any dispute action, including accepting a claim, and any change to `DisputePolicy`, the resolver or the alert outbox contract.
+- Any dispute action, including accepting a claim, any change to `DisputePolicy` or the resolver, and any change to the alert outbox contract other than the optional client argument to `record` in decision 5.
 - Provider-wide dispute polling, backfill of disputes opened before the receiver ran, and public webhook ingress or subscription registration.
 
 ## Open questions
