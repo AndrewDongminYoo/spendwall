@@ -45,6 +45,7 @@ The velocity fixture permits two small refunds and rejects the third using persi
 The [shopping](shopping.md) fixture denies an agent-supplied price, creates one catalog order with its approve link, denies capture before buyer approval, then captures once after a scripted buyer approval on the synthetic PayPal page.
 
 Use `pnpm demo small`, `pnpm demo approval`, `pnpm demo injection`, `pnpm demo velocity` or `pnpm demo shopping` to isolate a scenario.
+The optional, synthetic `pnpm demo dispute` scenario is not part of the default run or the expected output above; the [agent guide](../apps/agent-demo/README.md#opt-in-dispute-deadline-scenario) describes it.
 Each invocation creates a uniquely named disposable PostgreSQL container, plus temporary refund ledgers when it runs a refund scenario, then removes its own resources on completion or handled interruption.
 Do not use the synthetic ledger lifecycle as production recovery guidance.
 

@@ -40,6 +40,23 @@ Human approval is deliberately absent from the agent's tool catalog.
 The `shopping` scenario uses a separate buyer-side composition with `search_products` (local catalog), `create_order` and `pay_order`; buyer approval on the synthetic PayPal page is a runner capability, never a tool.
 See the [shopping flow](../../docs/shopping.md) for its ledger and capture binding.
 
+## Opt-in dispute deadline scenario
+
+```sh
+pnpm demo dispute
+```
+
+This scenario is not part of `pnpm demo` or `pnpm demo all`, which run only the five scenarios above.
+It has no agent and no live mode; it shows the [dispute tracking](../../docs/dispute-policy.md#dispute-tracking) path with real modules and synthetic data.
+The ticket in `tickets/dispute.json` names a synthetic dispute, its seller transaction and the hours from the demo clock to the seller deadline.
+The composition applies migrations through `013-dispute-tracking.sql` to the disposable database, enrolls one synthetic approver device for the review agent `support` and stores one `CUSTOMER.DISPUTE.CREATED` event through `DisputeEvents` with a separate webhook receiver login.
+Webhook signature verification is outside the demo, as it is for refunds.
+One `DisputeTracker` tick then reads the dispute through the synthetic payment adapter, which serves only `GET /v1/customer/disputes/{id}` for this dispute and refuses every dispute write.
+The `saleCustomer` lookup is a demo stand-in for a merchant's customer system: a fixed in-memory mapping from the ticket's seller transaction ID to its synthetic customer, and `undefined` for any other ID.
+The tracker clock is one fixed instant ten minutes after the start of the run, because the tracker compares it with database-clock check times and ends tracking 180 days after the first event; the seller deadline is the ticket's `deadlineHours` after that instant.
+The runner checks that the tracked row's outcome is `due_soon` with its next check at the deadline and that exactly one `due_soon` alert row is `ready` in `approvals.dispute_alerts`, then prints `dispute: PASS alerts=1`.
+The alert drain is not run, so no FCM message is sent, and no claim is accepted.
+
 ## Optional Claude run
 
 Supply `ANTHROPIC_API_KEY` through your shell's normal secret handling, then select one scenario:
