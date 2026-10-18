@@ -11,35 +11,39 @@ if (
       '--reconciliation',
       '--invoice-policy',
       '--orders',
+      '--dispute-alerts',
     ].includes(args[0]))
 ) {
   console.error(
-    'Usage: node scripts/test-audit-postgres.mjs [--approval-api|--reconciliation|--invoice-policy|--orders]',
+    'Usage: node scripts/test-audit-postgres.mjs [--approval-api|--reconciliation|--invoice-policy|--orders|--dispute-alerts]',
   );
   process.exit(2);
 }
 const testFiles =
-  args[0] === '--orders'
-    ? ['tests/orders-postgres.test.mjs']
-    : args[0] === '--invoice-policy'
-      ? ['tests/invoice-policy-postgres.test.mjs']
-      : args[0] === '--approval-api'
-        ? ['tests/approval-api-postgres.test.mjs']
-        : args[0] === '--reconciliation'
-          ? ['tests/reconciliation-postgres.test.mjs']
-          : [
-              'tests/audit-postgres.test.mjs',
-              'tests/velocity-postgres.test.mjs',
-              'tests/approvals-postgres.test.mjs',
-              'tests/approval-api-postgres.test.mjs',
-              'tests/dashboard-postgres.test.mjs',
-              'tests/agent-auth-postgres.test.mjs',
-              'tests/policy-preview-postgres.test.mjs',
-              'tests/hosting-postgres.test.mjs',
-              'tests/reconciliation-postgres.test.mjs',
-              'tests/invoice-policy-postgres.test.mjs',
-              'tests/orders-postgres.test.mjs',
-            ];
+  args[0] === '--dispute-alerts'
+    ? ['tests/dispute-alerts-postgres.test.mjs']
+    : args[0] === '--orders'
+      ? ['tests/orders-postgres.test.mjs']
+      : args[0] === '--invoice-policy'
+        ? ['tests/invoice-policy-postgres.test.mjs']
+        : args[0] === '--approval-api'
+          ? ['tests/approval-api-postgres.test.mjs']
+          : args[0] === '--reconciliation'
+            ? ['tests/reconciliation-postgres.test.mjs']
+            : [
+                'tests/audit-postgres.test.mjs',
+                'tests/velocity-postgres.test.mjs',
+                'tests/approvals-postgres.test.mjs',
+                'tests/approval-api-postgres.test.mjs',
+                'tests/dashboard-postgres.test.mjs',
+                'tests/agent-auth-postgres.test.mjs',
+                'tests/policy-preview-postgres.test.mjs',
+                'tests/hosting-postgres.test.mjs',
+                'tests/reconciliation-postgres.test.mjs',
+                'tests/invoice-policy-postgres.test.mjs',
+                'tests/orders-postgres.test.mjs',
+                'tests/dispute-alerts-postgres.test.mjs',
+              ];
 const name = `spendwall-audit-test-${randomUUID()}`;
 function docker(...args) {
   const result = spawnSync('docker', args, { encoding: 'utf8' });

@@ -1,6 +1,8 @@
 import { GoogleAuth } from 'google-auth-library';
 import { approvalId } from '../approvals/binding.ts';
+import { disputeIdentifier } from '../context/dispute.ts';
 import { deliveryToken } from './identity.ts';
+export type DisputeAlertStage = 'due_soon' | 'overdue';
 type Options = {
   projectId: string;
   getAccessToken?: () => Promise<string | null | undefined>;
@@ -39,13 +41,55 @@ export class FcmSender {
     });
     this.accessToken = options.getAccessToken ?? (() => auth.getAccessToken());
   }
-  async send(token: string, id: string): Promise<void> {
+  send(token: string, id: string): Promise<void> {
+    return this.post(
+      () => {
+        deliveryToken(token);
+        approvalId(id);
+      },
+      token,
+      { approval_id: id },
+      {
+        title: 'Approval requested',
+        body: 'Open Spendwall to review the request.',
+      },
+    );
+  }
+  // Invalid input can never succeed, so it is refused as non-retryable before
+  // any access token or request.
+  async sendDisputeDeadline(
+    token: string,
+    disputeId: string,
+    stage: DisputeAlertStage,
+  ): Promise<void> {
+    try {
+      deliveryToken(token);
+      disputeIdentifier(disputeId);
+      if (stage !== 'due_soon' && stage !== 'overdue') throw new FcmFailure();
+    } catch {
+      throw new FcmFailure(false);
+    }
+    return this.post(
+      () => {},
+      token,
+      { dispute_id: disputeId, stage },
+      {
+        title: 'Dispute response due',
+        body: 'Open Spendwall to review the dispute deadline.',
+      },
+    );
+  }
+  private async post(
+    validate: () => void,
+    token: string,
+    data: Record<string, string>,
+    notification: { title: string; body: string },
+  ): Promise<void> {
     const abort = new AbortController();
     let retryAfterSeconds = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      deliveryToken(token);
-      approvalId(id);
+      validate();
       const work = async () => {
         const access = await this.accessToken();
         if (
@@ -66,14 +110,7 @@ export class FcmSender {
               'content-type': 'application/json',
             },
             body: JSON.stringify({
-              message: {
-                token,
-                data: { approval_id: id },
-                notification: {
-                  title: 'Approval requested',
-                  body: 'Open Spendwall to review the request.',
-                },
-              },
+              message: { token, data, notification },
             }),
           },
         );
