@@ -49,13 +49,14 @@ Decision: a new `disputes` schema with two append-or-advance tables, applied by 
 - `disputes.events` stores one row per scoped event: adapter and merchant references, a keyed event reference, a keyed payload digest, the event type, `dispute_id` and the event's single `seller_transaction_id`.
   It stores no payload, buyer data, amount, note or header.
   A uniqueness constraint on (adapter, merchant, event reference) serializes copies; a repeat with the same digest is acknowledged and a changed digest under the same event ID is rejected, as in refund reconciliation, which is why the receiver can also `SELECT` this table.
-- `disputes.tracked` stores one row per (merchant reference, `dispute_id`): `seller_transaction_id`, first and last event times, `next_check_at`, consecutive failures, the last outcome, an `ended` reason, and `claim_id` and `leased_until` for the claim.
+- `disputes.tracked` stores one row per (merchant reference, `dispute_id`): `seller_transaction_id`, first and last event times, an `event_version` counter, `next_check_at`, consecutive failures, the last outcome, an `ended` reason, and `claim_id` and `leased_until` for the claim.
   An insert into `disputes.events` inserts or advances this row through an `AFTER INSERT` trigger whose function is `SECURITY DEFINER`, owned by the trusted owner, with `EXECUTE` revoked from `PUBLIC` and every runtime role, so the receiver needs no privilege on `disputes.tracked`.
-  The trigger sets `next_check_at` to the database clock, ends a row on a `CUSTOMER.DISPUTE.RESOLVED` event, and never changes identity columns or an ended row.
+  The trigger increments `event_version`, sets `next_check_at` to the database clock, ends a row on a `CUSTOMER.DISPUTE.RESOLVED` event, and never changes identity columns or an ended row.
+  Settlement binds to `event_version` rather than the last event time, because the database clock is the transaction start time, so an event transaction that commits after a claim can carry an earlier time than the one the claim observed.
 
 Out-of-order or repeated events need no ordering logic, because every evaluation reads current provider state; an event only brings the next check forward.
 An event for an ended row is stored as evidence but does not reopen it.
-A database guard keeps identity columns immutable, `ended` rows final and failure counts non-decreasing except on a successful evaluation; no runtime role can delete rows.
+A database guard keeps identity columns immutable, `event_version` changed only by the trigger and never decreasing, `ended` rows final and failure counts non-decreasing except on a successful evaluation; no runtime role can delete rows.
 Only the `unmapped` and `dispute_unavailable` outcomes count as failures; every other outcome in decision 5 is a successful evaluation and resets the count to zero.
 
 Tracking ends with one of these reasons:
@@ -124,8 +125,12 @@ A dispute that becomes acceptable inside the 24-hour window therefore reaches `d
 The 24-hour cap re-reads a dispute whose deadline changed without an event we received.
 A provider GET happens only when a row is due; the timer itself is a database query.
 
-The timer runs one tick per instance every 60 seconds, claims at most 10 due rows per tick with `FOR UPDATE SKIP LOCKED`, and sets a 30-second persisted lease bound to a claim UUID, as the alert outbox does.
-Outcome writes match the claim UUID, so a process whose lease expired cannot overwrite a newer claim.
+The timer runs one tick per instance every 60 seconds, claims at most 10 due rows that are not ended per tick with `FOR UPDATE SKIP LOCKED`, and sets a 30-second persisted lease bound to a claim UUID, as the alert outbox does.
+The claim returns each row's `event_version`, and the outcome write is a single conditional `UPDATE` that matches both the claim UUID and that version, so a process whose lease expired cannot overwrite a newer claim and an evaluation cannot replace the schedule of an event that arrived after its claim.
+Under read committed, a settlement that waits behind an uncommitted event re-checks its condition after the event commits and then matches no row.
+When the outcome write matches no row, the tracker clears only `claim_id` and `leased_until` of a row that still has its claim UUID and is not ended, and leaves `next_check_at`, the failure count, the last outcome and `ended` as the trigger left them; the next tick re-reads the dispute and derives any ending again.
+An ended row keeps its stale claim, which is harmless because the claim query excludes ended rows.
+An alert that `record` accepted during such an evaluation stays, because it came from a real provider read and `record` is idempotent.
 If two processes do evaluate the same dispute after a lease expiry, `record` is idempotent per (merchant, dispute, stage, device, generation), so no duplicate alert results.
 `close()` stops new ticks and waits for the running one.
 
@@ -152,7 +157,8 @@ The implementation must include:
 5. Cross-merchant routing: a dispute of another merchant, a tracker configured with mismatched merchants, and another merchant's tracked rows produce no alert and no claim.
 6. A review agent that the policy does not admit produces `policy_denied` and no alert.
 7. Concurrent schedulers against one disposable PostgreSQL database claim each row once per lease and produce one alert per device and stage.
-8. Real PostgreSQL permission checks, through `scripts/test-audit-postgres.mjs`, for the receiver grants and the application-group grants in decision 6 (including refused `INSERT` and `DELETE` on `disputes.tracked`, refused access to `disputes.events` and refused updates of identity columns), the trigger and the row guards.
+   A deterministic interleaving, in which the fake resolver inserts a `CUSTOMER.DISPUTE.UPDATED` event during its GET, leaves `next_check_at` at the trigger's value instead of the deadline-derived one and clears the claim; the next tick makes one more provider GET and, when the update moved `dueAt` inside 24 hours, records a `due_soon` alert.
+8. Real PostgreSQL permission checks, through `scripts/test-audit-postgres.mjs`, for the receiver grants and the application-group grants in decision 6 (including refused `INSERT` and `DELETE` on `disputes.tracked`, refused access to `disputes.events` and refused updates of identity columns and `event_version`), the trigger and the row guards.
 9. Existing project checks: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `trunk check --all --no-fix` and Compose configuration validation.
 
 Unverifiable locally: real PayPal webhook delivery and signature acceptance (mock events cannot be postback-verified), the dispute event resource shape, the capture-to-`seller_transaction_id` equality, which statuses PayPal makes acceptable, a resolved dispute's transaction status, live sandbox disputes and physical-device display.
