@@ -61,7 +61,7 @@ REVOKE ALL ON FUNCTION approvals.guard_dispute_alert() FROM PUBLIC;
 DO $$
 BEGIN
   EXECUTE format('GRANT SELECT,INSERT ON approvals.dispute_alerts TO %I',audit.app_role());
-  -- The drain writes only delivery state; identity columns stay ungranted.
+  -- The drain writes only delivery state; identity columns get no UPDATE grant.
   EXECUTE format('GRANT UPDATE (state,attempts,next_attempt_at,claim_id,leased_until) ON approvals.dispute_alerts TO %I',audit.app_role());
 END $$;
 COMMIT;
