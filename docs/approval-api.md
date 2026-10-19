@@ -4,6 +4,7 @@ The #14 server exposes human approval endpoints on `127.0.0.1` using the existin
 It is separate from the W0 MCP binary and the agent authentication boundary in PR #39.
 An application supplies the database pool, refund executor, current trusted-context refresh and provisioned devices; it adopts the returned `service.request` when a policy can require approval.
 No agent-facing create-approval or public payment-recovery route is added.
+The [recording composition](recording-approval.md) connects this API to the existing trusted resolver/policy and a synthetic refund executor, with registration before request creation and no scripted approval.
 See [the contract](specs/2026-10-15-approval-api.md) and [the underlying service](approvals.md).
 
 ## Storage and server composition

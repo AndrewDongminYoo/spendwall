@@ -25,6 +25,8 @@ pnpm demo
 
 Expect five `PASS` lines: `small` with one synthetic payment, `approval` with one, `injection` with zero, `velocity` with two, and `shopping` with one.
 Approval is explicitly scripted in this mode; it does not represent mobile or biometric approval.
+
+For a separate server composition that waits for human approval through the existing loopback API, see [the synthetic payment recording runbook](docs/recording-approval.md). Run `pnpm test:recording` for its credential-free local fixture. Physical iPhone push, biometrics and the private HTTPS route remain unverified.
 The runner starts and removes its own disposable PostgreSQL container.
 It does not use the Compose database or captures created by `pnpm seed`.
 The [judge guide](docs/judge-guide.md) explains prerequisites, timing evidence, cleanup and separate sandbox verification.
