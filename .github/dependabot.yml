@@ -8,12 +8,10 @@ updates:
       timezone: Asia/Seoul
     open-pull-requests-limit: 3
     groups:
-      github-actions-minor-patch:
+      # Every version update, majors included, in one PR; CI runs the actions it bumps.
+      github-actions:
         patterns:
           - '*'
-        update-types:
-          - minor
-          - patch
       github-actions-security:
         applies-to: security-updates
         patterns:
@@ -79,6 +77,12 @@ updates:
       day: monday
       timezone: Asia/Seoul
     open-pull-requests-limit: 3
+    ignore:
+      # Runtime majors without a security fix stay off (operator, 2026-10-24); node 26.11.1-bookworm-slim came as #81.
+      # update-types limits this to version updates; security updates still open.
+      - dependency-name: 'node'
+        update-types:
+          - version-update:semver-major
     groups:
       docker-minor-patch:
         patterns:
