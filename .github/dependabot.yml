@@ -22,7 +22,7 @@ updates:
       interval: weekly
       day: monday
       timezone: Asia/Seoul
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 2
     groups:
       npm-minor-patch:
         patterns:
@@ -40,7 +40,7 @@ updates:
       interval: weekly
       day: monday
       timezone: Asia/Seoul
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 2
     groups:
       pub-minor-patch:
         patterns:
@@ -58,11 +58,45 @@ updates:
       interval: weekly
       day: monday
       timezone: Asia/Seoul
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 2
     ignore:
+      # The Android Gradle Plugin follows the Flutter or React Native toolchain, not Dependabot.
+      # update-types limits this to version updates; security updates still open.
+      - dependency-name: com.android.application
+        update-types:
+          - version-update:semver-patch
+          - version-update:semver-minor
+          - version-update:semver-major
+      - dependency-name: com.android.library
+        update-types:
+          - version-update:semver-patch
+          - version-update:semver-minor
+          - version-update:semver-major
+      # The Kotlin Gradle plugin and its stdlib must match the framework's bundled Kotlin.
+      - dependency-name: org.jetbrains.kotlin.android
+        update-types:
+          - version-update:semver-patch
+          - version-update:semver-minor
+          - version-update:semver-major
+      - dependency-name: org.jetbrains.kotlin:kotlin-stdlib
+        update-types:
+          - version-update:semver-patch
+          - version-update:semver-minor
+          - version-update:semver-major
       # Gradle wrapper upgrades follow the Flutter/AGP toolchain of apps/approver, not Dependabot.
       # update-types limits this to version updates; security updates still open.
       - dependency-name: gradle-wrapper
+        update-types:
+          - version-update:semver-patch
+          - version-update:semver-minor
+          - version-update:semver-major
+      # The same two plugins, declared as classpath coordinates.
+      - dependency-name: com.android.tools.build:gradle
+        update-types:
+          - version-update:semver-patch
+          - version-update:semver-minor
+          - version-update:semver-major
+      - dependency-name: org.jetbrains.kotlin:kotlin-gradle-plugin
         update-types:
           - version-update:semver-patch
           - version-update:semver-minor
@@ -84,7 +118,7 @@ updates:
       interval: weekly
       day: monday
       timezone: Asia/Seoul
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 2
     ignore:
       # Runtime majors without a security fix stay off (operator, 2026-10-24); node 26.11.1-bookworm-slim came as #81.
       # update-types limits this to version updates; security updates still open.
@@ -108,7 +142,7 @@ updates:
       interval: weekly
       day: monday
       timezone: Asia/Seoul
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 2
     groups:
       docker-compose-minor-patch:
         patterns:
