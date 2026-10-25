@@ -12,7 +12,7 @@ Start with the [judge guide](docs/judge-guide.md) and [threat model](docs/threat
 
 ## Quickstart
 
-Install Node.js **24.21.0**, pnpm **11.24.0**, Git and Docker with its daemon running.
+Install Node.js **24.22.1**, pnpm **11.24.0**, Git and Docker with its daemon running.
 These versions are pinned in `.node-version` and `package.json`.
 No PayPal or Claude credentials are needed for this path.
 

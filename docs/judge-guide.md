@@ -13,7 +13,7 @@ Local evaluation is described in the [dashboard guide](dashboard.md#ag-studio-an
 
 ## Prerequisites
 
-- Node.js 24.21.0 and pnpm 11.24.0, verified with `node --version` and `pnpm --version`.
+- Node.js 24.22.1 and pnpm 11.24.0, verified with `node --version` and `pnpm --version`.
 - Git, Docker CLI and a running local Docker daemon, verified with `git --version` and `docker info`.
 - Internet access for the repository, package registry and the first `postgres:17-alpine` image pull.
 - A terminal on the Docker host; the runner connects to a dynamically published loopback port.
