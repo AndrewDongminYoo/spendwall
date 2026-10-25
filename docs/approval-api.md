@@ -93,7 +93,7 @@ The hash remains the audit SHA-256 of canonical normalized original arguments, n
 Compare the value obtained from detail; a mismatch returns 409 before refresh, expiry mutation, audit append, delivery work or payment execution.
 Additional identity, context, amount or policy fields are rejected.
 Cross-owner and unknown approvals return 404; missing, invalid, expired or revoked authentication returns 401.
-Expired/conflicting decisions and a busy unclaimed approval return 409.
+Expired/conflicting decisions and a busy unclaimed approval return 409; a decision first retries the busy lock for about 0.5 seconds, so a concurrent status read does not cause a 409.
 An active or unknown execution can return 202; a final outcome returns 200.
 Repeated approval uses the existing execution UUID and never creates another execution.
 Deny does not resolve payment context or submit a payment.
