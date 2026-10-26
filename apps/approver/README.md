@@ -50,8 +50,10 @@ The repository does not create cloud resources or install to a physical device d
 ## Connection and session limits
 
 The API currently listens on loopback and rejects non-local Host/Origin values.
-A physical-device connection needs a separately approved private routing arrangement that preserves those server checks.
-The [synthetic recording runbook](../../docs/recording-approval.md) provides a separate server composition and documents the still-pending Firebase/APNs and private HTTPS prerequisites. Its automated HTTP/fake-notifier fixture does not verify this app on a phone.
+For a physical iPhone, the recording command can start an optional TLS forwarder on the Mac's Tailscale address (`100.64.0.0/10` only) with a `tailscale cert` certificate for its `<name>.ts.net` name.
+The forwarder accepts only that exact Host, refuses any Origin, and rewrites Host to the API's loopback host, so the server checks stay unchanged.
+Enter `https://<name>.ts.net:<port>` in the app; the phone and the Mac must be in the same tailnet.
+The [synthetic recording runbook](../../docs/recording-approval.md) owns the operator steps and documents the still-pending Firebase/APNs prerequisites. Its automated HTTP/fake-notifier fixture does not verify this app on a phone.
 Do not expose the API publicly or change its bind address to make a demo work.
 The app normally accepts only an HTTPS origin without a path, query, fragment or user information.
 For an explicitly local debug run, `--dart-define=ALLOW_LOOPBACK_HTTP=true` also permits HTTP on `localhost`, `127.0.0.1` or `::1`.

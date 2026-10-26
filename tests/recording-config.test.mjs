@@ -5,7 +5,10 @@ import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readRecordingConfig } from '../apps/agent-demo/src/recording-config.ts';
+import {
+  readForwardTls,
+  readRecordingConfig,
+} from '../apps/agent-demo/src/recording-config.ts';
 
 const config = {
   identityKey: '1'.repeat(64),
@@ -123,4 +126,95 @@ test('valid reads close the verified descriptor and parsing errors reveal no sou
   fs.writeFileSync(file, '{' + marker);
   assert.throws(() => readRecordingConfig(file), unavailable);
   assert.throws(() => fstat(descriptor), { code: 'EBADF' });
+});
+
+const forward = {
+  bind: '100.101.102.103',
+  port: 8443,
+  host: 'mac.example.ts.net',
+  certFile: '/private/cert.pem',
+  keyFile: '/private/key.pem',
+};
+
+test('an optional forward object is accepted when every key is valid', (t) => {
+  const { file } = fixture(t);
+  fs.writeFileSync(file, JSON.stringify({ ...config, forward }));
+  assert.deepEqual(readRecordingConfig(file), { ...config, forward });
+});
+
+test('forward objects are validated strictly', (t) => {
+  const { file } = fixture(t);
+  const { keyFile: _omitted, ...missingKey } = forward;
+  for (const invalid of [
+    null,
+    [],
+    'https://mac.example.ts.net',
+    missingKey,
+    { ...forward, extra: true },
+    { ...forward, bind: '0.0.0.0' },
+    { ...forward, bind: '127.0.0.1' },
+    { ...forward, bind: '192.168.1.10' },
+    { ...forward, bind: '100.128.0.1' },
+    { ...forward, port: 0 },
+    { ...forward, port: 65536 },
+    { ...forward, port: 443 },
+    { ...forward, port: '8443' },
+    { ...forward, host: 'mac.example.com' },
+    { ...forward, host: 'Mac.example.ts.net' },
+    { ...forward, host: 'mac.example.ts.net:8443' },
+    { ...forward, certFile: 'cert.pem' },
+    { ...forward, keyFile: './key.pem' },
+    { ...forward, keyFile: 1 },
+  ]) {
+    fs.writeFileSync(file, JSON.stringify({ ...config, forward: invalid }));
+    assert.throws(() => readRecordingConfig(file), unavailable);
+  }
+});
+
+function tlsFixture(t) {
+  const { directory } = fixture(t);
+  const keyFile = join(directory, 'key.pem'),
+    certFile = join(directory, 'cert.pem');
+  fs.writeFileSync(keyFile, 'synthetic-key-marker', { mode: 0o600 });
+  fs.writeFileSync(certFile, 'synthetic-cert', { mode: 0o644 });
+  return { directory, tls: { ...forward, keyFile, certFile } };
+}
+const tlsUnavailable = { message: 'Forwarder TLS files unavailable.' };
+
+test('the forwarder key is read only from a current-owner owner-only regular file', (t) => {
+  const { tls } = tlsFixture(t);
+  assert.deepEqual(readForwardTls(tls), {
+    key: 'synthetic-key-marker',
+    cert: 'synthetic-cert',
+  });
+  fs.chmodSync(tls.keyFile, 0o400);
+  assert.equal(readForwardTls(tls).key, 'synthetic-key-marker');
+  fs.chmodSync(tls.keyFile, 0o640);
+  assert.throws(() => readForwardTls(tls), tlsUnavailable);
+  assert.equal(fs.statSync(tls.keyFile).mode & 0o777, 0o640);
+});
+
+test('forwarder key symlinks, directories, other owners and missing files are refused without paths', (t) => {
+  const { directory, tls } = tlsFixture(t);
+  const link = join(directory, 'key-link.pem');
+  fs.symlinkSync(tls.keyFile, link);
+  for (const keyFile of [link, directory, join(directory, 'missing.pem')])
+    assert.throws(
+      () => readForwardTls({ ...tls, keyFile }),
+      (error) => {
+        assert.equal(error.message, tlsUnavailable.message);
+        assert.equal(error.message.includes(directory), false);
+        return true;
+      },
+    );
+  assert.throws(
+    () => readForwardTls({ ...tls, certFile: join(directory, 'missing.pem') }),
+    tlsUnavailable,
+  );
+  t.mock.method(
+    process,
+    'geteuid',
+    () => Number(fs.statSync(tls.keyFile).uid) + 1,
+  );
+  assert.throws(() => readForwardTls(tls), tlsUnavailable);
 });
