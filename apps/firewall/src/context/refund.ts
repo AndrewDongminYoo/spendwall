@@ -41,11 +41,15 @@ export async function readRefund(
   const unit = object(order.purchase_units[0]);
   if (object(unit.payee).merchant_id !== merchantId) fail();
   const payments = object(unit.payments);
+  // Orders v2 may omit an empty refunds array. A present non-array is denied,
+  // and the capture status check below still requires refunds when it reports
+  // any.
+  const refunds = Object.hasOwn(payments, 'refunds') ? payments.refunds : [];
   if (
     !Array.isArray(payments.captures) ||
     payments.captures.length !== 1 ||
-    !Array.isArray(payments.refunds) ||
-    payments.refunds.length > 100
+    !Array.isArray(refunds) ||
+    refunds.length > 100
   )
     fail();
   const linked = object(payments.captures[0]);
@@ -59,7 +63,7 @@ export async function readRefund(
     fail();
   let refunded = 0n;
   const ids = new Set<string>();
-  for (const candidate of payments.refunds) {
+  for (const candidate of refunds) {
     const refund = object(candidate);
     const id = identifier(refund.id, 15, 32);
     if (

@@ -38,7 +38,9 @@ and requested refund amount are checked independently even when reads are shared
 
 The resolver reads capture detail and then its related order. It checks IDs,
 amounts, currency, status and merchant ownership across both responses. The order
-must have one purchase unit, one matching capture and an explicit refunds array.
+must have one purchase unit and one matching capture. An omitted refunds key
+means no refunds; a refunds value that is present but not an array is denied.
+The capture's own status still requires refund records when it reports any.
 Each refund requires a unique ID and exact fixed-origin parent-capture link.
 Completed refunds are summed in integer minor units; failed/cancelled records
 contribute zero. Pending/unknown or inconsistent history is denied.

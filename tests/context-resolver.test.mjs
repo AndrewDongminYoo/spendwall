@@ -255,6 +255,22 @@ test('the resolver emits a policy-compatible envelope and does not authorize or 
   );
 });
 
+test('an order that omits an empty refunds array resolves the full unrefunded capture', async (t) => {
+  const f = await fixture(t, { refunded: '0.00' });
+  delete f.order.purchase_units[0].payments.refunds;
+  const result = await f.resolve();
+  assert.equal(result.ok, true);
+  assert.equal(result.amount.usd, 100);
+  assert.equal(result.resolvedCtx.capture.amount_minor, 10000);
+  assert.equal(result.resolvedCtx.capture.refunded_minor, 0);
+  assert.equal(result.resolvedCtx.capture.remaining_minor, 10000);
+  for (const refunds of [null, {}, 'none']) {
+    const g = await fixture(t, { refunded: '0.00' });
+    g.order.purchase_units[0].payments.refunds = refunds;
+    assert.equal((await g.resolve()).decision, 'deny');
+  }
+});
+
 test('capture/order identity, ownership, amounts and incomplete history fail closed', async (t) => {
   for (const mutate of [
     (f) => {
@@ -278,8 +294,15 @@ test('capture/order identity, ownership, amounts and incomplete history fail clo
     (f) => {
       f.order.purchase_units[0].payments.captures[0].amount.value = '200.00';
     },
+    // A missing refunds key cannot hide a partial refund the capture reports.
     (f) => {
       delete f.order.purchase_units[0].payments.refunds;
+    },
+    (f) => {
+      f.order.purchase_units[0].payments.refunds = null;
+    },
+    (f) => {
+      f.order.purchase_units[0].payments.refunds = {};
     },
     (f) => {
       f.order.purchase_units.push(structuredClone(f.order.purchase_units[0]));
