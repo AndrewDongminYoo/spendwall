@@ -65,6 +65,7 @@ noninteractively
 NOREPLICATION
 nosniff
 NOSYSTEM
+notifyutil
 nspname
 nspowner
 Onone
