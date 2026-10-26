@@ -17,6 +17,7 @@ import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
+import pg from 'pg';
 import { withDemoDatabase } from '../apps/agent-demo/src/database.ts';
 import { createRecordingDemo } from '../apps/agent-demo/src/recording.ts';
 
@@ -185,6 +186,98 @@ test('recording composition uses policy, trusted context and the loopback approv
         await f.demo.close();
       },
     );
+    await t.test(
+      'a briefly held approval lock delays a decision; a longer holder is busy',
+      async (t) => {
+        const f = await fixture(url, t);
+        const token = await f.register();
+        const pending = await f.demo.request();
+        const path = `/approvals/${pending.approval_id}`;
+        const detail = (await f.http(path, 'GET', undefined, token)).body;
+        // Stands in for the recording CLI's status poll, which takes the same
+        // per-approval advisory lock for a moment (issue 91). Advisory locks are
+        // per database, so join the demo's own database, not the owner's.
+        const admin = new pg.Client({ connectionString: url });
+        await admin.connect();
+        const { rows } = await admin.query(
+          "SELECT datname FROM pg_database WHERE datname LIKE 'demo\\_%' ORDER BY oid DESC LIMIT 1",
+        );
+        await admin.end();
+        const target = new URL(url);
+        target.pathname = `/${rows[0].datname}`;
+        const reader = new pg.Client({ connectionString: target.toString() });
+        await reader.connect();
+        t.after(() => reader.end());
+        assert.equal(
+          (
+            await reader.query(
+              'SELECT 1 FROM approvals.requests WHERE approval_id=$1',
+              [pending.approval_id],
+            )
+          ).rowCount,
+          1,
+        );
+        await reader.query('SELECT pg_advisory_lock(hashtextextended($1,0))', [
+          `spendwall/approval/v1/${pending.approval_id}`,
+        ]);
+        const decide = () =>
+          f.http(
+            path + '/decision',
+            'POST',
+            { decision: 'approve', args_hash: detail.args_hash },
+            token,
+          );
+        // A holder that outlasts the retry window still reports busy.
+        const busy = await decide();
+        assert.equal(busy.status, 409);
+        assert.deepEqual(busy.body, { error: 'Approval changed or busy.' });
+        assert.equal(f.demo.payments.length, 0);
+        // Release mid-window, as a status read would.
+        const reply = decide();
+        await delay(250);
+        await reader.query(
+          'SELECT pg_advisory_unlock(hashtextextended($1,0))',
+          [`spendwall/approval/v1/${pending.approval_id}`],
+        );
+        const result = await reply;
+        assert.equal(result.status, 200, JSON.stringify(result.body));
+        assert.equal(result.body.execution_state, 'succeeded');
+        assert.equal(f.demo.payments.length, 1);
+      },
+    );
+    await t.test(
+      'a racing approval and denial settle on one decision',
+      async (t) => {
+        const f = await fixture(url, t);
+        const token = await f.register();
+        const pending = await f.demo.request();
+        const path = `/approvals/${pending.approval_id}`;
+        const detail = (await f.http(path, 'GET', undefined, token)).body;
+        const [approve, deny] = await Promise.all(
+          ['approve', 'deny'].map((decision) =>
+            f.http(
+              path + '/decision',
+              'POST',
+              { decision, args_hash: detail.args_hash },
+              token,
+            ),
+          ),
+        );
+        const message = JSON.stringify({ approve, deny });
+        const final = (await f.http(path, 'GET', undefined, token)).body;
+        if (final.status === 'approved') {
+          assert.equal(approve.status, 200, message);
+          assert.equal(approve.body.execution_state, 'succeeded', message);
+          assert.equal(deny.status, 409, message);
+          assert.equal(f.demo.payments.length, 1);
+        } else {
+          assert.equal(final.status, 'denied', message);
+          assert.equal(deny.status, 200, message);
+          assert.equal(approve.status, 409, message);
+          assert.equal(f.demo.payments.length, 0);
+        }
+      },
+    );
     for (const scenario of ['deny', 'changed customer', 'changed policy']) {
       await t.test(
         `${scenario} never executes a synthetic refund`,
@@ -345,7 +438,11 @@ test('recording CLI waits for HTTP approval and prints only synthetic results', 
     },
     body: JSON.stringify({ decision: 'approve', args_hash: detail.args_hash }),
   });
-  assert.equal(approved.status, 200);
+  assert.equal(
+    approved.status,
+    200,
+    `${await approved.clone().text()}\n${output}${errors}`,
+  );
   await until(/Result remains available until Ctrl\+C/);
   const final = await (
     await fetch(origin + '/approvals/' + id, {

@@ -1,5 +1,6 @@
 import type { PolicyReplay } from '../policy-preview/replay.ts';
 import { randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import type { Pool, PoolClient } from 'pg';
 import type { LoadedPolicy } from '../../../../packages/policy/src/index.ts';
 import { AuditLog } from '../audit/index.ts';
@@ -554,12 +555,20 @@ export class ApprovalService {
       id = approvalId(submittedId);
       identifier(agent);
       client = await this.pool.connect();
-      locked = (
-        await client.query<{ locked: boolean }>(
-          'SELECT pg_try_advisory_lock(hashtextextended($1,0)) AS locked',
-          [`spendwall/approval/v1/${id}`],
-        )
-      ).rows[0]!.locked;
+      const tryLock = async () =>
+        (
+          await client!.query<{ locked: boolean }>(
+            'SELECT pg_try_advisory_lock(hashtextextended($1,0)) AS locked',
+            [`spendwall/approval/v1/${id}`],
+          )
+        ).rows[0]!.locked;
+      locked = await tryLock();
+      // A concurrent status check holds this lock only briefly. Let a decision
+      // wait it out instead of reporting busy; a longer holder still yields 409.
+      for (let attempt = 0; !locked && guard && attempt < 10; attempt++) {
+        await delay(50);
+        locked = await tryLock();
+      }
       if (!locked) {
         const row = await this.row(client, id, agent);
         if (guard && row.args_hash !== guard.argsHash)
