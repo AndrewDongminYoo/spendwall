@@ -6,6 +6,7 @@ Spendwall is a payment policy firewall for merchant-support AI agents.
 Keep policy decisions deterministic and default to denial when trustworthy payment context is unavailable.
 Never put PayPal credentials in the agent or commit real credentials.
 The repository contains tested payment-control modules, a synthetic support-agent demo and a local read-only dashboard.
+The human-approval recording uses synthetic payments by default; its `--paypal-sandbox` flag opts into one real PayPal sandbox refund per approval and has no live PayPal path.
 The W0 sandbox proxy is a separate integration without the demo's policy/approval composition; do not describe it as a production payment service.
 The hosted dashboard preparation entrypoint is API-only; public UI licensing, deployment and 48-hour operation remain unverified.
 The optional loopback sandbox webhook receiver verifies observed refunds and compares them with opt-in execution receipts; live delivery and direct-dashboard refund acceptance remain unverified.

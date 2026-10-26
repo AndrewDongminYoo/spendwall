@@ -1,6 +1,6 @@
-# Human approval recording with synthetic payments
+# Human approval recording with synthetic or PayPal sandbox payments
 
-`pnpm demo:recording` composes the existing loopback approval API with the demo's PostgreSQL audit/approval tables, trusted context resolver, deterministic policy and synthetic refund executor. It never calls PayPal or an AI provider. The ordinary `pnpm demo` still runs its five recorded scenarios with scripted approval.
+`pnpm demo:recording` composes the existing loopback approval API with the demo's PostgreSQL audit/approval tables, trusted context resolver, deterministic policy and, by default, a synthetic refund executor. Without `--paypal-sandbox` it never calls PayPal, and it never calls an AI provider. [PayPal sandbox mode](#paypal-sandbox-mode) is an explicit opt-in that performs one real sandbox refund per approval. The ordinary `pnpm demo` still runs its five recorded scenarios with scripted approval.
 
 This prepares the server side of scene 4. Physical iPhone push delivery, Face ID, device installation, Firebase/APNs, signing and a private HTTPS route have **not** been verified. There is no Spendwall Firebase project or working phone route supplied by this change. Do not describe the automated fixture as a physical-device test.
 
@@ -17,7 +17,7 @@ pnpm demo
 
 `test:recording` creates disposable loopback PostgreSQL containers and uses the real approval HTTP API, local payment fixtures and a fake notifier. Its enrollment material, signing keys, JWTs and notification addresses belong only to disposable synthetic instances. They grant no access to an operator device, Firebase, Apple or PayPal. Nothing is printed for enrollment or copied into a real configuration.
 
-The tests verify registration before request creation, stored matched rule `rules.v1:1`, authoritative USD 60.00/customer/merchant facts, pending with zero executions, incorrect hash rejection, concurrent/repeated approval with exactly one execution ID and completed result, denial, changed policy/customer, exact Host/Origin rejection, no HTTP request-creation endpoint, CLI result lookup and cleanup. Existing approval API tests additionally cover expiry, revocation, delivery retries and execution recovery.
+The tests verify registration before request creation, stored matched rule `rules.v1:1`, authoritative USD 60.00/customer/merchant facts, pending with zero executions, incorrect hash rejection, concurrent/repeated approval with exactly one execution ID and completed result, denial, changed policy/customer, exact Host/Origin rejection, no HTTP request-creation endpoint, CLI result lookup and cleanup. Existing approval API tests additionally cover expiry, revocation, delivery retries and execution recovery. The sandbox-mode tests serve the token, capture, order and refund endpoints from the same fixture. They verify one refund POST under the stored execution ID, one retry under the same ID after a 401 that counts as one submission, none on denial, expiry, an already refunded capture or a capture that needs no approval, and that the default mode makes no PayPal environment lookup or fetch.
 
 ## Trusted configuration for a later operator rehearsal
 
@@ -42,7 +42,7 @@ The regression tests exercise real file modes/types and path replacement. The di
 }
 ```
 
-The raw enrollment credential, JWT and FCM registration token do not belong in this file. See [provisioning and JWTs](approval-api.md#provisioning-and-jwts) for the existing contract. Device IDs and digests must already be provisioned; this document does not issue or register one. Omitting `port` selects an available loopback port, which the command prints. The configuration cannot change the bind address, Host/Origin checks, payment provider or AI behavior.
+The raw enrollment credential, JWT and FCM registration token do not belong in this file. See [provisioning and JWTs](approval-api.md#provisioning-and-jwts) for the existing contract. Device IDs and digests must already be provisioned; this document does not issue or register one. Omitting `port` selects an available loopback port, which the command prints. The configuration cannot change the bind address, Host/Origin checks or AI behavior; its optional `sandbox` object selects the PayPal sandbox only together with `--paypal-sandbox`.
 
 ```sh
 pnpm demo:recording /absolute/private/config.json
@@ -50,7 +50,7 @@ pnpm demo:recording /absolute/private/config.json
 
 The default explicitly prints `NOTIFICATIONS DISABLED`; it needs no Google credentials and performs no real push. For automated local rehearsal, use `pnpm test:recording` rather than putting its fixture credential into this configuration.
 
-The command starts its own disposable PostgreSQL container/database, applies migrations `001`, `002`, `003`, `004`, `007` and `011`, creates a restricted application login, opens a temporary refund ledger and starts `startApproverServer`. It ignores the repository `.env`, ambient PayPal keys and `ANTHROPIC_API_KEY`. It accepts no existing database URL or live-payment option.
+The command starts its own disposable PostgreSQL container/database, applies migrations `001`, `002`, `003`, `004`, `007` and `011`, creates a restricted application login, opens a temporary refund ledger and starts `startApproverServer`. It ignores the repository `.env` and `ANTHROPIC_API_KEY`; without `--paypal-sandbox` it also ignores ambient PayPal keys. It accepts no existing database URL or live-payment option.
 
 The server prints its loopback URL and waits for an active registered device assigned to `demo-support`. Only then does the trusted runner resolve `DEMO_CAPTURE_00002` from the recorded capture/order facts and current ticket customer and call the existing policy/reservation/approval service. The default demo policy requires approval because the authoritative amount is USD 60.00, above USD 20. The console prints:
 
@@ -64,6 +64,50 @@ The pending request is available through the authenticated existing list/detail 
 After a successful human decision, the executor ledger and PostgreSQL approval/audit/reconciliation records hold one synthetic result. The console prints `execution_state: succeeded` in JSON and `synthetic executions=1`. Repeated approval retains the same execution ID. Denial or expiry keeps execution at zero; a failed refresh leaves approval unresolved and performs no refund. The server stays available after the result so the phone can re-fetch detail. Press Ctrl+C to close it and remove its container and temporary ledger (exit status 130; SIGTERM uses 143).
 
 All recording state is disposable. This is not restart recovery for an operator session. Restarting loses approvals, device registrations, audit rows, synthetic provider state and executor ledger. Re-register before the next run and never reuse recording enrollment credentials for a real service. For a persistent deployment, retain the stable DB, identity/signing keys and executor ledger together under the existing approval API contract instead.
+
+## PayPal sandbox mode
+
+`--paypal-sandbox` replaces the synthetic payment fixture with the PayPal sandbox for one run, and it performs a **real sandbox refund once per approval**. The refund executor and the context resolver hard-code `https://api-m.sandbox.paypal.com`; this composition has no live PayPal path. The automated tests serve the sandbox endpoints from the synthetic fixture; this mode has not been run against PayPal.
+
+Prerequisites, none of which the command creates:
+
+1. Sandbox REST app credentials as `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` in the process environment. The command reads them only with the flag, and it checks that both are set before Docker starts.
+2. A buyer-approved `COMPLETED` sandbox capture above USD 20 whose order has a `payer.payer_id`. The resolver binds the customer to that payer, so the seeded card captures, whose orders have no payer, cannot be used.
+3. The capture's payee merchant ID and the merchant email.
+
+Add a `sandbox` object to the private config. All four keys are required and unknown keys are refused. `captureId` is 15–32 letters, digits, `_` or `-`; `payerId` and `merchantId` are 1–128 of the same characters; `merchantEmail` must be a valid email address:
+
+```json
+{
+  "sandbox": {
+    "captureId": "<buyer-approved sandbox capture ID>",
+    "payerId": "<payer ID of that capture's order>",
+    "merchantId": "<payee merchant ID>",
+    "merchantEmail": "<merchant email>"
+  }
+}
+```
+
+```sh
+pnpm demo:recording /absolute/private/config.json --paypal-sandbox
+pnpm demo:recording /absolute/private/config.json --fcm approved-project-id --paypal-sandbox
+```
+
+The flag without a `sandbox` object, a `sandbox` object without the flag, or missing credentials fails with the generic `Recording unavailable.` message before the banner and before Docker starts.
+
+The trusted ticket comes from the config: the customer is `payerId` and the scope is exactly `captureId`. `tickets/approval.json` is not read. Policy, the approval API, approval binding, refresh-before-execute and reconciliation are unchanged. On approve, refresh re-reads the capture and its order. A capture that was refunded in the meantime fails refresh and submits no refund. The executor sends the refund with the stored execution ID as `PayPal-Request-Id`, so concurrent or repeated approvals produce one refund.
+
+If the policy does not require approval, for example because the capture is USD 20 or less, the command prints `Recording policy did not require approval; no sandbox refund was created.` and exits with status 1. It creates no approval and no refund.
+
+The console prints:
+
+```text
+HUMAN APPROVAL RECORDING / PAYPAL SANDBOX REFUND / NO LIVE PAYPAL OR AI
+pending_approval: <approval UUID>; sandbox refund submissions=0
+SANDBOX REFUND RESULT: approval=approved; execution=succeeded; refund=<sandbox refund ID> COMPLETED; sandbox refund submissions=1
+```
+
+`sandbox refund submissions` counts the distinct `PayPal-Request-Id` values sent to the refund route, so a retry after a 401 is not counted twice; a refund POST without that header would count on its own. The console never prints tokens, credentials, the payer ID or provider error bodies. The executor ledger stays in the run's temporary directory and is removed on exit, together with the disposable approval database, because a kept ledger could not recover a run whose approvals are gone. The sandbox refund itself remains in PayPal. A later run against the same capture fails at trusted resolution, because nothing remains to refund.
 
 ## iOS Simulator rehearsal without Firebase
 
@@ -118,8 +162,8 @@ These are pending operational tasks, not actions performed by the implementation
    pnpm demo:recording /absolute/private/config.json --fcm approved-project-id
    ```
 
-   The default has no sender. `--fcm` may contact Google using independently configured ADC; it does not generate credentials or configure Firebase/APNs. This option was not exercised against Google. The payment side remains synthetic.
+   The default has no sender. `--fcm` may contact Google using independently configured ADC; it does not generate credentials or configure Firebase/APNs. This option was not exercised against Google. The payment side remains synthetic unless `--paypal-sandbox` is also given.
 
-5. Keep an on-screen label **SYNTHETIC PAYMENTS / HUMAN APPROVAL** throughout the scene, including the iPhone shot. Show the real push opening original facts, the matched rule and USD 60.00 amount, the app's local Face ID confirmation, then the returned synthetic execution result. A local biometric gate is not server-side biometric attestation.
+5. Keep an on-screen label **SYNTHETIC PAYMENTS / HUMAN APPROVAL** throughout the scene, including the iPhone shot. Show the real push opening original facts, the matched rule and USD 60.00 amount, the app's local Face ID confirmation, then the returned synthetic execution result. In [PayPal sandbox mode](#paypal-sandbox-mode), use **PAYPAL SANDBOX REFUND / HUMAN APPROVAL** instead, show the capture's own amount and end on the sandbox refund result. A local biometric gate is not server-side biometric attestation.
 
 Creation enqueues notifications only for matching devices registered at that transaction. Later registration has no retroactive push; use the authenticated pending list to discover an existing request. The runner's registration gate prevents that ordering mistake for its initial request. FCM is advisory and at least once; failed push does not approve, execute or remove the pending request. Never use a public API, external create-approval endpoint, public tunnel or changed bind/authorization checks to complete the scene.
