@@ -88,7 +88,29 @@ The app itself shows no synthetic marker. Add the **SYNTHETIC PAYMENTS / HUMAN A
 These are pending operational tasks, not actions performed by the implementation:
 
 1. Create an approved personal Spendwall Firebase project, register the matching iOS app and configure its APNs relationship and private Google ADC credentials outside Git. Follow the [approver README](../apps/approver/README.md); native signing, entitlements and installation remain separate work.
-2. Establish a separately reviewed **private HTTPS** phone path. The API must still bind only to `127.0.0.1` and see exactly its own loopback Host and, when present, matching Origin. A VPN alone does not make the phone's loopback reach the Mac or satisfy these checks. A private TLS forwarding design must account for the upstream Host/Origin explicitly without weakening server validation or introducing a public listener/tunnel. No VPN, Tailscale, certificate, proxy or routing configuration is installed here.
+2. Prepare the **private HTTPS** phone path over Tailscale. The API still binds only to `127.0.0.1` and keeps its exact loopback Host and Origin checks. An optional in-repository TLS forwarder (`apps/firewall/src/approver/forwarder.ts`) listens only on the Mac's tailnet IPv4 address in `100.64.0.0/10`; it refuses `0.0.0.0`, loopback and LAN addresses at startup. It accepts a request only when Host equals the configured `<name>.ts.net:<port>` exactly (421 otherwise) and refuses any request that carries Origin (403); refused requests never reach the API. Port 443 is refused at startup, because clients omit the default port from Host and the exact match would then fail. It forwards method, path, query, body and end-to-end headers to the loopback API with Host replaced by the API's own loopback host, removes hop-by-hop headers in both directions, answers 502 when the API is unreachable and logs nothing. Operator steps, none of which this repository performs:
+   1. Install Tailscale on the Mac and the iPhone and sign both into the same tailnet.
+   2. In the tailnet admin console, enable MagicDNS and HTTPS certificates.
+   3. On the Mac, run `tailscale cert <name>.ts.net` for the Mac's MagicDNS name. Keep the key file outside Git, owned by the user who runs the recording command, with mode `0600` or `0400`; the CLI applies the same owner-only, no-symlink, regular-file checks to the key as to the private config.
+   4. Add a `forward` object to the private config. All five keys are required, unknown keys are refused, `bind` is the Mac's address from `tailscale ip -4`, `port` is 1–65535 but not 443, and the paths are absolute:
+
+      ```json
+      {
+        "forward": {
+          "bind": "100.x.y.z",
+          "port": 8443,
+          "host": "<name>.ts.net",
+          "certFile": "/absolute/path/<name>.ts.net.crt",
+          "keyFile": "/absolute/path/<name>.ts.net.key"
+        }
+      }
+      ```
+
+   5. Start `pnpm demo:recording` as usual. After the API is listening it prints `Tailnet HTTPS forwarder: https://<name>.ts.net:<port>` and closes the forwarder together with the API on Ctrl+C. Without `forward`, nothing listens beyond loopback.
+   6. Enter `https://<name>.ts.net:<port>` as the server origin in the app.
+
+   The automated tests use a throwaway self-signed certificate on `127.0.0.1` through a test-only seam; a real tailnet, `tailscale cert` and the phone connection were not exercised.
+
 3. Provision the intended device privately, start the recording server and register the phone before creating the request. Registration stores the FCM address and returns a JWT lasting 900 seconds (15 minutes). Expiry requires a newly provisioned one-use credential and re-registration; there is no refresh-token endpoint. The command re-reads only `devices` from the private file so an independently provisioned replacement digest can be supplied during a run; keep the identity/signing keys fixed. Approval TTL is also 15 minutes. Registration readiness checks an active device row, not a still-valid phone JWT, so keep enrollment and filming close together.
 4. Only after Firebase/ADC and the private phone path are independently ready, opt into the existing sender explicitly:
 
