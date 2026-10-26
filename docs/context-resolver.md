@@ -51,9 +51,11 @@ The audit facts expose original, refunded and remaining minor units and status.
 No fractional floating-point arithmetic is used to sum or subtract money.
 
 Capture GET alone does not expose a total-refunded aggregate. The additional
-documented order payment history is required; missing history is never treated
-as zero. The explicit-array, single-capture and identity requirements are
-conservative supported-response restrictions. Some valid live PayPal responses
+documented order payment history is required. An omitted refunds key reads as no
+refunds only because the capture status must then agree; a capture that reports
+a refund without matching history is denied. The array-when-present,
+single-capture and identity requirements are conservative supported-response
+restrictions. Some valid live PayPal responses
 may omit required facts and will be denied. Live completeness/eligibility has
 not been tested. See the [design's official schema evidence](specs/2026-10-14-context-resolver.md).
 
