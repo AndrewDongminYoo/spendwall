@@ -122,7 +122,7 @@ updates:
     ignore:
       # Runtime majors without a security fix stay off (operator, 2026-10-24); node 26.11.1-bookworm-slim came as #81.
       # update-types limits this to version updates; security updates still open.
-      - dependency-name: 'node'
+      - dependency-name: node
         update-types:
           - version-update:semver-major
     groups:

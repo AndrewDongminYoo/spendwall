@@ -3,7 +3,7 @@ $schema: https://raw.githubusercontent.com/streetsidesoftware/cspell/main/cspell
 useGitignore: true
 # $HOME is itself a git root whose .gitignore excludes everything, so without this
 # cspell can report "Files checked: 0" and read as a pass. Run cspell from the repo root.
-gitignoreRoot: '.'
+gitignoreRoot: .
 # enableGlobDot is deliberately absent. The gate is trunk, which enumerates files
 # itself and passes each one as an explicit target, and cspell's dot-skip applies
 # only to its own glob expansion: a typo planted in .trunk/trunk.yaml was caught by
@@ -49,5 +49,5 @@ ignoreRegExpList:
   # The GitHub token-type character class inside the credential-shape guards of
   # the SQL migration and the audit event module. Written generically so this
   # config file does not contain the very token it exists to clear.
-  - '/gh\[[a-z]+\]_/g'
+  - /gh\[[a-z]+\]_/g
 import: []
