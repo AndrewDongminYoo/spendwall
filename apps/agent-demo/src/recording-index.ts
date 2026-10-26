@@ -1,9 +1,10 @@
 import { isAbsolute } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { FcmSender } from '../../firewall/src/approver/fcm.ts';
+import { startApproverForwarder } from '../../firewall/src/approver/forwarder.ts';
 import { withDemoDatabase } from './database.ts';
 import { createRecordingDemo } from './recording.ts';
-import { readRecordingConfig } from './recording-config.ts';
+import { readForwardTls, readRecordingConfig } from './recording-config.ts';
 
 const args = process.argv.slice(2);
 if (
@@ -32,6 +33,8 @@ if (
   process.on('SIGTERM', onTerminate);
   try {
     const config = readConfig();
+    // Read once at startup so a missing or unsafe key fails before Docker.
+    const tls = config.forward ? readForwardTls(config.forward) : undefined;
     const notifier =
       args[1] === '--fcm' ? new FcmSender({ projectId: args[2]! }) : undefined;
     console.log(
@@ -52,8 +55,21 @@ if (
         ...(config.port === undefined ? {} : { port: config.port }),
         ...(notifier ? { notifier } : {}),
       });
+      let forwarder:
+        Awaited<ReturnType<typeof startApproverForwarder>> | undefined;
       try {
         console.log(`Approval API: ${demo.url}`);
+        if (config.forward && tls) {
+          forwarder = await startApproverForwarder({
+            bind: config.forward.bind,
+            port: config.forward.port,
+            host: config.forward.host,
+            cert: tls.cert,
+            key: tls.key,
+            apiUrl: demo.url,
+          });
+          console.log(`Tailnet HTTPS forwarder: ${forwarder.origin}`);
+        }
         console.log(
           'Waiting for a registered demo-support approver before creating the synthetic USD 60.00 request.',
         );
@@ -95,7 +111,11 @@ if (
           await delay(250, undefined, { signal: cancellation.signal });
         }
       } finally {
-        await demo.close();
+        try {
+          await forwarder?.close();
+        } finally {
+          await demo.close();
+        }
       }
     }, cancellation.signal);
   } catch {
