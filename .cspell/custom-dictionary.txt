@@ -16,6 +16,7 @@ biometrically
 Buildables
 buildlog
 BYPASSRLS
+CGNAT
 CHARGEBACK
 ciphertext
 datdba
@@ -110,6 +111,7 @@ supportbot
 swiftpm
 Symbolication
 SYNTHETICCAPTURE
+tailnet
 Testables
 textconv
 topbar
