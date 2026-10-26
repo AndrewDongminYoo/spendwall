@@ -218,3 +218,48 @@ test('forwarder key symlinks, directories, other owners and missing files are re
   );
   assert.throws(() => readForwardTls(tls), tlsUnavailable);
 });
+
+const sandbox = {
+  captureId: '4VF69183K94616007',
+  payerId: 'SYNTHETIC-PAYER-1',
+  merchantId: 'SYNTHETIC-MERCHANT',
+  merchantEmail: 'merchant@example.test',
+};
+
+test('an optional sandbox object is accepted when every key is valid', (t) => {
+  const { file } = fixture(t);
+  fs.writeFileSync(file, JSON.stringify({ ...config, sandbox }));
+  assert.deepEqual(readRecordingConfig(file), { ...config, sandbox });
+  fs.writeFileSync(file, JSON.stringify({ ...config, forward, sandbox }));
+  assert.deepEqual(readRecordingConfig(file), { ...config, forward, sandbox });
+});
+
+test('sandbox objects are validated strictly', (t) => {
+  const { file } = fixture(t);
+  const { merchantEmail: _omitted, ...missingKey } = sandbox;
+  for (const invalid of [
+    null,
+    [],
+    '4VF69183K94616007',
+    {},
+    missingKey,
+    { ...sandbox, extra: true },
+    { ...sandbox, captureId: 'SHORT0123456789'.slice(1) },
+    { ...sandbox, captureId: 'A'.repeat(33) },
+    { ...sandbox, captureId: '4VF69183K9461600/' },
+    { ...sandbox, captureId: 4 },
+    { ...sandbox, payerId: '' },
+    { ...sandbox, payerId: 'payer id' },
+    { ...sandbox, payerId: 'A'.repeat(129) },
+    { ...sandbox, merchantId: '' },
+    { ...sandbox, merchantId: 'merchant.id' },
+    { ...sandbox, merchantId: null },
+    { ...sandbox, merchantEmail: 'merchant' },
+    { ...sandbox, merchantEmail: 'merchant@localhost' },
+    { ...sandbox, merchantEmail: 'merchant @example.test' },
+    { ...sandbox, merchantEmail: `${'m'.repeat(250)}@example.test` },
+  ]) {
+    fs.writeFileSync(file, JSON.stringify({ ...config, sandbox: invalid }));
+    assert.throws(() => readRecordingConfig(file), unavailable);
+  }
+});

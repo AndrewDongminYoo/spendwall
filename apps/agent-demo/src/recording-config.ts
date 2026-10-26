@@ -5,6 +5,8 @@ import {
   isTailnetAddress,
   isTailnetHost,
 } from '../../firewall/src/approver/forwarder.ts';
+import { email, identifier } from '../../firewall/src/context/json.ts';
+import type { SandboxTarget } from './recording.ts';
 
 type ForwardConfig = {
   bind: string;
@@ -20,6 +22,7 @@ type RecordingConfig = {
   devices: DeviceGrant[];
   port?: number;
   forward?: ForwardConfig;
+  sandbox?: SandboxTarget;
 };
 
 // Reads a regular file owned by the effective user with no group/other mode
@@ -88,6 +91,27 @@ function isForwardConfig(value: unknown): value is ForwardConfig {
   );
 }
 
+// The same identifier and email shapes the context resolver enforces.
+function isSandboxConfig(value: unknown): value is SandboxTarget {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const sandbox = value as Record<string, unknown>;
+  const keys = ['captureId', 'payerId', 'merchantId', 'merchantEmail'];
+  if (
+    Object.keys(sandbox).length !== keys.length ||
+    !Object.keys(sandbox).every((key) => keys.includes(key))
+  )
+    return false;
+  try {
+    identifier(sandbox.captureId, 15, 32);
+    identifier(sandbox.payerId);
+    identifier(sandbox.merchantId);
+    email(sandbox.merchantEmail);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Every invocation, including devices reloads, validates and reads the same
 // opened file. Never repair an operator's ownership or permissions implicitly.
 export function readRecordingConfig(file: string): RecordingConfig {
@@ -99,9 +123,14 @@ export function readRecordingConfig(file: string): RecordingConfig {
       Array.isArray(config) ||
       Object.keys(config).some(
         (key) =>
-          !['identityKey', 'signingKey', 'devices', 'port', 'forward'].includes(
-            key,
-          ),
+          ![
+            'identityKey',
+            'signingKey',
+            'devices',
+            'port',
+            'forward',
+            'sandbox',
+          ].includes(key),
       ) ||
       typeof config.identityKey !== 'string' ||
       !/^[a-f0-9]{64}$/i.test(config.identityKey) ||
@@ -112,7 +141,8 @@ export function readRecordingConfig(file: string): RecordingConfig {
         (!Number.isInteger(config.port) ||
           config.port < 0 ||
           config.port > 65535)) ||
-      (config.forward !== undefined && !isForwardConfig(config.forward))
+      (config.forward !== undefined && !isForwardConfig(config.forward)) ||
+      (config.sandbox !== undefined && !isSandboxConfig(config.sandbox))
     )
       throw new Error();
     return config as RecordingConfig;
