@@ -65,6 +65,24 @@ After a successful human decision, the executor ledger and PostgreSQL approval/a
 
 All recording state is disposable. This is not restart recovery for an operator session. Restarting loses approvals, device registrations, audit rows, synthetic provider state and executor ledger. Re-register before the next run and never reuse recording enrollment credentials for a real service. For a persistent deployment, retain the stable DB, identity/signing keys and executor ledger together under the existing approval API contract instead.
 
+## iOS Simulator rehearsal without Firebase
+
+`apps/approver/lib/main_synthetic.dart` is a debug-only entrypoint for a mock-data rehearsal on an iOS Simulator. It skips Firebase, registers the fixed push address `synthetic-simulator-push` and allows the loopback HTTP origin; biometrics, secure storage and the approval API stay real. It is not push, physical-device or sandbox evidence, and the result is still a synthetic refund.
+
+Start the recording server with a private configuration as described above, then run the app on a booted Simulator from `apps/approver`. On macOS 27 the Simulator app is replaced by DeviceHub (`/Applications/Xcode.app/Contents/Applications/DeviceHub.app`), which shows and controls the booted device:
+
+```sh
+flutter run -t lib/main_synthetic.dart -d <simulator UDID>
+```
+
+Enroll Face ID in the Simulator before connecting, because enrollment and decisions are disabled without available biometrics. Without the device menu, `xcrun simctl spawn <UDID> notifyutil -s com.apple.BiometricKit.enrollmentChanged 1` followed by `xcrun simctl spawn <UDID> notifyutil -p com.apple.BiometricKit.enrollmentChanged` enrolls it.
+
+The Simulator pasteboard did not receive `xcrun simctl pbcopy` content in DeviceHub, so the entrypoint can enroll itself at launch. Write a private owner-only JSON file outside Git with `SPENDWALL_ENDPOINT` (`http://127.0.0.1:<port>`), `SPENDWALL_DEVICE_ID` and `SPENDWALL_ENROLLMENT` (the disposable one-use credential), then add `--dart-define-from-file=<that file>` to the `flutter run` command. The values are compiled into that debug build, so use this only with a recording credential. Without them, the app shows the normal enrollment form.
+
+The server creates its USD 60.00 request only after registration, and the 15-minute session and approval TTL start then. Because no push is sent, tap refresh in the queue to show the request. When the app asks for confirmation, send a Face ID match from the device menu or with `xcrun simctl spawn <UDID> notifyutil -p com.apple.BiometricKit_Sim.pearl.match`.
+
+The app itself shows no synthetic marker. Add the **SYNTHETIC PAYMENTS / HUMAN APPROVAL** label from scene 4 as a caption in the edited recording and keep it visible throughout.
+
 ## Scene 4 prerequisites and filming order
 
 These are pending operational tasks, not actions performed by the implementation:
