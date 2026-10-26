@@ -245,6 +245,39 @@ test('recording composition uses policy, trusted context and the loopback approv
         assert.equal(f.demo.payments.length, 1);
       },
     );
+    await t.test(
+      'a racing approval and denial settle on one decision',
+      async (t) => {
+        const f = await fixture(url, t);
+        const token = await f.register();
+        const pending = await f.demo.request();
+        const path = `/approvals/${pending.approval_id}`;
+        const detail = (await f.http(path, 'GET', undefined, token)).body;
+        const [approve, deny] = await Promise.all(
+          ['approve', 'deny'].map((decision) =>
+            f.http(
+              path + '/decision',
+              'POST',
+              { decision, args_hash: detail.args_hash },
+              token,
+            ),
+          ),
+        );
+        const message = JSON.stringify({ approve, deny });
+        const final = (await f.http(path, 'GET', undefined, token)).body;
+        if (final.status === 'approved') {
+          assert.equal(approve.status, 200, message);
+          assert.equal(approve.body.execution_state, 'succeeded', message);
+          assert.equal(deny.status, 409, message);
+          assert.equal(f.demo.payments.length, 1);
+        } else {
+          assert.equal(final.status, 'denied', message);
+          assert.equal(deny.status, 200, message);
+          assert.equal(approve.status, 409, message);
+          assert.equal(f.demo.payments.length, 0);
+        }
+      },
+    );
     for (const scenario of ['deny', 'changed customer', 'changed policy']) {
       await t.test(
         `${scenario} never executes a synthetic refund`,
