@@ -102,7 +102,9 @@ Bodies are limited to 8 KiB and questions to 2,000 characters, with a five-secon
 
 The local preview labels its agent as synthetic and recognizes only the three supplied prompt buttons.
 It exercises the actual Studio runner, HTTP endpoint, SQL, and widgets without making model calls.
-Free-form Claude interpretation and repeatability with a configured live model require separate authorized verification; synthetic results do not establish model accuracy.
+A [live rehearsal on October 27, 2026](notes/2026-10-27-live-audit-query-rehearsal.md) repeated the three supplied questions with `claude-sonnet-5-5` and got the same intent and widget data on every run.
+With `claude-haiku-5-5`, the same rehearsal classified `차단 사유별로 묶어줘` as unsupported every time, so name a model that passed this check in the demo configuration.
+Free-form Claude interpretation beyond the three supplied questions is not verified; synthetic results do not establish model accuracy.
 Unsupported questions receive no result rather than a guessed answer.
 The browser keeps only its current conversation in memory.
 
