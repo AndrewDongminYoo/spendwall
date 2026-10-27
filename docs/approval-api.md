@@ -176,7 +176,7 @@ FCM failure never releases the payment reservation or deletes the approval.
 The default poll interval is one second; set `pollIntervalMs: 0` for explicit drains in tests.
 `close()` stops new drains and waits for active delivery work without starting queued notifications.
 The Flutter app validates the ID and loads authenticated detail when the notification is opened.
-Real Android/iOS background delivery, APNs configuration and physical-device behavior remain unverified for #15; a notification payload alone does not prove delivery.
+Real delivery and opening on an iPhone with the personal Firebase/APNs configuration were observed for #15 on 2026-10-27; Android delivery and the remaining device cases are tracked in #103, and a notification payload alone does not prove delivery.
 
 ## Verification
 
