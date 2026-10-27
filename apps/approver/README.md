@@ -90,7 +90,8 @@ There is no server dispute list API, no scheduler that re-evaluates disputes and
 ## Remaining acceptance
 
 On 2026-10-27 an iPhone 16 Pro with the personal Firebase/APNs configuration reached the recording server through the tailnet forwarder, received a real push, opened the request, authenticated with Face ID and observed the bound PayPal sandbox refund result; [issue 15](https://github.com/AndrewDongminYoo/spendwall/issues/15) is closed with that record.
-Completed requests disabled both actions on that device; expired requests were checked only in the Simulator rehearsal.
-[Issue 103](https://github.com/AndrewDongminYoo/spendwall/issues/103) tracks the remaining device checks: expired-request actions, notification permission denial, app restart, backgrounding during authentication and push registration rotation on iOS, and the whole flow on Android.
+Completed requests disabled both actions on that device.
+A [later iPhone run the same day](../../docs/notes/2026-10-27-approver-ios-edge-checks.md) covered expired-request actions, notification permission denial, app restart, backgrounding during authentication and a session that did not survive reinstallation.
+[Issue 103](https://github.com/AndrewDongminYoo/spendwall/issues/103) tracks the whole flow on Android.
 Delivery and opening of a real dispute deadline push on a physical device are also unverified; issue 28 stays open for that, the scheduler and live sandbox disputes.
 Actual deployment and trial issuance remain deferred.

@@ -227,6 +227,29 @@ void main() {
     );
   }
 
+  test('denied notification permission names the reason and keeps the credential unused', () async {
+    var enrollments = 0;
+    api.beforeEnrollment = () async => enrollments++;
+    final denied = ApproverController(
+      gateway: (_) => api,
+      store: store,
+      biometrics: auth,
+      pushToken: () async => throw const NotificationPermissionDenied(),
+      clock: () => now,
+    );
+    addTearDown(denied.dispose);
+    await denied.enroll(
+      'https://approvals.example',
+      'deviceA',
+      'private-one-use-token',
+    );
+    expect(denied.connected, isFalse);
+    expect(store.value, isNull);
+    expect(enrollments, 0);
+    expect(denied.message, contains('Allow notifications'));
+    expect(denied.message, contains('was not used'));
+  });
+
   test('push rotation during enrollment prevents session activation', () async {
     api.beforeEnrollment = () => controller.pushChanged('rotated-token');
     await controller.enroll(

@@ -12,6 +12,13 @@ abstract interface class SessionStore {
   Future<void> clear();
 }
 
+/// Thrown by a push token provider when notifications are not authorized.
+class NotificationPermissionDenied implements Exception {
+  const NotificationPermissionDenied();
+  @override
+  String toString() => 'Notification permission required.';
+}
+
 abstract interface class Biometrics {
   Future<bool> available();
   Future<bool> confirm();
@@ -162,6 +169,12 @@ class ApproverController extends ChangeNotifier {
       if (_disposed || epoch != _epoch) return;
       _api = api;
       connected = true;
+    } on NotificationPermissionDenied {
+      // Permission is checked before the credential is sent, so it stays usable.
+      if (epoch == _epoch) {
+        await disconnect();
+        message = 'Allow notifications for this app in Settings, then enroll again. The credential was not used.';
+      }
     } on Object {
       if (epoch == _epoch) {
         await disconnect();
