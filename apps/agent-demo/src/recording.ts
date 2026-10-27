@@ -119,6 +119,10 @@ export async function createRecordingDemo(
       resolver = new ContextResolver({
         fetchImpl,
         tokens,
+        // A token plus capture and order reads took about 2.2-2.5 seconds
+        // against the real sandbox, past the 2-second default; 5 seconds is
+        // the resolver's maximum freshness window.
+        ttlMs: 5000,
         merchant: { id: sandbox!.merchantId, email: sandbox!.merchantEmail },
       });
     } else {

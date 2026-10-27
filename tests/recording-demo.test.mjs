@@ -376,9 +376,11 @@ const sandboxEnv = {
 // without reaching the fixture, like an expired sandbox token.
 // `omitEmptyRefunds` removes an empty `payments.refunds` key from order
 // responses, which PayPal's Orders v2 schema permits.
+// `latencyMs` delays every provider response, like a distant sandbox region.
 function sandboxProvider({
   unauthorizedRefunds = 0,
   omitEmptyRefunds = false,
+  latencyMs = 0,
 } = {}) {
   const payment = recordedPayments();
   const calls = [];
@@ -395,6 +397,7 @@ function sandboxProvider({
         headers: new Headers(init?.headers),
       };
       calls.push(call);
+      if (latencyMs > 0) await delay(latencyMs);
       if (isRefundPost(call) && unauthorizedRefunds > 0) {
         unauthorizedRefunds--;
         return new Response(null, { status: 401 });
@@ -576,6 +579,29 @@ test('sandbox recording composition submits one sandbox refund only after approv
           posts[0].headers.get('paypal-request-id'),
           reply.body.execution_id,
         );
+        assert.equal(f.demo.executions(), 1);
+      },
+    );
+    await t.test(
+      'sandbox lookups slower than the default context TTL still reach approval and one refund',
+      async (t) => {
+        // Measured on 2026-10-27: token, capture and order took about 0.6,
+        // 0.8 and 0.9 seconds, so one lookup outlived the 2-second default.
+        const f = await sandboxFixture(url, t, undefined, { latencyMs: 800 });
+        const token = await f.register();
+        const pending = await f.demo.request();
+        assert.equal(pending.status, 'pending_approval');
+        const path = `/approvals/${pending.approval_id}`;
+        const detail = (await f.http(path, 'GET', undefined, token)).body;
+        const reply = await f.http(
+          path + '/decision',
+          'POST',
+          { decision: 'approve', args_hash: detail.args_hash },
+          token,
+        );
+        assert.equal(reply.status, 200, JSON.stringify(reply.body));
+        assert.equal(reply.body.execution_state, 'succeeded');
+        assert.equal(f.provider.refundPosts().length, 1);
         assert.equal(f.demo.executions(), 1);
       },
     );
