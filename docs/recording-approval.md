@@ -2,7 +2,7 @@
 
 `pnpm demo:recording` composes the existing loopback approval API with the demo's PostgreSQL audit/approval tables, trusted context resolver, deterministic policy and, by default, a synthetic refund executor. Without `--paypal-sandbox` it never calls PayPal, and it never calls an AI provider. [PayPal sandbox mode](#paypal-sandbox-mode) is an explicit opt-in that performs one real sandbox refund per approval. The ordinary `pnpm demo` still runs its five recorded scenarios with scripted approval.
 
-This prepares the server side of scene 4. Physical iPhone push delivery, Face ID, device installation, Firebase/APNs, signing and a private HTTPS route have **not** been verified. There is no Spendwall Firebase project or working phone route supplied by this change. Do not describe the automated fixture as a physical-device test.
+This prepares the server side of scene 4. On 2026-10-27 an iPhone 16 Pro installed with the personal Firebase/APNs configuration and development signing reached this command through the tailnet HTTPS forwarder, received a real push, approved with Face ID and observed a PayPal sandbox refund ([#15](https://github.com/AndrewDongminYoo/spendwall/issues/15)). Firebase configuration files, Google ADC credentials and the Tailscale certificate stay outside the repository. Android and the remaining device cases are tracked in [#103](https://github.com/AndrewDongminYoo/spendwall/issues/103). Do not describe the automated fixture as a physical-device test.
 
 ## Reproduce locally without device credentials
 
@@ -67,7 +67,7 @@ All recording state is disposable. This is not restart recovery for an operator 
 
 ## PayPal sandbox mode
 
-`--paypal-sandbox` replaces the synthetic payment fixture with the PayPal sandbox for one run, and it performs a **real sandbox refund once per approval**. The refund executor and the context resolver hard-code `https://api-m.sandbox.paypal.com`; this composition has no live PayPal path. The automated tests serve the sandbox endpoints from the synthetic fixture; this mode has not been run against PayPal.
+`--paypal-sandbox` replaces the synthetic payment fixture with the PayPal sandbox for one run, and it performs a **real sandbox refund once per approval**. The refund executor and the context resolver hard-code `https://api-m.sandbox.paypal.com`; this composition has no live PayPal path. The automated tests serve the sandbox endpoints from the synthetic fixture. On 2026-10-27 this mode ran against the real sandbox once: a phone approval refunded a buyer-approved USD 60.00 capture ([#15](https://github.com/AndrewDongminYoo/spendwall/issues/15)). That run needed the 5-second context freshness window from [#102](https://github.com/AndrewDongminYoo/spendwall/pull/102), because the sandbox lookups took about 2.2–2.5 seconds.
 
 Prerequisites, none of which the command creates:
 
@@ -129,7 +129,7 @@ The app itself shows no synthetic marker. Add the **SYNTHETIC PAYMENTS / HUMAN A
 
 ## Scene 4 prerequisites and filming order
 
-These are pending operational tasks, not actions performed by the implementation:
+These are operator tasks, not actions performed by the implementation; the operator completed them for an iPhone on 2026-10-27 ([#15](https://github.com/AndrewDongminYoo/spendwall/issues/15)):
 
 1. Create an approved personal Spendwall Firebase project, register the matching iOS app and configure its APNs relationship and private Google ADC credentials outside Git. Follow the [approver README](../apps/approver/README.md); native signing, entitlements and installation remain separate work.
 2. Prepare the **private HTTPS** phone path over Tailscale. The API still binds only to `127.0.0.1` and keeps its exact loopback Host and Origin checks. An optional in-repository TLS forwarder (`apps/firewall/src/approver/forwarder.ts`) listens only on the Mac's tailnet IPv4 address in `100.64.0.0/10`; it refuses `0.0.0.0`, loopback and LAN addresses at startup. It accepts a request only when Host equals the configured `<name>.ts.net:<port>` exactly (421 otherwise) and refuses any request that carries Origin (403); refused requests never reach the API. Port 443 is refused at startup, because clients omit the default port from Host and the exact match would then fail. It forwards method, path, query, body and end-to-end headers to the loopback API with Host replaced by the API's own loopback host, removes hop-by-hop headers in both directions, answers 502 when the API is unreachable and logs nothing. Operator steps, none of which this repository performs:
@@ -153,7 +153,7 @@ These are pending operational tasks, not actions performed by the implementation
    5. Start `pnpm demo:recording` as usual. After the API is listening it prints `Tailnet HTTPS forwarder: https://<name>.ts.net:<port>` and closes the forwarder together with the API on Ctrl+C. Without `forward`, nothing listens beyond loopback.
    6. Enter `https://<name>.ts.net:<port>` as the server origin in the app.
 
-   The automated tests use a throwaway self-signed certificate on `127.0.0.1` through a test-only seam; a real tailnet, `tailscale cert` and the phone connection were not exercised.
+   The automated tests use a throwaway self-signed certificate on `127.0.0.1` through a test-only seam. A real tailnet, a `tailscale cert` certificate and an iPhone connection were exercised manually on 2026-10-27 ([#15](https://github.com/AndrewDongminYoo/spendwall/issues/15)).
 
 3. Provision the intended device privately, start the recording server and register the phone before creating the request. Registration stores the FCM address and returns a JWT lasting 900 seconds (15 minutes). Expiry requires a newly provisioned one-use credential and re-registration; there is no refresh-token endpoint. The command re-reads only `devices` from the private file so an independently provisioned replacement digest can be supplied during a run; keep the identity/signing keys fixed. Approval TTL is also 15 minutes. Registration readiness checks an active device row, not a still-valid phone JWT, so keep enrollment and filming close together.
 4. Only after Firebase/ADC and the private phone path are independently ready, opt into the existing sender explicitly:
@@ -162,7 +162,7 @@ These are pending operational tasks, not actions performed by the implementation
    pnpm demo:recording /absolute/private/config.json --fcm approved-project-id
    ```
 
-   The default has no sender. `--fcm` may contact Google using independently configured ADC; it does not generate credentials or configure Firebase/APNs. This option was not exercised against Google. The payment side remains synthetic unless `--paypal-sandbox` is also given.
+   The default has no sender. `--fcm` may contact Google using independently configured ADC; it does not generate credentials or configure Firebase/APNs. On 2026-10-27 it delivered a real push to an iPhone ([#15](https://github.com/AndrewDongminYoo/spendwall/issues/15)). The payment side remains synthetic unless `--paypal-sandbox` is also given.
 
 5. Keep an on-screen label **SYNTHETIC PAYMENTS / HUMAN APPROVAL** throughout the scene, including the iPhone shot. Show the real push opening original facts, the matched rule and USD 60.00 amount, the app's local Face ID confirmation, then the returned synthetic execution result. In [PayPal sandbox mode](#paypal-sandbox-mode), use **PAYPAL SANDBOX REFUND / HUMAN APPROVAL** instead, show the capture's own amount and end on the sandbox refund result. A local biometric gate is not server-side biometric attestation.
 
