@@ -59,7 +59,7 @@ Trial issuance remains deferred; there is no hosted demo URL yet.
 The [hosting preparation guide](docs/hosting.md) provides a container and Render template for an authenticated, read-only API.
 The hosted entrypoint does not serve AG Studio assets; public UI deployment and the 48-hour operational check remain pending.
 The separate [local webhook receiver](docs/webhooks.md) verifies observed sandbox refunds and compares them with recorded firewall completions.
-Real webhook delivery and direct-dashboard refund acceptance remain pending; an unmatched observation does not prove complete bypass detection.
+One real sandbox delivery of a refund made in the PayPal dashboard was observed as unmediated on 2026-10-27 through a temporary ingress ([rehearsal note](docs/notes/2026-10-27-webhook-delivery-rehearsal.md)); an unmatched observation does not prove complete bypass detection.
 
 The [invoice policy baseline](docs/invoice-policy.md) checks amount caps and recipient domains, with atomic per-customer daily send reservations.
 Run `node scripts/invoice-demo.mjs` for a synthetic console example; it does not create or send provider invoices.

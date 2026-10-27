@@ -9,7 +9,7 @@ The repository contains tested payment-control modules, a synthetic support-agen
 The human-approval recording uses synthetic payments by default; its `--paypal-sandbox` flag opts into one real PayPal sandbox refund per approval and has no live PayPal path.
 The W0 sandbox proxy is a separate integration without the demo's policy/approval composition; do not describe it as a production payment service.
 The hosted dashboard preparation entrypoint is API-only; public UI licensing, deployment and 48-hour operation remain unverified.
-The optional loopback sandbox webhook receiver verifies observed refunds and compares them with opt-in execution receipts; live delivery and direct-dashboard refund acceptance remain unverified.
+The optional loopback sandbox webhook receiver verifies observed refunds and compares them with opt-in execution receipts; one live delivery of a direct-dashboard sandbox refund was observed through a temporary ingress on 2026-10-27, and hosted ingress remains unverified.
 The invoice policy module reserves allowed send attempts atomically; its synthetic console example does not create or send provider invoices.
 The dispute policy module returns review-only approval requirements and deadline data; it does not create approval records, accept claims or send notifications.
 The dispute tracker re-reads disputes from verified webhook events and records deadline alerts only through a required trusted customer lookup that no code in this repository implements; it never accepts a claim.

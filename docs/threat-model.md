@@ -39,7 +39,7 @@ The audit trail does not imply every direct provider action or early demo scope 
 - **Upstream bugs or incomplete payment facts:** validation rejects unsupported or inconsistent responses, but cannot independently prove every upstream statement is true.
   The system is not a substitute for provider reconciliation.
 - **Direct PayPal access:** calls that bypass the composed firewall are not prevented by it.
-  Webhook reconciliation and unmediated-payment detection remain planned in #19.
+  The optional [webhook reconciliation](webhooks.md) marks an observed sandbox refund without matching completion evidence as unmediated after five minutes; it detects subscribed events after the fact and does not prevent them.
 - **Unprotected entry points:** the W0 `pnpm proxy` does not integrate policy, velocity and human approvals.
   A localhost bearer token is not production per-agent authorization.
 - **Deployment attacks:** production TLS, identity lifecycle, rate limiting, distributed operations, backups and recovery require a deployment design.

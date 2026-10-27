@@ -3,7 +3,7 @@
 This baseline compares verified, observed PayPal refund notifications with completed firewall execution receipts.
 It is separate from the W0 proxy and the hosted read-only dashboard entrypoint.
 It does not register a webhook, expose public ingress, move money, poll all PayPal activity or prove that all bypasses are detected.
-Real delivery and a direct PayPal-dashboard refund remain acceptance work in [issue #19](https://github.com/AndrewDongminYoo/spendwall/issues/19).
+A [rehearsal on October 27, 2026](notes/2026-10-27-webhook-delivery-rehearsal.md) observed one real sandbox delivery for a refund made in the PayPal dashboard, its `unmediated` state and the rejection of a forged signature, through a temporary ingress.
 
 ## Prepare storage and identities
 
@@ -66,6 +66,8 @@ Exact duplicates are acknowledged after verifying existing evidence; conflicting
 There is no acknowledgement before the database write completes.
 
 PayPal delivery requires separately configured public HTTPS ingress.
+The receiver accepts only its own loopback `Host`, so the ingress must forward requests with `Host: 127.0.0.1:<port>`.
+A proxy that passes the public host name through, such as Tailscale Funnel, is refused with 403 before signature verification.
 Do not expose the W0 proxy or hosted dashboard as a shortcut.
 Subscription creation, ingress deployment and a direct-dashboard test refund require their own authorized integration work.
 PayPal's mock simulator events do not support this postback verification path.
