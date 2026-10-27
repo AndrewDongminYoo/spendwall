@@ -102,6 +102,15 @@ No live payment request was made for either rehearsal.
 
 ## Rehearsal evidence
 
+On October 27, 2026 (KST; 04:51:25 to 04:51:44 UTC), a new Linux ARM64 `node:24.22.1-bookworm` validation container ran a fresh public clone at `bd43915883acc4a12ae8be17ee6da9be39054c32`, frozen install and all five default scenarios in **19 seconds**.
+Node 24.22.1, pnpm 11.24.0 (activated with Corepack), Git 2.39.5 and a dedicated Docker daemon (Debian `docker.io` 20.10.24) were ready before the timer started.
+The pnpm store directory did not exist and the inner Docker image store held no images, so the measurement includes every package download (the frozen install downloaded 209 packages, reusing none, in 3.9 seconds) and the PostgreSQL image pull.
+The five observed results were `small: PASS payments=1`, `approval: PASS payments=1`, `injection: PASS payments=0`, `velocity: PASS payments=2` and `shopping: PASS payments=1`, and no `spendwall-demo-` container remained afterwards.
+The host was a Mac mini (Apple silicon) running Docker Engine 29.9.2 in Docker Desktop with 10 CPUs and about 7.7 GiB of memory in its VM; its load average was about 7 during the run.
+The harness had the same shape as the October 18 run described below: a privileged disposable container with its own daemon, no host Docker socket or credentials mounted, and default bridge networking.
+The documentation PR changes no runtime files relative to that revision.
+This run does not isolate whether network, host load or project changes explain the difference from the 152-second run.
+
 On October 18, 2026 (KST; 23:54:34 to 23:57:06 UTC on October 17), a new Linux ARM64 `node:24.21.0-bookworm` validation container ran a fresh public clone at `fdb83d165279396ec56b62c6d24b601a35008dd5`, frozen install and all five default scenarios in **152 seconds**.
 Node 24.21.0, pnpm 11.24.0, Git 2.39.5 and a dedicated Docker daemon were ready before the timer started.
 The pnpm store directory did not exist and the inner Docker image store held no images, so the measurement includes every package download (the frozen install added 210 packages in 44.1 seconds) and the PostgreSQL image pull.
