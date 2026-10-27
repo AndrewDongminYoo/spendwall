@@ -78,7 +78,7 @@ class PushInbox {
       provisional: false,
     );
     if (permission.authorizationStatus != AuthorizationStatus.authorized) {
-      throw StateError('Notification permission required.');
+      throw const NotificationPermissionDenied();
     }
     if (Platform.isIOS && await messaging.getAPNSToken() == null) {
       throw StateError('APNs registration unavailable.');
