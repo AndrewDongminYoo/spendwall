@@ -95,7 +95,7 @@ flowchart TD
 It does **not** wire in this policy/approval composition and must not be exposed as a protected public gateway.
 See [proxy boundaries](docs/proxy.md), [approvals](docs/approvals.md) and [approval API](docs/approval-api.md).
 The [Flutter approver](apps/approver/README.md) implements the local approval flow for iOS and Android.
-A real push, Face ID approval and a PayPal sandbox refund were verified on an iPhone in [#15](https://github.com/AndrewDongminYoo/spendwall/issues/15); Android and the remaining device edge cases are tracked in [#103](https://github.com/AndrewDongminYoo/spendwall/issues/103).
+A real push, Face ID approval and a PayPal sandbox refund were verified on an iPhone in [#15](https://github.com/AndrewDongminYoo/spendwall/issues/15); Android is tracked in [#103](https://github.com/AndrewDongminYoo/spendwall/issues/103).
 
 ## Where AI is used
 
