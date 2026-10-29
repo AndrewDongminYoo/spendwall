@@ -26,7 +26,7 @@ pnpm demo
 Expect five `PASS` lines: `small` with one synthetic payment, `approval` with one, `injection` with zero, `velocity` with two, and `shopping` with one.
 Approval is explicitly scripted in this mode; it does not represent mobile or biometric approval.
 
-For a separate server composition that waits for human approval through the existing loopback API, see [the human approval recording runbook](docs/recording-approval.md); its payments are synthetic unless `--paypal-sandbox` opts into one PayPal sandbox refund per approval. Run `pnpm test:recording` for its credential-free local fixture. Physical iPhone push, biometrics and the private HTTPS route remain unverified.
+For a separate server composition that waits for human approval through the existing loopback API, see [the human approval recording runbook](docs/recording-approval.md); its payments are synthetic unless `--paypal-sandbox` opts into one PayPal sandbox refund per approval. Run `pnpm test:recording` for its credential-free local fixture. A physical iPhone received a real push, approved with Face ID and reached the server through the private HTTPS route, as the runbook records; Android remains unverified ([#103](https://github.com/AndrewDongminYoo/spendwall/issues/103)).
 The runner starts and removes its own disposable PostgreSQL container.
 It does not use the Compose database or captures created by `pnpm seed`.
 The [judge guide](docs/judge-guide.md) explains prerequisites, timing evidence, cleanup and separate sandbox verification.
