@@ -1,4 +1,4 @@
-FROM node:24.22.1-bookworm-slim AS build
+FROM node:24.22.2-bookworm-slim AS build
 WORKDIR /app
 RUN npm install --global pnpm@11.24.0
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .node-version ./
@@ -16,10 +16,12 @@ COPY scripts/check-paypal-sandbox.mjs scripts/check-paypal-sandbox.mjs
 COPY tsconfig.base.json ./
 RUN pnpm --filter @spendwall/dashboard build
 
-FROM node:24.22.1-bookworm-slim AS runtime
+FROM node:24.22.2-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build --chown=node:node /app /app
 USER node
 EXPOSE 10000
+HEALTHCHECK --interval=30s --timeout=12s --start-period=30s --retries=3 \
+  CMD ["node", "-e", "const req = require('node:http').get({ hostname: '127.0.0.1', port: process.env.PORT, path: '/healthz', headers: { host: new URL(process.env.SPENDWALL_PUBLIC_ORIGIN).host }, timeout: 10000 }, res => process.exit(res.statusCode === 200 ? 0 : 1)); req.on('timeout', () => req.destroy()); req.on('error', () => process.exit(1));"]
 CMD ["node", "scripts/hosted-dashboard.mjs"]
