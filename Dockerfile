@@ -1,4 +1,4 @@
-FROM node:24.22.1-bookworm-slim AS build
+FROM node:24.22.2-bookworm-slim AS build
 WORKDIR /app
 RUN npm install --global pnpm@11.24.0
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .node-version ./
@@ -16,7 +16,7 @@ COPY scripts/check-paypal-sandbox.mjs scripts/check-paypal-sandbox.mjs
 COPY tsconfig.base.json ./
 RUN pnpm --filter @spendwall/dashboard build
 
-FROM node:24.22.1-bookworm-slim AS runtime
+FROM node:24.22.2-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build --chown=node:node /app /app
