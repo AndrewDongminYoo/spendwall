@@ -12,7 +12,9 @@ The hosted dashboard preparation entrypoint is API-only; public UI licensing, de
 The optional loopback sandbox webhook receiver verifies observed refunds and compares them with opt-in execution receipts; one live delivery of a direct-dashboard sandbox refund was observed through a temporary ingress on 2026-10-27, and hosted ingress remains unverified.
 The invoice policy module reserves allowed send attempts atomically; its synthetic console example does not create or send provider invoices.
 The dispute policy module returns review-only approval requirements and deadline data; it does not create approval records, accept claims or send notifications.
-The dispute tracker re-reads disputes from verified webhook events and records deadline alerts only through a required trusted customer lookup that no code in this repository implements; it never accepts a claim.
+The dispute tracker re-reads disputes from verified webhook events and records deadline alerts through a trusted customer lookup that the deployment must provide.
+No production code in this repository implements that lookup; the demo supplies a fixed synthetic mapping.
+The tracker never accepts a claim.
 The order module recomputes `create_order` totals, records approve links in a PostgreSQL ledger and captures only after the provider reports buyer approval; the shopping demo's catalog and payments are synthetic.
 
 ## Structure

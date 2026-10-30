@@ -35,7 +35,8 @@ The audit trail does not imply every direct provider action or early demo scope 
 
 - **Compromised firewall host or database owner:** an attacker can change policies, credentials, ledgers and code, or rewrite audit data and hashes.
 - **Compromised approver device or stolen credentials:** a valid session can act within its scope; expiry/generation checks do not prove the human understood the request.
-  Flutter biometrics and native push verification remain planned.
+  An iPhone push, Face ID approval and bound sandbox refund were observed in the [recording flow](recording-approval.md#paypal-sandbox-mode), with [additional iOS edge checks](notes/2026-10-27-approver-ios-edge-checks.md).
+  Android approval and physical-device dispute deadline push remain unverified; those observations do not provide device attestation.
 - **Upstream bugs or incomplete payment facts:** validation rejects unsupported or inconsistent responses, but cannot independently prove every upstream statement is true.
   The system is not a substitute for provider reconciliation.
 - **Direct PayPal access:** calls that bypass the composed firewall are not prevented by it.
