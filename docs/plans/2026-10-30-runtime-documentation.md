@@ -15,9 +15,9 @@ No runtime or dependency changes are planned.
 2. Correct those claims and review directly affected linked documents, including the submission draft.
    Preserve historical records and distinguish repository text from externally saved content.
 3. Run a fresh public clone of the current runtime revision in a new Node 24.22.2 container with an independent Docker daemon.
-   Verify frozen install, five expected PASS lines, payment counts, elapsed time, a clean clone and removal of demo containers.
+   Verify and record the evidence in Acceptance 4 of the spec: measured revision, versions, cache state, frozen install, five expected PASS lines, payment counts, elapsed time, a clean clone and removal of demo containers.
 4. Append the bounded observation to the judge guide.
-   Verify changed-document local links with a negative control, explicit-path formatting and scoped Trunk checks.
+   Verify changed-document local links with a negative control, explicit-path formatting and the repository-wide `trunk check --all --no-fix`; scoped Trunk checks are supplemental local validation.
 5. Review the entire candidate and its documentation audit table.
    Fix confirmed omissions in the same PR and rerun affected checks.
 6. Make one cohesive documentation commit, push and open a PR using `Refs #22`.

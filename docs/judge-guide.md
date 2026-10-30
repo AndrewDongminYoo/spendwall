@@ -106,7 +106,7 @@ On October 30, 2026 (KST; 03:50:37 to 03:50:57 UTC), a new Linux ARM64 `node:24.
 Node 24.22.2, pnpm 11.24.0 (activated with Corepack), Git 2.39.5 and a dedicated Docker daemon (Debian `docker.io` 20.10.24) were ready before the timer started.
 The pnpm store directory did not exist and the inner Docker image store held no images, so package downloads and the PostgreSQL image pull were included in the measurement.
 The five observed results were `small: PASS payments=1`, `approval: PASS payments=1`, `injection: PASS payments=0`, `velocity: PASS payments=2` and `shopping: PASS payments=1`.
-The cloned checkout remained clean and no `spendwall-demo-` container remained afterwards.
+The cloned checkout remained clean and no `spendwall-demo-` container remained afterward.
 The harness used the privileged disposable-container arrangement described below, without a host Docker socket or credentials mounted.
 This documentation update changes no runtime files or dependencies relative to that revision; the result does not reverify PayPal connectivity or mobile behavior after the SDK update.
 

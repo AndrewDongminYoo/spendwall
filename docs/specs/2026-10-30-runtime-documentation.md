@@ -17,14 +17,14 @@ Keep issue 22 open for the hosted URL and preserve Android, dispute delivery, pu
 ## Non-goals
 
 No runtime, dependency, media or layout changes.
-No payment or model calls, device writes, trial issuance, deployment or final submission.
+No live payment-provider or model calls, device writes, trial issuance, deployment or final submission.
 The Flutter SDK upgrade is not itself evidence that real-device behavior was reverified.
 
 ## Acceptance
 
-1. Current instructions agree with `.node-version`, `.flutter-version`, `pubspec.yaml`, CI and package scripts.
+1. Current instructions agree with `.node-version`, `apps/approver/.flutter-version`, `apps/approver/pubspec.yaml`, CI and package scripts.
 2. Current behavior claims agree with implementation and the linked dated acceptance records.
-3. A new container runs frozen install and all five default demo scenarios within ten minutes after prerequisite preparation, with empty package and inner image stores at the timer boundary.
+3. A new container runs frozen install and all five default demo scenarios within ten minutes after prerequisite preparation, with empty package and inner image stores immediately before the timer starts.
 4. Document the measured revision, versions, cache state, duration, expected payment counts and cleanup without generalizing the result to live payments or mobile acceptance.
 5. Changed-document local links and formatting pass, the candidate receives structured review, and required hosted checks pass before merge.
 
