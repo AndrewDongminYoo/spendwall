@@ -74,7 +74,7 @@ The smoke command invokes the same operation twice, checks that both return the 
 It does not use a new execution ID for the second call.
 
 New W0 refunds require a `COMPLETED` USD capture.
-Partially refunded captures are refused until the remaining-balance resolver in #9 exists.
+Partially refunded captures are refused; this W0 execution path does not compose the [trusted remaining-balance resolver](context-resolver.md).
 Positive partial amounts can be supplied through MCP; omission resolves to the full captured amount.
 The fixture's historical capture record remains unchanged after a refund and no longer proves remaining refundable funds.
 

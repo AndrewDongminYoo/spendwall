@@ -1,7 +1,9 @@
 # Spendwall submission draft
 
-Repository draft for [#24](https://github.com/AndrewDongminYoo/spendwall/issues/24), reviewed against the implementation at `bd5a9ac6c56f27fd52eb218cccac6934168b3413` on October 16, 2026.
-This task prepares repository text only; the Devpost saved state has not been verified, and no final submission is made here.
+Repository draft for [#24](https://github.com/AndrewDongminYoo/spendwall/issues/24), originally reviewed against `bd5a9ac6c56f27fd52eb218cccac6934168b3413` on October 16, 2026.
+The narrative and preparation notes were reconciled against `ce91dfaaa8cfa9af09cfdb3b597c40593b87d14d` and the linked acceptance records on October 30, 2026.
+The operator reported saving the initial Devpost draft on October 17, as recorded in the [issue closure evidence](notes/2026-10-17-issue-closure-evidence.md#24-devpost-draft).
+This update changes repository text only; it does not update or recheck the saved Devpost fields and makes no final submission.
 The narrative below is proposed submission copy; the review notes at the end are for preparation.
 
 ## Project name and tagline
@@ -35,6 +37,8 @@ The preview labels synthetic data and retains evaluation watermarks.
 
 The separate sandbox proxy has recorded PayPal MCP/SSE connectivity and REST refund evidence.
 It does not compose the demo's policy and approval pipeline, so this project does not claim an integrated production payment service.
+The separate opt-in human-approval recording does compose those controls with a sandbox refund adapter; one iPhone approval executed a bound sandbox refund on October 27.
+The default recorded demo remains synthetic.
 
 ## How we built it
 
@@ -44,7 +48,9 @@ Approval is bound to the request context, and the refund executor preserves exec
 
 The sandbox proxy uses NestJS and the MCP SDK; its documented successful upstream observation used SSE, while refund execution used PayPal REST.
 React and AG Studio provide the local dashboard.
-A separate Flutter app implements an approval flow for iOS and Android, with physical-device push, biometrics and integrated sandbox acceptance still pending.
+A separate Flutter app implements an approval flow for iOS and Android.
+An iPhone received a real push, approved with Face ID and observed the bound sandbox refund in the [recording flow](recording-approval.md#paypal-sandbox-mode); [additional iOS edge checks](notes/2026-10-27-approver-ios-edge-checks.md) have dated evidence.
+Android approval and physical-device dispute deadline delivery remain unverified.
 
 Codex assisted development, tests, documentation and code review.
 It was the only AI development tool used.
@@ -66,16 +72,17 @@ The project preserves that boundary rather than claiming both transports worked.
 
 ## What's next
 
-Connect and verify the policy-and-approval composition against the sandbox execution path, preserving the existing denial, recovery and retry contracts.
-Complete physical-device push and biometric approval checks, real webhook delivery and integrated sandbox acceptance.
+Extend sandbox verification beyond the one observed iPhone approval and the [one direct-dashboard refund webhook](notes/2026-10-27-webhook-delivery-rehearsal.md), preserving the existing denial, recovery and retry contracts.
+Complete Android approval checks, live matched-refund reconciliation, trusted dispute customer integration and physical-device dispute deadline delivery.
 Resolve public dashboard licensing and hosting, then verify the intended operational window.
 Prepare the demonstration video and complete the remaining submission checks.
 
 ## Built with
 
 TypeScript, Node.js, PostgreSQL, YAML, CEL, Model Context Protocol, Claude Agent SDK, NestJS, React, AG Studio, Flutter/Dart and Docker.
-PayPal MCP and Orders/Payments REST are used by the separate sandbox tools; the local demo uses synthetic responses.
-The webhook receiver is implemented, but live delivery acceptance remains pending.
+The separate sandbox tools use PayPal MCP and Orders/Payments REST; the opt-in sandbox recording uses PayPal Payments REST.
+The default local demo uses synthetic responses.
+The webhook receiver observed one real direct-dashboard sandbox refund through temporary ingress; persistent hosted ingress and live matched-refund reconciliation remain unverified.
 Codex is the development assistant; Claude is the optional runtime model integration.
 
 ## AI tool disclosure
@@ -108,9 +115,10 @@ No public hosted demo URL or submission video URL is supplied in this draft.
 | Separate NestJS sandbox proxy and dated provider result          | [Server](../apps/firewall/src/server.ts), [proxy guide](proxy.md), [refund evidence](../fixtures/proxy-refund.json)                                                          |
 | React/AG Studio dashboard, synthetic classifier and draft export | [Dashboard manifest](../apps/dashboard/package.json), [dashboard contract](dashboard.md), [preview server](../scripts/dashboard-preview.mjs)                                 |
 | Flutter implementation and device acceptance limits              | [Approver guide](../apps/approver/README.md), [manifest](../apps/approver/pubspec.yaml)                                                                                      |
+| iPhone sandbox approval and iOS edge checks                      | [Sandbox recording](recording-approval.md#paypal-sandbox-mode), [iOS checks](notes/2026-10-27-approver-ios-edge-checks.md)                                                   |
 | Runtime AI surfaces and live-model distinction                   | [README AI table](../README.md#where-ai-is-used), [live rehearsal](notes/2026-10-16-live-rehearsal.md)                                                                       |
 | Development tool disclosure                                      | Operator confirmation on October 16, 2026: Codex only; reflected in [README](../README.md#where-ai-is-used)                                                                  |
-| Hosting and webhook limits                                       | [Hosting guide](hosting.md), [webhook guide](webhooks.md)                                                                                                                    |
+| Hosting and webhook limits                                       | [Hosting guide](hosting.md), [webhook guide](webhooks.md), [sandbox delivery record](notes/2026-10-27-webhook-delivery-rehearsal.md)                                         |
 
 ### Save and submission checklist
 
@@ -120,12 +128,13 @@ These requirements do not establish this project's eligibility or completion.
 The issue's November 6 draft target is an internal milestone; the official submission deadline is November 12, 2026 at noon Pacific time.
 
 - [ ] Confirm the actual Devpost fields and character limits before copying this draft; those fields have not been inspected.
-- [ ] Review the narrative and AI disclosure, then save through the verified operator account and confirm persistence without final submission.
+- [ ] Review this refreshed narrative and AI disclosure, then update the saved draft through the verified operator account and confirm persistence without final submission.
 - [ ] Add the real demonstration video URL after recording and publication; do not substitute the dashboard GIF for the required video.
 - [ ] Recheck licensing, access and remaining acceptance evidence against the intended submission.
 - [ ] Review the issue's prize interests: Grand Prizes, Best Use of Agentic Commerce and Best Use of AG Grid.
 - [ ] Recheck prize eligibility with the organizer's rules; AG Studio dependency presence alone does not establish sponsor eligibility or deployment rights.
-- [ ] Keep #24 open until the Devpost draft is saved; final submission remains [#25](https://github.com/AndrewDongminYoo/spendwall/issues/25).
+- [x] Initial draft save was reported on October 17; #24 is closed with the [recorded evidence](notes/2026-10-17-issue-closure-evidence.md#24-devpost-draft).
+- [ ] Complete final rehearsal and submission under [#25](https://github.com/AndrewDongminYoo/spendwall/issues/25).
 
 The rules permit at most one Grand Prize plus one Sponsor Prize, or one Honorable Mention Prize plus one Sponsor Prize.
 No award eligibility or selection is asserted by this draft.

@@ -7,7 +7,7 @@ The server remains authoritative; the app contains no PayPal credentials or paym
 
 ## Local checks
 
-Use Flutter 3.47.7 from `.flutter-version` with Dart 3.13.5.
+Use Flutter 3.47.8 from `.flutter-version` with Dart 3.13.7.
 The lockfile pins the resolved plugin graph.
 From this directory:
 
@@ -85,7 +85,8 @@ The app validates the ID with the server's rule and ignores any other payload sh
 The notice states that the deadline must be handled outside this app and can only be dismissed.
 It needs no session, makes no server or network request, asks for no biometrics, offers no dispute action and is not persisted, so it disappears after dismissal or an app restart.
 The app ignores a dispute push received while it is in the foreground; it does not start a refresh or show the notice.
-There is no server dispute list API, no scheduler that re-evaluates disputes and no physical-device verification of this notice.
+There is no server dispute list API or physical-device verification of this notice.
+The server's [dispute tracker](../../docs/dispute-policy.md#dispute-tracking) implements scheduled reevaluation, but a deployment must supply its own trusted customer lookup and compose the tracker with the webhook receiver and alert delivery.
 
 ## Remaining acceptance
 
@@ -93,5 +94,5 @@ On 2026-10-27 an iPhone 16 Pro with the personal Firebase/APNs configuration rea
 Completed requests disabled both actions on that device.
 A [later iPhone run the same day](../../docs/notes/2026-10-27-approver-ios-edge-checks.md) covered expired-request actions, notification permission denial, app restart, backgrounding during authentication and a session that did not survive reinstallation.
 [Issue 103](https://github.com/AndrewDongminYoo/spendwall/issues/103) tracks the whole flow on Android.
-Delivery and opening of a real dispute deadline push on a physical device are also unverified; issue 28 stays open for that, the scheduler and live sandbox disputes.
+Delivery and opening of a real dispute deadline push on a physical device are also unverified; issue 28 stays open for that, the trusted customer lookup and deployment composition, real dispute webhook delivery and live sandbox disputes.
 Actual deployment and trial issuance remain deferred.

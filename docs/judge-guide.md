@@ -13,7 +13,7 @@ Local evaluation is described in the [dashboard guide](dashboard.md#ag-studio-an
 
 ## Prerequisites
 
-- Node.js 24.22.1 and pnpm 11.24.0, verified with `node --version` and `pnpm --version`.
+- Node.js 24.22.2 and pnpm 11.24.0, verified with `node --version` and `pnpm --version`.
 - Git, Docker CLI and a running local Docker daemon, verified with `git --version` and `docker info`.
 - Internet access for the repository, package registry and the first `postgres:17-alpine` image pull.
 - A terminal on the Docker host; the runner connects to a dynamically published loopback port.
@@ -102,6 +102,14 @@ No live payment request was made for either rehearsal.
 
 ## Rehearsal evidence
 
+On October 30, 2026 (KST; 03:50:37 to 03:50:57 UTC), a new Linux ARM64 `node:24.22.2-bookworm` validation container ran a fresh public clone at `ce91dfaaa8cfa9af09cfdb3b597c40593b87d14d`, frozen install and all five default scenarios in **20 seconds**.
+Node 24.22.2, pnpm 11.24.0 (activated with Corepack), Git 2.39.5 and a dedicated Docker daemon (Debian `docker.io` 20.10.24) were ready before the timer started.
+The pnpm store directory did not exist and the inner Docker image store held no images, so package downloads and the PostgreSQL image pull were included in the measurement.
+The five observed results were `small: PASS payments=1`, `approval: PASS payments=1`, `injection: PASS payments=0`, `velocity: PASS payments=2` and `shopping: PASS payments=1`.
+The cloned checkout remained clean and no `spendwall-demo-` container remained afterwards.
+The harness used the privileged disposable-container arrangement described below, without a host Docker socket or credentials mounted.
+This documentation update changes no runtime files or dependencies relative to that revision; the result does not reverify PayPal connectivity or mobile behavior after the SDK update.
+
 On October 27, 2026 (KST; 04:51:25 to 04:51:44 UTC), a new Linux ARM64 `node:24.22.1-bookworm` validation container ran a fresh public clone at `bd43915883acc4a12ae8be17ee6da9be39054c32`, frozen install and all five default scenarios in **19 seconds**.
 Node 24.22.1, pnpm 11.24.0 (activated with Corepack), Git 2.39.5 and a dedicated Docker daemon (Debian `docker.io` 20.10.24) were ready before the timer started.
 The pnpm store directory did not exist and the inner Docker image store held no images, so the measurement includes every package download (the frozen install downloaded 209 packages, reusing none, in 3.9 seconds) and the PostgreSQL image pull.
@@ -136,7 +144,8 @@ A [repeat scan on October 18, 2026](notes/2026-10-18-history-secret-scan.md), at
 
 - A hosted URL and read-only judge access depend on #20 and a valid deployment license.
 - The integrated live-sandbox judge flow is not delivered by the synthetic demo.
-- Broader live Claude coverage, mobile push/biometric approval and the submission video require separate verification.
+- Broader live Claude coverage, Android push/biometric approval ([#103](https://github.com/AndrewDongminYoo/spendwall/issues/103)) and the submission video require separate verification.
+  The [iPhone recording](recording-approval.md#paypal-sandbox-mode) and [iOS edge checks](notes/2026-10-27-approver-ios-edge-checks.md) have dated evidence; physical-device dispute deadline delivery remains unverified under #28.
 - The architecture diagram shows current composition, not completion of every item in the roadmap.
 
 The [official rules](https://paypalaihackathon.devpost.com/rules) allow complete runnable setup instructions instead of a hosted URL.
