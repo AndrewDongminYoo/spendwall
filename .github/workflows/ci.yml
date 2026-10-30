@@ -54,7 +54,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: flutter/flutter
-          ref: abaf9c523780a608bd46686fd5e53740a07077f8 # 3.47.7
+          ref: 737ba8f885dc774b53b442759999a312c9461e4e # 3.47.8
           path: .flutter-sdk
           fetch-depth: 0
           persist-credentials: false
