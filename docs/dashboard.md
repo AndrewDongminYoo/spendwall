@@ -6,7 +6,7 @@ The dashboard is a separate, read-only loopback server.
 It serves the production React/AG Studio build and authenticated `/audit` and `/stats` routes from one origin.
 No approval decisions, policy updates, or PayPal requests are available through it.
 The optional audit agent uses Claude only to select a supported read-only query.
-The separate [hosted preparation entrypoint](hosting.md) exposes only authenticated audit/statistics reads and minimal health, with no frontend assets, model queries or policy workshop.
+The separate [hosted entrypoint](hosting.md) serves the same build with authenticated audit/statistics reads and minimal health, without model queries, reconciliation or the policy workshop.
 
 Use the pinned Node and pnpm versions, then build and start an isolated preview:
 
@@ -75,7 +75,7 @@ After migration `007`, configure `reconciliation.adapterRef` with the executor's
 The panel distinguishes pending, matched, unmediated and mismatched observations, plus disabled and empty configurations.
 It refreshes from persisted observations and execution receipts without calling PayPal or changing payment state.
 Unmediated means no matching completion evidence after five minutes, not proven bypass activity.
-The preview supplies synthetic examples; the hosted API-only entrypoint does not enable this integration.
+The preview supplies synthetic examples; the hosted entrypoint does not enable this integration.
 
 ## Audit assistant
 
@@ -135,7 +135,7 @@ VITE_AG_STUDIO_LICENSE_KEY='<key>' pnpm --filter @spendwall/dashboard build
 Never commit the key.
 Vite writes the key into the JavaScript bundle under `apps/dashboard/dist`, so anyone who loads the page can read it; this is how AG Studio client-side licensing works.
 Do not publish a `dist` directory that was built with a key you do not intend to deploy.
-The `Dockerfile` passes no key to its dashboard build, and the hosted entrypoint does not serve AG Studio assets; supplying a key to a deployed frontend belongs to the licensed public frontend work in [#20](https://github.com/AndrewDongminYoo/spendwall/issues/20).
+The `Dockerfile` reads the same variable as a build argument, so the hosted image is licensed only when the deployment supplies the key ([hosted demo](hosting.md#current-artifact)).
 
 ## Verification
 
