@@ -103,6 +103,27 @@ test(
       });
       assert.equal(run.status, 0, run.stderr);
     }
+    // A storage failure surfaces as a velocity denial, not an exception. Fail
+    // only the denied refund's audit row, so the later approval still succeeds
+    // and only the result check can report the batch as failed.
+    await owner.query(
+      "CREATE FUNCTION public.fail_denied_refund() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.decision = 'deny' THEN RAISE EXCEPTION 'injected'; END IF; RETURN NEW; END $$",
+    );
+    await owner.query(
+      'CREATE TRIGGER fail_denied_refund BEFORE INSERT ON audit.audit_events FOR EACH ROW EXECUTE FUNCTION public.fail_denied_refund()',
+    );
+    try {
+      const failed = script('hosted-writer.mjs', {
+        SPENDWALL_DASHBOARD_CONFIG: config,
+        SPENDWALL_WRITER_DATABASE_URL: writerUrl.toString(),
+      });
+      assert.equal(failed.status, 1, 'a skipped refund must fail the run');
+    } finally {
+      await owner.query(
+        'DROP TRIGGER fail_denied_refund ON audit.audit_events',
+      );
+      await owner.query('DROP FUNCTION public.fail_denied_refund()');
+    }
     const readerUrl = new URL(url);
     readerUrl.username = 'spendwall_dashboard_reader';
     readerUrl.password = readerPassword;
@@ -157,7 +178,8 @@ test(
     const data = JSON.parse(stats.body);
     const count = (decision) =>
       data.decisions.find((d) => d.decision === decision).count;
-    assert.equal(count('allow'), 4);
+    // Two full batches plus the two allowed refunds of the failed run.
+    assert.equal(count('allow'), 6);
     assert.equal(count('deny'), 2);
     assert.equal(count('require_approval'), 2);
     assert.ok(data.confirmed_usd > 0);

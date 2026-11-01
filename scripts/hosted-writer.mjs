@@ -82,17 +82,31 @@ try {
     const service = new ApprovalService(pool, { ...options, executor });
     const main = agentIds[0],
       other = agentIds[1] ?? main;
-    await velocity.evaluateAndReserve(
+    // evaluateAndReserve reports storage failures as a denial with a reason
+    // instead of throwing, so check each result before reporting success.
+    const reserve = async (loaded, input, decision) => {
+      const result = await velocity.evaluateAndReserve(loaded, input);
+      if (
+        result.decision !== decision ||
+        result.reason !== undefined ||
+        !result.receipt
+      )
+        throw new Error();
+    };
+    await reserve(
       policy('small-refund', 'allow'),
       request(cents(500, 1800), main, config.merchantId),
+      'allow',
     );
-    await velocity.evaluateAndReserve(
+    await reserve(
       policy('small-refund', 'allow'),
       request(cents(500, 1800), other, config.merchantId),
+      'allow',
     );
-    await velocity.evaluateAndReserve(
+    await reserve(
       policy('refund-over-limit', 'deny'),
       request(cents(12000, 25000), main, config.merchantId),
+      'deny',
     );
     const input = request(cents(3000, 9000), main, config.merchantId),
       loaded = policy('manager-review', 'require_approval');
@@ -111,6 +125,15 @@ try {
       },
       async () => ({ input, policy: loaded }),
     );
+    const settled = await pool.query(
+      'SELECT approval_state, execution_state FROM approvals.requests WHERE approval_id=$1',
+      [pending.approval_id],
+    );
+    if (
+      settled.rows[0]?.approval_state !== 'approved' ||
+      settled.rows[0]?.execution_state !== 'succeeded'
+    )
+      throw new Error();
     console.log('Synthetic writer added one batch of synthetic refunds.');
   }
 } catch {
