@@ -6,7 +6,7 @@ The recommended first run is the credential-free synthetic demo in the [README Q
 It executes actual MCP calls, policy evaluation, PostgreSQL reservations, approval binding and the refund executor against synthetic payment responses.
 It is suitable for checking the five documented scenarios (four refund cases and the buyer-side shopping flow), not for demonstrating live PayPal or model accuracy.
 
-Public hosted demo URL: **not available**.
+Public hosted demo URL: **not available yet**; the [hosted demo](hosting.md) serves the read-only dashboard over synthetic data once deployed.
 Hosting is tracked in [#20](https://github.com/AndrewDongminYoo/spendwall/issues/20).
 An AG Studio trial has been requested ([license key setup](dashboard.md#installing-the-license-key)); public deployment needs a valid license.
 Local evaluation is described in the [dashboard guide](dashboard.md#ag-studio-and-licenses).
@@ -142,7 +142,7 @@ A [repeat scan on October 18, 2026](notes/2026-10-18-history-secret-scan.md), at
 
 ## Remaining submission work
 
-- A hosted URL and read-only judge access depend on #20 and a valid deployment license.
+- A hosted URL and read-only judge access depend on the #20 deployment.
 - The integrated live-sandbox judge flow is not delivered by the synthetic demo.
 - Broader live Claude coverage, Android push/biometric approval ([#103](https://github.com/AndrewDongminYoo/spendwall/issues/103)) and the submission video require separate verification.
   The [iPhone recording](recording-approval.md#paypal-sandbox-mode) and [iOS edge checks](notes/2026-10-27-approver-ios-edge-checks.md) have dated evidence; physical-device dispute deadline delivery remains unverified under #28.

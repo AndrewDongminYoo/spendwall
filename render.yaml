@@ -1,7 +1,8 @@
-# Preparation template only. Do not sync before account/cost/licence approval.
+# Hosted demo: a read-only dashboard over synthetic data. No PayPal or model
+# credentials belong in any of these services. See docs/hosting.md before sync.
 services:
   - type: web
-    name: spendwall-dashboard-api
+    name: spendwall-dashboard
     runtime: docker
     plan: 0.5c-512mb
     region: singapore
@@ -16,6 +17,25 @@ services:
         value: /etc/secrets/dashboard.json
       # Supply the restricted reader's private-network URL, never the owner URL.
       - key: SPENDWALL_DASHBOARD_DATABASE_URL
+        sync: false
+      # Render passes this to the Docker build; the key is public once bundled.
+      - key: VITE_AG_STUDIO_LICENSE_KEY
+        sync: false
+  # Writes one synthetic batch (seven audit rows) every two hours, so the
+  # dashboard's 24-hour views stay populated; it stops at 9,000 audit rows.
+  - type: cron
+    name: spendwall-synthetic-writer
+    runtime: docker
+    plan: 0.5c-512mb
+    region: singapore
+    schedule: 0 */2 * * *
+    dockerCommand: node scripts/hosted-writer.mjs
+    autoDeployTrigger: 'off'
+    envVars:
+      - key: SPENDWALL_DASHBOARD_CONFIG
+        value: /etc/secrets/dashboard.json
+      # Supply the synthetic writer's private-network URL, never the owner URL.
+      - key: SPENDWALL_WRITER_DATABASE_URL
         sync: false
 databases:
   - name: spendwall

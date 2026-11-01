@@ -48,12 +48,15 @@ function get(port, path, authenticated = true, host = new URL(origin).host) {
       (res) => {
         const chunks = [];
         res.on('data', (chunk) => chunks.push(chunk));
-        res.on('end', () =>
+        res.on('end', () => {
+          const text = Buffer.concat(chunks).toString();
+          const type = res.headers['content-type'] ?? '';
           resolve({
             status: res.statusCode,
-            body: JSON.parse(Buffer.concat(chunks).toString()),
-          }),
-        );
+            body: type.startsWith('application/json') ? JSON.parse(text) : text,
+            ...(type.startsWith('application/json') ? {} : { type }),
+          });
+        });
       },
     );
     req.on('timeout', () => req.destroy(new Error('HTTP timeout')));
@@ -198,9 +201,17 @@ try {
   assert.equal(audit.status, 200);
   assert.equal(audit.body.items.length, 1);
   assert.equal(audit.body.items[0].usd, 12);
+  const page = await get(appPort, '/', false);
+  assert.equal(page.status, 200);
+  assert.equal(page.type, 'text/html; charset=utf-8');
+  const script = /src="(\/assets\/[A-Za-z0-9_-]+\.js)"/.exec(page.body)?.[1];
+  assert.ok(script);
+  const asset = await get(appPort, script, false);
+  assert.equal(asset.status, 200);
+  assert.equal(asset.type, 'text/javascript');
   for (const path of [
-    '/',
     '/assets/main.js',
+    '/index.html',
     '/policy',
     '/query',
     '/mcp',
@@ -264,7 +275,7 @@ try {
     );
   }
   console.log(
-    'PASS: non-root image, assets withheld, empty/populated reads, auth, privilege rejection, restart and shutdown.',
+    'PASS: non-root image, dashboard files served, other routes withheld, empty/populated reads, auth, privilege rejection, restart and shutdown.',
   );
 } catch (error) {
   console.error(error.message);
