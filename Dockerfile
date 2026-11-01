@@ -11,9 +11,14 @@ COPY apps/firewall/src apps/firewall/src
 COPY apps/dashboard apps/dashboard
 COPY packages/policy/src packages/policy/src
 COPY scripts/hosted-dashboard.mjs scripts/hosted-dashboard.mjs
+COPY scripts/hosted-database.mjs scripts/hosted-database.mjs
+COPY scripts/hosted-writer.mjs scripts/hosted-writer.mjs
 COPY scripts/dashboard.mjs scripts/dashboard.mjs
 COPY scripts/check-paypal-sandbox.mjs scripts/check-paypal-sandbox.mjs
 COPY tsconfig.base.json ./
+# The AG Studio license key is public once bundled; an empty value builds the
+# unlicensed evaluation bundle.
+ARG VITE_AG_STUDIO_LICENSE_KEY=""
 RUN pnpm --filter @spendwall/dashboard build
 
 FROM node:24.22.2-bookworm-slim AS runtime

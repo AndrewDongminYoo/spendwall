@@ -26,5 +26,7 @@
 !packages/policy/src/**
 !scripts/
 !scripts/hosted-dashboard.mjs
+!scripts/hosted-database.mjs
+!scripts/hosted-writer.mjs
 !scripts/dashboard.mjs
 !scripts/check-paypal-sandbox.mjs

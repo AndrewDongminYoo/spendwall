@@ -42,6 +42,7 @@ const testFiles =
                   'tests/agent-auth-postgres.test.mjs',
                   'tests/policy-preview-postgres.test.mjs',
                   'tests/hosting-postgres.test.mjs',
+                  'tests/hosted-writer-postgres.test.mjs',
                   'tests/reconciliation-postgres.test.mjs',
                   'tests/invoice-policy-postgres.test.mjs',
                   'tests/orders-postgres.test.mjs',
