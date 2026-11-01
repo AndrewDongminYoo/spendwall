@@ -18,7 +18,7 @@ An injected configuration field cannot enable those routes.
 The normal local dashboard entrypoint remains available for local evaluation.
 
 AG Studio's [licence guide](https://www.ag-grid.com/studio/react/enterprise-licence/) requires a deployment licence.
-Trial issuance remains deferred.
+An AG Studio trial has been requested; [license key setup](dashboard.md#installing-the-license-key) covers the build-time key, not public release.
 Serving the frontend later requires confirmed licence coverage, licence integration and a separately approved public release; this entrypoint has no flag that silently enables it.
 
 ## Runtime configuration
