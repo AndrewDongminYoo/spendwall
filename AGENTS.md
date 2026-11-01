@@ -8,7 +8,7 @@ Never put PayPal credentials in the agent or commit real credentials.
 The repository contains tested payment-control modules, a synthetic support-agent demo and a local read-only dashboard.
 The human-approval recording uses synthetic payments by default; its `--paypal-sandbox` flag opts into one real PayPal sandbox refund per approval and has no live PayPal path.
 The W0 sandbox proxy is a separate integration without the demo's policy/approval composition; do not describe it as a production payment service.
-The hosted dashboard entrypoint serves the read-only dashboard over synthetic data written by a scheduled synthetic writer; public deployment and 48-hour operation remain unverified.
+The hosted dashboard entrypoint serves the read-only dashboard over synthetic data written by a scheduled synthetic writer; it was deployed on Render on 2026-11-01, and 48-hour operation stays unverified until the check tracked in #20 completes.
 The optional loopback sandbox webhook receiver verifies observed refunds and compares them with opt-in execution receipts; one live delivery of a direct-dashboard sandbox refund was observed through a temporary ingress on 2026-10-27, and hosted ingress remains unverified.
 The invoice policy module reserves allowed send attempts atomically; its synthetic console example does not create or send provider invoices.
 The dispute policy module returns review-only approval requirements and deadline data; it does not create approval records, accept claims or send notifications.
