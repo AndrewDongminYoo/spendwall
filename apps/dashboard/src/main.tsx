@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
+import { AgStudioProvider } from 'ag-studio-react';
 import { Report } from './studio.tsx';
 import { PolicyPreviewPanel } from './policy-preview.tsx';
 import { AuditAgent } from './audit-agent.tsx';
@@ -223,4 +224,9 @@ function App() {
     </>
   );
 }
-createRoot(document.getElementById('root')!).render(<App />);
+const licenseKey = import.meta.env.VITE_AG_STUDIO_LICENSE_KEY?.trim();
+createRoot(document.getElementById('root')!).render(
+  <AgStudioProvider {...(licenseKey ? { licenseKey } : {})}>
+    <App />
+  </AgStudioProvider>,
+);

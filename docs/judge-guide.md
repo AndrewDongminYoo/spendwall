@@ -8,7 +8,7 @@ It is suitable for checking the five documented scenarios (four refund cases and
 
 Public hosted demo URL: **not available**.
 Hosting is tracked in [#20](https://github.com/AndrewDongminYoo/spendwall/issues/20).
-AG Studio trial issuance remains deferred; public deployment needs a valid license.
+An AG Studio trial has been requested ([license key setup](dashboard.md#installing-the-license-key)); public deployment needs a valid license.
 Local evaluation is described in the [dashboard guide](dashboard.md#ag-studio-and-licenses).
 
 ## Prerequisites

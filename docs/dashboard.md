@@ -117,11 +117,25 @@ No standalone enterprise grid or chart is embedded in the custom widget.
 
 AG Studio permits [local evaluation without a license](https://www.ag-grid.com/studio/react/installation/); console/license warnings and watermarks are expected in this mode.
 Every deployment requires a license under the [enterprise license guidance](https://www.ag-grid.com/studio/react/enterprise-licence/).
-No trial has been requested or key installed for this change.
 The operator raised the timing concern: a 45-day trial issued on October 15 would end before the issue's December 1–15 judging window.
-Defer issuance until November 1 or later, then verify the actual issued expiration covers the full judging window before deployment.
-This timing is a planning calculation, not a provider guarantee.
-License acquisition and public deployment are not part of the local evaluation evidence.
+Issuance was deferred until November 1; the operator requested a trial on 2026-11-01.
+The issuance email states that the key expires on 16 December 2026, which covers the judging window.
+With the key set, the operator observed that the local preview no longer showed the AG Studio watermark.
+Public deployment is not part of the local evaluation evidence.
+
+### Installing the license key
+
+The dashboard reads the key from `VITE_AG_STUDIO_LICENSE_KEY` at build time and passes it to `AgStudioProvider`.
+Without it, or with an empty value, the build stays in local evaluation mode.
+
+```sh
+VITE_AG_STUDIO_LICENSE_KEY='<key>' pnpm --filter @spendwall/dashboard build
+```
+
+Never commit the key.
+Vite writes the key into the JavaScript bundle under `apps/dashboard/dist`, so anyone who loads the page can read it; this is how AG Studio client-side licensing works.
+Do not publish a `dist` directory that was built with a key you do not intend to deploy.
+The `Dockerfile` passes no key to its dashboard build, and the hosted entrypoint does not serve AG Studio assets; supplying a key to a deployed frontend belongs to the licensed public frontend work in [#20](https://github.com/AndrewDongminYoo/spendwall/issues/20).
 
 ## Verification
 

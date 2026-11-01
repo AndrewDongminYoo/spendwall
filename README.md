@@ -54,7 +54,7 @@ Earlier local audit-assistant recording; synthetic classification, synthetic pay
 Run the current preview to inspect the added reconciliation panel.
 [Static frame](docs/assets/dashboard-demo.png) · [Dashboard setup and query limits](docs/dashboard.md).
 Local evaluation retains AG Studio's evaluation warnings and watermarks.
-Trial issuance remains deferred; there is no hosted demo URL yet.
+An AG Studio trial has been requested ([license key setup](docs/dashboard.md#installing-the-license-key)); there is no hosted demo URL yet.
 
 The [hosting preparation guide](docs/hosting.md) provides a container and Render template for an authenticated, read-only API.
 The hosted entrypoint does not serve AG Studio assets; public UI deployment and the 48-hour operational check remain pending.
