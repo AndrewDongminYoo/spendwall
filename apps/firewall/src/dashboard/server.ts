@@ -94,7 +94,6 @@ export async function startDashboardServer(options: DashboardOptions) {
         options.policyPreview !== undefined ||
         options.classify !== undefined ||
         options.queryMode !== undefined ||
-        options.staticDirectory !== undefined ||
         options.reconciliation !== undefined
       )
         throw new Error();
@@ -200,7 +199,8 @@ export async function startDashboardServer(options: DashboardOptions) {
       const url = new URL(req.url ?? '/', origin);
       if (
         hostedOrigin &&
-        !['/healthz', '/audit', '/stats'].includes(url.pathname)
+        !['/', '/healthz', '/audit', '/stats'].includes(url.pathname) &&
+        !url.pathname.startsWith('/assets/')
       ) {
         reply(res, 404, { error: 'Not found.' });
         return;

@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import http from 'node:http';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { startDashboardServer } from '../apps/firewall/src/dashboard/server.ts';
+import { databaseTls } from '../scripts/hosted-database.mjs';
 
 const origin = 'https://spendwall.example.invalid';
 const token = '8'.repeat(64);
@@ -68,12 +72,12 @@ test('hosted mode authenticates the configured HTTPS origin without trusting for
   assert.equal(server.url, origin);
 });
 
-test('hosted mode cannot enable model, replay or asset capabilities', async () => {
+test('hosted mode cannot enable model, replay or reconciliation capabilities', async () => {
   for (const extra of [
     { classify: async () => 'unsupported' },
     { policyPreview: {} },
-    { staticDirectory: '/tmp' },
     { queryMode: 'synthetic' },
+    { reconciliation: { adapterRef: 'a'.repeat(64) } },
   ]) {
     let server;
     try {
@@ -121,8 +125,6 @@ test('hosted mode has no policy, query, payment or approval routes even with val
   });
   t.after(() => server.close());
   for (const path of [
-    '/',
-    '/assets/main.js',
     '/policy',
     '/policy/propose',
     '/policy/dry-run',
@@ -145,6 +147,38 @@ test('hosted mode has no policy, query, payment or approval routes even with val
       assert.equal(result.status, 404, `${method} ${path}`);
     }
   }
+});
+
+test('hosted mode serves only the built dashboard files beside its read routes', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'spendwall-hosted-ui-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  await mkdir(join(directory, 'assets'));
+  await writeFile(join(directory, 'index.html'), '<div id="root"></div>');
+  await writeFile(join(directory, 'assets', 'index-abc.js'), 'export {};');
+  await writeFile(join(directory, 'secret.json'), '{}');
+  const server = await startDashboardServer({
+    ...options,
+    hosted: { publicOrigin: origin },
+    staticDirectory: directory,
+  });
+  t.after(() => server.close());
+  const page = await call(server, '/');
+  assert.equal(page.status, 200);
+  assert.equal(page.headers['content-type'], 'text/html; charset=utf-8');
+  const script = await call(server, '/assets/index-abc.js');
+  assert.equal(script.status, 200);
+  assert.equal(script.headers['content-type'], 'text/javascript');
+  for (const path of [
+    '/secret.json',
+    '/index.html',
+    '/assets/missing.js',
+    '/assets/../secret.json',
+    '/assets/%2e%2e/secret.json',
+    '/policy',
+    '/query',
+  ])
+    assert.equal((await call(server, path)).status, 404, path);
+  assert.equal((await call(server, '/', {}, 'POST')).status, 405);
 });
 
 test('hosted health fails closed without exposing database errors', async (t) => {
@@ -219,4 +253,22 @@ test('hosted health probes leave capacity for authenticated reads and release th
     await Promise.allSettled([health, duplicate]);
     await server.close();
   }
+});
+
+test('hosted database TLS relaxes verification only for private single-label hosts', () => {
+  assert.deepEqual(databaseTls(undefined, 'db.example.com'), {
+    rejectUnauthorized: true,
+  });
+  assert.deepEqual(databaseTls('require', 'dpg-abc123-a'), {
+    rejectUnauthorized: false,
+  });
+  assert.equal(databaseTls('disable', '127.0.0.1'), false);
+  for (const [mode, host] of [
+    ['require', 'dpg-abc123-a.singapore-postgres.render.com'],
+    ['require', 'localhost'],
+    ['require', '10.0.0.5'],
+    ['disable', 'dpg-abc123-a'],
+    ['verify-ca', 'dpg-abc123-a'],
+  ])
+    assert.throws(() => databaseTls(mode, host), /Invalid database TLS/);
 });

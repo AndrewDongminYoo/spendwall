@@ -1,51 +1,21 @@
-import { readFile } from 'node:fs/promises';
-import { isAbsolute } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { startDashboardServer } from '../apps/firewall/src/dashboard/server.ts';
 import { checkHostedReader } from '../apps/firewall/src/dashboard/hosted-reader.ts';
+import { databaseTls, databaseUrl, hostedConfig } from './hosted-database.mjs';
 
 let pool, server;
 try {
   if (process.argv.length !== 2) throw new Error();
-  const configFile = process.env.SPENDWALL_DASHBOARD_CONFIG;
-  if (!configFile || !isAbsolute(configFile)) throw new Error();
-  const config = JSON.parse(await readFile(configFile, 'utf8'));
-  const fields = [
-    'identityKey',
-    'merchantId',
-    'token',
-    'agents',
-    'databaseTls',
-  ];
-  if (
-    !config ||
-    typeof config !== 'object' ||
-    Array.isArray(config) ||
-    Object.keys(config).some((key) => !fields.includes(key))
-  )
-    throw new Error();
-  const database = new URL(process.env.SPENDWALL_DASHBOARD_DATABASE_URL ?? '');
-  if (
-    !['postgres:', 'postgresql:'].includes(database.protocol) ||
-    database.search ||
-    database.hash
-  )
-    throw new Error();
-  const tls = config.databaseTls ?? 'verify-full';
-  if (
-    tls !== 'verify-full' &&
-    !(
-      tls === 'disable' &&
-      ['127.0.0.1', 'localhost', '[::1]'].includes(database.hostname)
-    )
-  )
-    throw new Error();
+  const config = await hostedConfig(process.env.SPENDWALL_DASHBOARD_CONFIG);
+  const database = databaseUrl(process.env.SPENDWALL_DASHBOARD_DATABASE_URL);
+  const tls = databaseTls(config.databaseTls, database.hostname);
   const portText = process.env.PORT ?? '';
   if (!/^[1-9][0-9]{0,4}$/.test(portText) || Number(portText) > 65535)
     throw new Error();
   pool = new pg.Pool({
     connectionString: database.toString(),
-    ssl: tls === 'verify-full' ? { rejectUnauthorized: true } : false,
+    ssl: tls,
     max: 4,
     connectionTimeoutMillis: 2000,
     statement_timeout: 5000,
@@ -65,10 +35,12 @@ try {
     ...(config.agents === undefined ? {} : { agents: config.agents }),
     hosted: { publicOrigin: process.env.SPENDWALL_PUBLIC_ORIGIN ?? '' },
     port: Number(portText),
+    // Fixed in code so that no configuration field selects served files.
+    staticDirectory: fileURLToPath(
+      new URL('../apps/dashboard/dist', import.meta.url),
+    ),
   });
-  console.log(
-    'Hosted read-only dashboard API ready; UI deployment remains disabled.',
-  );
+  console.log('Hosted read-only dashboard ready.');
   let closing = false;
   const close = async () => {
     if (closing) return;
