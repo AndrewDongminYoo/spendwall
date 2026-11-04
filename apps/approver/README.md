@@ -27,9 +27,9 @@ The integration fixture is a separate test entrypoint and never runs from `lib/m
 
 ## Configure a personal device
 
-`firebase.json` names the operator's `spendwall-approver` Firebase project and the FlutterFire output paths; no generated Firebase configuration file, APNs credential, enrollment token or public endpoint is included.
+`firebase.json` names the user's `spendwall-approver` Firebase project and the FlutterFire output paths; no generated Firebase configuration file, APNs credential, enrollment token or public endpoint is included.
 Builds without Firebase configuration open an explanatory setup screen and disable enrollment.
-Use only the operator's approved personal Spendwall Firebase project.
+Use only the user's approved personal Spendwall Firebase project.
 The generated identifiers are `dev.spendwall.spendwallApprover` on iOS and `dev.spendwall.spendwall_approver` on Android; confirm these before registration.
 
 1. Add the corresponding Firebase `GoogleService-Info.plist` to `ios/Runner/` and `google-services.json` to `android/app/`.
@@ -53,7 +53,7 @@ The API currently listens on loopback and rejects non-local Host/Origin values.
 For a physical iPhone, the recording command can start an optional TLS forwarder on the Mac's Tailscale address (`100.64.0.0/10` only) with a `tailscale cert` certificate for its `<name>.ts.net` name.
 The forwarder accepts only that exact Host, refuses any Origin, and rewrites Host to the API's loopback host, so the server checks stay unchanged.
 Enter `https://<name>.ts.net:<port>` in the app; the phone and the Mac must be in the same tailnet.
-The [synthetic recording runbook](../../docs/recording-approval.md) owns the operator steps and documents the Firebase/APNs prerequisites. Its automated HTTP/fake-notifier fixture does not verify this app on a phone.
+The [synthetic recording runbook](../../docs/recording-approval.md) owns the user's steps and documents the Firebase/APNs prerequisites. Its automated HTTP/fake-notifier fixture does not verify this app on a phone.
 Do not expose the API publicly or change its bind address to make a demo work.
 The app normally accepts only an HTTPS origin without a path, query, fragment or user information.
 For an explicitly local debug run, `--dart-define=ALLOW_LOOPBACK_HTTP=true` also permits HTTP on `localhost`, `127.0.0.1` or `::1`.
