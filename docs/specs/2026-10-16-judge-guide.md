@@ -1,7 +1,7 @@
 # Judge guide and threat model
 
 Issue: https://github.com/AndrewDongminYoo/spendwall/issues/22.
-Dongmin Yu approved this documentation baseline with `pr-loop #22`; trial issuance remains deferred.
+This documentation baseline was approved with `pr-loop #22`; trial issuance remains deferred.
 
 ## Problem and scope
 
@@ -27,7 +27,7 @@ The hosted URL and integrated live-sandbox judge flow remain unavailable; refere
 3. A separately started dashboard preview displays real SQL results from synthetic fixtures; its GIF is an actual browser recording with a synthetic caption and static alternative.
 4. Security claims identify source boundaries and verification references, including exclusions for compromised hosts/devices, upstream errors and direct provider bypass.
 5. AI disclosure distinguishes optional Claude integrations from planned policy compilation and development assistance.
-6. Local links, formatting, declared checks and hosted review pass; approval by Dongmin Yu covers the final diagram and GIF before merge.
+6. Local links, formatting, declared checks and hosted review pass; approval covers the final diagram and GIF before merge.
 
 ## Precedent
 

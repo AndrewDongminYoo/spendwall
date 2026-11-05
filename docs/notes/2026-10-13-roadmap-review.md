@@ -35,7 +35,7 @@ These are recommendations for follow-up issues, not features implemented by the 
 
 ## Accepted W0 execution decision
 
-Dongmin Yu approved the following alignment on 2026-10-13 after issues #2 through #4 completed.
+The following alignment was approved on 2026-10-13 after issues #2 through #4 completed.
 The actual SSE snapshot remains historical evidence; it is not evidence of a Streamable HTTP connection.
 Its `create_refund` schema exposes no caller-controlled idempotency key and rejects additional properties.
 Hosted MCP header forwarding remains unverified.
@@ -53,8 +53,8 @@ Explicit SSE mode retrieved the same 46 tools; only the two rolling transaction 
 The proxy now compares their schema constraints while permitting valid timestamp values to change.
 The original snapshot remains unchanged.
 
-Dongmin Yu then verified a normal MCP read and a USD 1.00 REST refund through the local Streamable HTTP proxy using explicit SSE upstream.
+A normal MCP read and a USD 1.00 REST refund were then verified through the local Streamable HTTP proxy using explicit SSE upstream.
 The repeated execution ID returned the same refund ID, and a refund GET confirmed `COMPLETED`.
 See [connection evidence](../../fixtures/proxy-connection.json) and [refund evidence](../../fixtures/proxy-refund.json).
-Dongmin Yu approved adjusting issue #5 to record the HTTP failure and accept the verified, explicitly selected SSE path for W0.
+Adjusting issue #5 to record the HTTP failure and accept the verified, explicitly selected SSE path for W0 was approved.
 Keep the HTTP default and leave hosted upstream HTTP compatibility unverified.

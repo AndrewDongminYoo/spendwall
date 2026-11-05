@@ -36,7 +36,7 @@ Synthetic preview uses an explicitly labelled deterministic provider substitute 
 2. Tests cover week and USD boundaries, policy-version grouping, reservation release and expiry windows, missing configuration, invalid model output, auth, origin, and data continuity failures.
 3. Actual Studio harness execution updates the rendered result on desktop and mobile without duplicate widgets or stale results after failure/cancellation.
 4. Declared repository checks and frontend build pass; mocked-provider evidence is distinguished from live Claude verification.
-5. Dongmin Yu approves the final rendered candidate before merge.
+5. The final rendered candidate is approved before merge.
 
 ## Evidence and precedent
 

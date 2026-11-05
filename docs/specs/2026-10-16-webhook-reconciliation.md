@@ -56,7 +56,7 @@ Disabled reconciliation is distinct from an enabled empty report.
 5. Exact completed receipt evidence matches; wrong refund ID, capture, amount, app, merchant or audit binding cannot match.
 6. A webhook arriving before its receipt starts pending, becomes unmediated after the grace interval, and matches after a late receipt.
 7. The dashboard renders disabled, empty, pending, matched, unmediated and mismatch states with no raw provider IDs or payloads.
-8. Existing project checks pass; local screenshots support visual review by Dongmin Yu.
+8. Existing project checks pass; local screenshots support visual review.
 
 ## Sources and precedent
 

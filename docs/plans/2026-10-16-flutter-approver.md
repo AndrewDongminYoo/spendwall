@@ -2,7 +2,7 @@
 
 ## Direction
 
-Execute the [issue 15 contract](../specs/2026-10-16-flutter-approver.md) requested by Dongmin Yu in the main workspace on `codex/issue-15-flutter-approver`.
+Execute the requested [issue 15 contract](../specs/2026-10-16-flutter-approver.md) in the main workspace on `codex/issue-15-flutter-approver`.
 No worktree is needed.
 Keep actual deployment and trial issuance deferred.
 The root owns all edits, staging, commits and final gates.
@@ -38,7 +38,7 @@ The root owns all edits, staging, commits and final gates.
    Repair sequentially and repeat only affected checks.
 9. Commit by concern, push, open the PR without closing issue 15 until physical acceptance is established, and observe current-head hosted review and CI within the recorded budget.
    Preserve screenshots and review notes in the surviving visible review directory.
-10. Request visual approval and merge by Dongmin Yu only after technical gates and accurately scoped acceptance are satisfied.
+10. Request visual approval and merge only after technical gates and accurately scoped acceptance are satisfied.
     Keep any unavailable physical-device criterion and its concrete resume action explicit.
 
 ## Full-device prerequisites

@@ -2,7 +2,7 @@
 
 ## Authority and ownership
 
-Dongmin Yu requested selection and immediate implementation through pr-loop.
+Selection and immediate implementation through pr-loop were requested.
 Issue 16 is the selected bounded task; the root owns all edits and Git mutations in the main workspace.
 No worktree or dependency is required.
 
@@ -14,7 +14,7 @@ No worktree or dependency is required.
 4. Test a held model request concurrently with a successful human decision, and reject cross-owner requests before generating.
 5. Document server composition and verification limits in `docs/approval-api.md`.
 6. Run `pnpm check`, `trunk check --all --no-fix`, and Compose validation; review the candidate adversarially before commits and PR.
-7. Complete current-head hosted code/security review and CI, then request a merge by Dongmin Yu.
+7. Complete current-head hosted code/security review and CI, then request merge.
 
 ## Owned paths
 

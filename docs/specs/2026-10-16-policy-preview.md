@@ -3,7 +3,7 @@
 ## Status and evidence
 
 Approved contract for [issue 21](https://github.com/AndrewDongminYoo/spendwall/issues/21), inspected against main `6fffc6a2a6d56686346023cd2c17157e1e5d5db0`.
-Dongmin Yu approved encrypted retention and exact historical reevaluation on 2026-10-16.
+Encrypted retention and exact historical reevaluation were approved on 2026-10-16.
 No AG Studio trial, hosted deployment, paid model call or live payment is authorized by this plan.
 
 The existing policy loader validates YAML and prepares CEL expressions in `packages/policy/src/index.ts`.
@@ -48,7 +48,7 @@ No system scheduler is installed; after downtime physical deletion resumes at th
 Seven days bounds replay availability; physical cleanup can lag by the worker interval, expired-record backlog or downtime.
 Each cleanup uses an expiry index and deletes at most 1,000 expired rows, skipping records locked by another cleanup.
 Read paths also exclude expired payloads, even if maintenance has not run.
-This store retains sensitive policy input that the ordinary audit log omits; Dongmin Yu explicitly approved this extension.
+This store retains sensitive policy input that the ordinary audit log omits; this extension was explicitly approved.
 
 ## Reviewer authorization
 
@@ -79,7 +79,7 @@ Return only decision counts and safe event references to the browser; do not ret
 4. Coverage → legacy, expired, missing and corrupt snapshots remain visibly unavailable; no plaintext reconstruction is attempted.
 5. Privacy and scope → actual PostgreSQL tests inspect ciphertext and permissions, merchant isolation, transaction rollback and seven-day retention boundaries.
 6. Runtime bounds → authentication, bounded input/model output, cancellation, concurrency limits and database errors fail safely.
-7. Presentation → desktop and narrow-screen browser checks cover valid, invalid, partial, empty, disconnected and stale states; visual approval by Dongmin Yu is required before merge.
+7. Presentation → desktop and narrow-screen browser checks cover valid, invalid, partial, empty, disconnected and stale states; visual approval is required before merge.
 8. Delivery → pinned Node/pnpm checks, Trunk, Compose, local core-area review and current-head hosted review/CI must pass.
 
 Oracle retrieval for approval app and policy replay returned `[no precedent found]`.

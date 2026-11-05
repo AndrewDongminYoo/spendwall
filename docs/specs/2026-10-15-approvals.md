@@ -1,7 +1,7 @@
 # Durable refund approvals
 
 Implement [issue #12](https://github.com/AndrewDongminYoo/spendwall/issues/12) on the audit and velocity boundaries merged in PRs #37 and #40.
-Dongmin Yu authorized implementation, commits, push, PR, and hosted review through `pr-loop`.
+Implementation, commits, push, PR, and hosted review through `pr-loop` were authorized.
 Merge, live payment calls, production migrations, approval REST endpoints (#14), and mobile work are outside this request.
 
 ## Boundary

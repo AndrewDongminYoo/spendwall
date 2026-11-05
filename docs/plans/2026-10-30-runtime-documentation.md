@@ -21,12 +21,12 @@ No runtime or dependency changes are planned.
 5. Review the entire candidate and its documentation audit table.
    Fix confirmed omissions in the same PR and rerun affected checks.
 6. Make one cohesive documentation commit, push and open a PR using `Refs #22`.
-   Verify empty closing references, current-head CI and hosted review, then finish the body and assign Dongmin Yu before the authorized gated merge.
+   Verify empty closing references, current-head CI and hosted review, then finish the body and assign me before the authorized gated merge.
 7. Verify the merge and issue 22's open state.
    Preserve a visible receipt and retire only this run's owned control state.
    Branch cleanup and memory recording were not requested.
 
 ## Review boundary
 
-Existing media, layout and diagrams remain unchanged, so visual approval by Dongmin Yu is not applicable.
+Existing media, layout and diagrams remain unchanged, so visual approval is not applicable.
 Native checks and synthetic tests do not establish new physical-device acceptance.

@@ -10,8 +10,8 @@ Consequently, passing every call through MCP cannot establish issue #12's `PayPa
 Keep the downstream MCP interface and use a dedicated REST execution path for `create_refund`.
 Use Streamable HTTP upstream by default and allow an explicit SSE compatibility mode.
 Never change transports or replay a mutation automatically after an ambiguous result.
-Dongmin Yu approved this direction, related issue updates, and the implementation-to-PR workflow on 2026-10-13.
-After the documented HTTP endpoint returned 404, Dongmin Yu approved completing W0 through explicitly selected SSE on the same date.
+This direction, related issue updates, and the implementation-to-PR workflow were approved on 2026-10-13.
+After the documented HTTP endpoint returned 404, completing W0 through explicitly selected SSE was approved on the same date.
 Keep the HTTP default and record its observed failure without claiming hosted HTTP compatibility.
 
 ## W0 scope
@@ -56,7 +56,7 @@ Keep the HTTP default and record its observed failure without claiming hosted HT
 7. An upstream disconnect or stall produces a safe bounded error instead of hanging; no transport fallback repeats a mutation.
 8. Record the authenticated sandbox `/http` initialization result.
    If unavailable, verify catalog and read calls through explicitly selected SSE; claim live HTTP compatibility only after observing a successful authenticated HTTP connection.
-9. Dongmin Yu runs the explicit refund smoke command against one selected fixture capture.
+9. I run the explicit refund smoke command against one selected fixture capture.
    Two calls with the same execution ID return the same refund ID, and a refund GET confirms the final state.
    Save safe acceptance evidence separately from the private runtime ledger.
 

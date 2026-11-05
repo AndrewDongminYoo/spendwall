@@ -3,7 +3,7 @@
 ## Contract and authority
 
 Implement [issue 15](https://github.com/AndrewDongminYoo/spendwall/issues/15) against the existing [approval API](../approval-api.md).
-Dongmin Yu requested implementation, verification and a PR through pr-loop on 2026-10-16.
+Implementation, verification and a PR through pr-loop were requested on 2026-10-16.
 Real deployment and trial issuance remain deferred.
 The app must not contain PayPal credentials or perform provider refunds itself.
 The server remains authoritative for ownership, argument binding, policy, expiry and execution.
@@ -79,6 +79,6 @@ Official package and Firebase setup documentation were checked on 2026-10-16.
 3. UI → widget tests exercise actual pending, expired, completed, authentication failure and uncertain-result states; rendered evidence shows the required information hierarchy and accessible actions.
 4. Native integration → analyze, format, tests and a native build verify plugin integration; simulator interactions and screenshots establish only their stated local scenarios.
 5. Full issue completion → an explicitly authorized physical device receives a real push, opens the bound detail, authenticates biometrically and observes the sandbox execution; expired/completed requests remain disabled.
-6. Delivery → repository gates, Flutter checks, local adversarial review and current-head hosted reviews pass; Dongmin Yu reviews visual artifacts before merge.
+6. Delivery → repository gates, Flutter checks, local adversarial review and current-head hosted reviews pass; visual artifacts are reviewed before merge.
 
 If external configuration or a private connection prevents check 5, retain the exact prerequisite as incomplete and do not close issue 15 or describe synthetic success as real-device acceptance.

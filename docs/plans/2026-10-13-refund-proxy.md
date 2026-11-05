@@ -1,6 +1,6 @@
 # Refund proxy implementation plan
 
-Dongmin Yu approved the [contract](../specs/2026-10-13-refund-proxy.md) and issue alignment on 2026-10-13.
+The [contract](../specs/2026-10-13-refund-proxy.md) and issue alignment were approved on 2026-10-13.
 Use the current workspace on `feat/issue-5-refund-proxy`; no additional worktree is needed.
 
 ## Owned scope
@@ -25,9 +25,9 @@ Use Node's existing test runner and native TypeScript support rather than introd
    Verify invalid commands and missing credentials fail safely before network side effects.
 6. Run `pnpm check`, `pnpm install --frozen-lockfile`, `trunk check --all --no-fix`, and Compose configuration validation.
    Review the complete diff and run independent contract/security reviews under the large/core-area review rule.
-7. Inspect the authenticated HTTP probe run by Dongmin Yu and the refund acceptance artifact.
+7. Inspect the manually run authenticated HTTP probe and refund acceptance artifact.
    Verify duplicate calls resolve to the same refund and inspect the stored fixture evidence without reading credential files.
-8. Create concern-based commits and a PR, observe current-head CI and hosted review, and request a merge by Dongmin Yu only after the gates pass.
+8. Create concern-based commits and a PR, observe current-head CI and hosted review, and request merge only after the gates pass.
 
 ## Limits
 

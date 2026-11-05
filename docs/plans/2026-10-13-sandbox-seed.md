@@ -3,7 +3,7 @@
 ## Approved direction
 
 Implement issue #4 in the existing main workspace on `feat/issue-4-sandbox-seed`.
-Dongmin Yu requested the PR Loop for this issue after merging PR #32.
+The PR Loop for this issue was requested after PR #32 was merged.
 The root owns all edits, staging, commits, and verification.
 Use the existing Node runtime, fetch, test runner, OAuth helper, and JSON formatter; add no dependency.
 
@@ -20,7 +20,7 @@ Use the existing Node runtime, fetch, test runner, OAuth helper, and JSON format
    Inspect captured amounts, unique IDs, completed batches, client binding, and preservation of the first run's records.
    If card eligibility blocks the run, diagnose that response before selecting the issue's approved browser fallback.
 6. Review the complete diff with independent read-only coverage calibrated to its actual size and payment-related risk.
-   Repair confirmed findings, create scoped commits and a PR, then follow current-head hosted review and CI to the merge boundary of Dongmin Yu.
+   Repair confirmed findings, create scoped commits and a PR, then follow current-head hosted review and CI to the merge boundary.
 
 ## Authority and terminal conditions
 

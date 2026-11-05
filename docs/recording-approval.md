@@ -129,7 +129,7 @@ The app itself shows no synthetic marker. Add the **SYNTHETIC PAYMENTS / HUMAN A
 
 ## Scene 4 prerequisites and filming order
 
-These are user tasks, not actions performed by the implementation; Dongmin Yu completed them for an iPhone on 2026-10-27 ([#15](https://github.com/AndrewDongminYoo/spendwall/issues/15)):
+These are user tasks, not actions performed by the implementation; they were completed for an iPhone on 2026-10-27 ([#15](https://github.com/AndrewDongminYoo/spendwall/issues/15)):
 
 1. Create an approved personal Spendwall Firebase project, register the matching iOS app and configure its APNs relationship and private Google ADC credentials outside Git. Follow the [approver README](../apps/approver/README.md); native signing, entitlements and installation remain separate work.
 2. Prepare the **private HTTPS** phone path over Tailscale. The API still binds only to `127.0.0.1` and keeps its exact loopback Host and Origin checks. An optional in-repository TLS forwarder (`apps/firewall/src/approver/forwarder.ts`) listens only on the Mac's tailnet IPv4 address in `100.64.0.0/10`; it refuses `0.0.0.0`, loopback and LAN addresses at startup. It accepts a request only when Host equals the configured `<name>.ts.net:<port>` exactly (421 otherwise) and refuses any request that carries Origin (403); refused requests never reach the API. Port 443 is refused at startup, because clients omit the default port from Host and the exact match would then fail. It forwards method, path, query, body and end-to-end headers to the loopback API with Host replaced by the API's own loopback host, removes hop-by-hop headers in both directions, answers 502 when the API is unreachable and logs nothing. User steps, none of which this repository performs:

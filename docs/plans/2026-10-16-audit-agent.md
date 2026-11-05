@@ -1,6 +1,6 @@
 # Audit agent implementation
 
-Direction approved by Dongmin Yu through issue #18 and Claude reuse; AG Studio trial issuance remains deferred.
+Direction approved through issue #18 and Claude reuse; AG Studio trial issuance remains deferred.
 Use the existing workspace and a scoped branch.
 
 ## Steps and ownership
@@ -13,7 +13,7 @@ Use the existing workspace and a scoped branch.
    Verify runner events and cancellation through tests, then three repeated queries in a named browser session at desktop and mobile widths.
 4. Root: update `docs/dashboard.md`; run frozen install, lint, typecheck, complete tests, frontend build, Trunk, and compose validation.
 5. Independent read-only reviews: inspect the server data/provider boundary and the client runner/widget lifecycle; root resolves findings sequentially, at most two local repair rounds.
-6. Root: create concern-based commits, push, open the PR, observe current-head CI and hosted reviews within the recorded budget, and request final visual approval and a merge by Dongmin Yu.
+6. Root: create concern-based commits, push, open the PR, observe current-head CI and hosted reviews within the recorded budget, and request final visual approval and merge.
 
 ## Constraints
 

@@ -117,10 +117,10 @@ No standalone enterprise grid or chart is embedded in the custom widget.
 
 AG Studio permits [local evaluation without a license](https://www.ag-grid.com/studio/react/installation/); console/license warnings and watermarks are expected in this mode.
 Every deployment requires a license under the [enterprise license guidance](https://www.ag-grid.com/studio/react/enterprise-licence/).
-Dongmin Yu raised the timing concern: a 45-day trial issued on October 15 would end before the issue's December 1–15 judging window.
-Issuance was deferred until November 1; Dongmin Yu requested a trial on 2026-11-01.
+The timing concern was raised: a 45-day trial issued on October 15 would end before the issue's December 1–15 judging window.
+Issuance was deferred until November 1; a trial was requested on 2026-11-01.
 The issuance email states that the key expires on 16 December 2026, which covers the judging window.
-With the key set, Dongmin Yu observed that the local preview no longer showed the AG Studio watermark.
+With the key set, it was observed that the local preview no longer showed the AG Studio watermark.
 Public deployment is not part of the local evaluation evidence.
 
 ### Installing the license key
@@ -149,7 +149,7 @@ docker compose --env-file .env.example config --quiet
 `tests/dashboard.test.mjs` covers projection meaning, failure limits, and pre-database authentication.
 `tests/dashboard-postgres.test.mjs` covers actual SQL, lifecycle writes from existing services, merchant separation, HTTP, and unchanged audit data.
 Browser verification must include populated/empty snapshots, invalid credentials, refresh failure, narrow layout, and the actual custom widget fill.
-Approval of the rendered candidate by Dongmin Yu remains required before merge.
+Approval of the rendered candidate remains required before merge.
 
 ## Policy workshop (optional)
 

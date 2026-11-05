@@ -45,8 +45,8 @@ Original API data remains authoritative and no generated prose appears here.
 HTTP and actual PostgreSQL tests must establish authorization, merchant separation, read-only behavior, deduplication, expiry, uncertainty, and bounded failure.
 Browser checks must render the actual AG Studio widgets and custom theme over a disposable database populated through existing services, including refresh, error, empty, and narrow states.
 Synthetic seeded payment outcomes are not live PayPal verification.
-Visual approval by Dongmin Yu is required for the final candidate.
-Dongmin Yu confirmed no trial license has been issued.
+Visual approval is required for the final candidate.
+It was confirmed that no trial license has been issued.
 [AG Studio installation guidance](https://www.ag-grid.com/studio/react/installation/) permits local evaluation without a license; deployment, license acquisition, and judging-period validity remain unverified and are not claimed complete.
 The [license guidance](https://www.ag-grid.com/studio/react/enterprise-licence/) requires a license for deployment.
 No external AI or payment request is part of this task.

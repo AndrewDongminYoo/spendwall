@@ -1,7 +1,7 @@
 # Human approval API and delivery
 
 Implement [issue #14](https://github.com/AndrewDongminYoo/spendwall/issues/14) on merge `ad68b13b8fe012ad994c483c70f458071379341e` and the durable approval service from #12.
-Dongmin Yu authorized implementation, checks, commits, push, PR and hosted review through `pr-loop`.
+Implementation, checks, commits, push, PR and hosted review through `pr-loop` were authorized.
 Merge, live payments, live notifications, production migration, issue edits and post-merge cleanup/recording are not authorized.
 The security-review exception for PR #41 does not cover this issue.
 

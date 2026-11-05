@@ -3,7 +3,7 @@
 ## Contract
 
 Implement [issue #7](https://github.com/AndrewDongminYoo/spendwall/issues/7) on top of the [issue #6 loader](2026-10-14-policy-loader.md).
-Dongmin Yu authorized implementation, verification, and the PR workflow on 2026-10-14.
+Implementation, verification, and the PR workflow were authorized on 2026-10-14.
 Reuse `LoadedPolicy` and the exact `@marcbachmann/cel-js@8.0.0` dependency.
 No LLM, network request, clock, randomness, payment execution, or new dependency belongs in this evaluator.
 
@@ -88,7 +88,7 @@ No production currency-conversion claim or live payment integration follows from
 2. Regression tests exercise masked logical/quantifier errors, unreachable error branches, presence checks, nonboolean results, repeated mixed contexts, operation-budget exhaustion, and unchanged caller data.
 3. The existing loader suite remains green, including exact hash behavior, source paths, and 64/65 unary depth boundaries.
 4. `pnpm check`, `pnpm install --frozen-lockfile`, `trunk check --all --no-fix`, and Compose configuration validation pass.
-5. Local adversarial reviews and current-head hosted review/CI complete before the merge request to Dongmin Yu.
+5. Local adversarial reviews and current-head hosted review/CI complete before the merge request.
 
 Do not integrate the firewall, implement aggregation/context resolvers, edit issues, change unrelated README/AGENTS drift, contact PayPal, or change dependency versions.
 This library change needs no visual approval.

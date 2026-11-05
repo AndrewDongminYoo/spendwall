@@ -19,4 +19,4 @@ Expected edits are this spec/plan, a dated evidence note and directly affected a
    Preserve the distinction between live Claude, synthetic payments, recorded calls and missing coverage.
 5. Run relevant tests plus `pnpm lint`, `pnpm typecheck`, `pnpm test`, `trunk check --all --no-fix` and Compose validation.
    Review the final diff, commit by concern, push, and complete hosted CI/code/security review.
-6. Request a merge by Dongmin Yu after readiness; leave the parent issue open for remaining submission criteria.
+6. Request merge after readiness; leave the parent issue open for remaining submission criteria.

@@ -4,8 +4,8 @@
 
 The [committed snapshot](paypal-mcp-tools.json) contains 46 tools from one authenticated `tools/list` page at `2026-10-13T00:13:32.703Z`.
 It was collected from `https://mcp.sandbox.paypal.com/sse` using `@modelcontextprotocol/sdk` 1.32.1 and the US sandbox merchant app prepared in issue #2.
-Dongmin Yu ran the command with local credentials; no payment tool was called.
-Dongmin Yu's shell reported Node 24.20.0, while repository checks ran on the declared Node 24.21.0.
+The command was run with local credentials; no payment tool was called.
+The local shell reported Node 24.20.0, while repository checks ran on the declared Node 24.21.0.
 
 Run from the repository root after privately loading `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` into the environment:
 
