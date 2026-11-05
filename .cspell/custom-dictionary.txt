@@ -80,6 +80,7 @@ pbxproj
 pbxuser
 perspectivev
 PGOPTIONS
+pinact
 plpgsql
 Preparse
 preparsing
