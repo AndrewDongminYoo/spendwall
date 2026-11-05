@@ -15,4 +15,4 @@ No worktree, dependency change or database migration is required.
    These checks establish local decisions and GET-only synthetic traffic, not real approvals or provider execution.
 6. Complete independent read-only reviews of trusted-context integrity and approval/deadline policy behavior, then root adversarial assessment and bounded repairs.
 7. Commit by concern, push, open the PR and complete hosted code/security review and CI.
-   Leave merge to the operator.
+   Leave merge to Dongmin Yu.

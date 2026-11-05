@@ -19,6 +19,6 @@ No runtime or dependency changes are planned.
 4. Write observations with the exact snapshot, method, limits and any unresolved findings.
    Correct the judge guide only where the evidence changes its claims.
 5. Run scoped formatting, claim/link review, declared gates and hosted review.
-   Commit documentation by concern and request operator merge.
+   Commit documentation by concern and request a merge by Dongmin Yu.
 6. Remove only task-owned temporary repositories after preserving sanitized evidence.
    Retain the visible review receipt and reports through post-merge cleanup.

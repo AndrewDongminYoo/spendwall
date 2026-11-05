@@ -16,7 +16,7 @@ The root owns edits, staging, commits, and final checks.
 5. Run independent read-only reviews of evaluator/amount safety and loader/API compatibility, followed by root adversarial reconciliation.
    Repair supported findings sequentially with failing regressions.
 6. Commit by concern, push, create the PR, and observe current-head CI and hosted review.
-   Require the complete review-thread gate before requesting operator merge.
+   Require the complete review-thread gate before requesting a merge by Dongmin Yu.
 
 ## Owned paths and limits
 

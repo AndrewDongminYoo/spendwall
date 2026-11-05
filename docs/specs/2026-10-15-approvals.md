@@ -1,7 +1,7 @@
 # Durable refund approvals
 
 Implement [issue #12](https://github.com/AndrewDongminYoo/spendwall/issues/12) on the audit and velocity boundaries merged in PRs #37 and #40.
-The operator authorized implementation, commits, push, PR, and hosted review through `pr-loop`.
+Dongmin Yu authorized implementation, commits, push, PR, and hosted review through `pr-loop`.
 Merge, live payment calls, production migrations, approval REST endpoints (#14), and mobile work are outside this request.
 
 ## Boundary
@@ -56,7 +56,7 @@ After a crash, reuse the persisted execution UUID and body.
 Within the existing executor's conservative 24-hour replay window, unknown requests may recover with that identity.
 Enforce the original claim's deadline at the actual POST boundary, including delays in the executor queue, lookup and token refresh.
 Known refund references and recovery beyond that window use an explicitly read-only executor reconciliation method, which cannot create a new ledger entry or issue POST.
-If read-only reconciliation is impossible, preserve unknown and capacity for operator reconciliation.
+If read-only reconciliation is impossible, preserve unknown and capacity for user reconciliation.
 Do not interpret the local replay window as a new claim about provider retention guarantees.
 
 ## Acceptance checks

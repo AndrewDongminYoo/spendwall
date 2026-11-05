@@ -34,7 +34,7 @@ for (const mode of [0o600, 0o400]) {
   });
 }
 
-test('configuration reloads recheck mode without changing the operator file', (t) => {
+test('configuration reloads recheck mode without changing the user file', (t) => {
   const { file } = fixture(t);
   assert.deepEqual(readRecordingConfig(file), config);
   fs.chmodSync(file, 0o644);

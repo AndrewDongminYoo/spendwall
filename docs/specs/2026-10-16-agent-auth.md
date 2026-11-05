@@ -1,7 +1,7 @@
 # Agent authentication and tool isolation
 
 Issue: https://github.com/AndrewDongminYoo/spendwall/issues/10.
-The operator approved the remaining agent authentication and tool isolation work, keeping the existing token manager and deferring trial issuance.
+Dongmin Yu approved the remaining agent authentication and tool isolation work, keeping the existing token manager and deferring trial issuance.
 
 ## Contract
 

@@ -116,7 +116,7 @@ The compute plans and 1 GB database storage are planning defaults, not a guarant
 Storage autoscaling and commit-triggered deployments are disabled; PostgreSQL external ingress is closed.
 The database URLs intentionally are not automatic owner-credential references.
 
-Release steps, all by the operator in the Render dashboard:
+Release steps, all by the user in the Render dashboard:
 
 1. Apply the Blueprint from the personal Render account after confirming the total estimate. Disabling automatic deploys does not prevent initial resource creation or billing.
 2. Add the private JSON as the secret file `dashboard.json` on both the web service and the cron job.

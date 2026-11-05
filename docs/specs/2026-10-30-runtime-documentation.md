@@ -2,7 +2,7 @@
 
 ## Problem and approved scope
 
-The operator invoked `pr-loop #22` after upgrading runtime and dependency versions, with a requirement to settle affected documentation in this PR.
+Dongmin Yu invoked `pr-loop #22` after upgrading runtime and dependency versions, with a requirement to settle affected documentation in this PR.
 Current setup instructions and acceptance summaries disagree with the checked-in pins and later recorded evidence.
 This extends the [judge guide baseline](2026-10-16-judge-guide.md) without changing its historical observations.
 

@@ -76,7 +76,7 @@ if (!args) {
     );
     console.log(
       notifier
-        ? 'FCM EXPLICITLY ENABLED; physical delivery remains an operator check.'
+        ? 'FCM EXPLICITLY ENABLED; physical delivery remains a user check.'
         : 'NOTIFICATIONS DISABLED; local API rehearsal only.',
     );
     await withDemoDatabase(async (url) => {

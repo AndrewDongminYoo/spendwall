@@ -8,7 +8,7 @@ The synthetic policy demo, separate sandbox proxy and incomplete external accept
 ## Scope
 
 - Prepare `docs/submission-draft.md` with the requested narrative sections, actual technologies, AI disclosure, judge entrypoint and a claim-source map.
-- Correct the README development-tool disclosure: the operator confirmed on October 16, 2026 that Codex was the only development AI tool.
+- Correct the README development-tool disclosure: Dongmin Yu confirmed on October 16, 2026 that Codex was the only development AI tool.
 - Preserve Claude as a separately documented runtime integration.
 - Record outstanding Devpost fields and submission assets without invented URLs, account details or completion claims.
 

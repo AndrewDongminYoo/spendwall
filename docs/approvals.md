@@ -65,7 +65,7 @@ After claim, expiry and denial cannot cancel or release an uncertain payment.
 It reuses the original UUID and body, and does not renew the replay window.
 The executor checks the persisted claim's deadline immediately before each possible POST, including after capture lookup, token refresh and queue delays.
 Known refund results and attempts beyond the existing executor's conservative 24-hour window use `RefundExecutor.reconcile`, which requires an existing ledger refund reference and can only GET.
-If the ledger cannot support that read-only operation, the state remains unknown for operator reconciliation.
+If the ledger cannot support that read-only operation, the state remains unknown for user reconciliation.
 The 24-hour boundary is the existing local safety policy, not a claim about PayPal's current retention guarantees.
 Confirmed success contributes once to velocity.
 Unknown and failed outcomes remain reserved under the current velocity contract.

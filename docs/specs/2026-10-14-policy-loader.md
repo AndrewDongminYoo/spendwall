@@ -3,7 +3,7 @@
 ## Contract
 
 Issue [#6](https://github.com/AndrewDongminYoo/spendwall/issues/6) introduces the policy input boundary in `packages/policy`.
-The operator authorized implementation, verification, and the PR workflow on 2026-10-14.
+Dongmin Yu authorized implementation, verification, and the PR workflow on 2026-10-14.
 The loader accepts YAML text without reading files, contacting payment services, or changing the running firewall.
 
 Require `agents`, `rules`, and an explicit `default: deny`.

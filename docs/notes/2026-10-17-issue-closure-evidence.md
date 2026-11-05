@@ -42,7 +42,7 @@ The check marks in roadmap issue #29 are not evidence; it marks several issues d
 
 ### #24 Devpost draft
 
-- The operator reported on 2026-10-17 that the Devpost draft was saved, before the 11/6 deadline.
+- Dongmin Yu reported on 2026-10-17 that the Devpost draft was saved, before the 11/6 deadline.
   The verified draft text is `docs/submission-draft.md` (#58).
 
 ### #27 invoice policy
@@ -62,7 +62,7 @@ The issue has no checkboxes; its three listed rules are tested.
 - The dry-run matches the re-evaluation of stored inputs: `tests/policy-preview-postgres.test.mjs:313` replays actual encrypted records and asserts the changed, unchanged and unavailable counts; `tests/policy-preview-postgres.test.mjs:68` asserts that the replay uses the exact original inputs.
 
 Limit: the UI conditions are read from source; no component test renders them.
-The #49 PR body left the operator's visual approval pending; the operator approved closing #21 with this limit on 2026-10-17.
+The #49 PR body left the visual approval of Dongmin Yu pending; Dongmin Yu approved closing #21 with this limit on 2026-10-17.
 
 ## Left open
 

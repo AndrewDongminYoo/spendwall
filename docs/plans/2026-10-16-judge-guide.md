@@ -17,7 +17,7 @@ Do not change runtime code or dependencies.
    Record output, elapsed time, candidate revision and cache conditions.
 4. Record the synthetic dashboard in a named isolated browser session, export a GIF/static frame, inspect the artifacts and close owned resources.
 5. Run explicit-path formatting, declared checks, a structured local adversarial review and the advisory Codex diagnostic for the contributor-instruction edit.
-6. Commit the cohesive documentation change, push, open a PR referencing #22, observe hosted review/CI, then request operator visual approval and merge.
+6. Commit the cohesive documentation change, push, open a PR referencing #22, observe hosted review/CI, then request visual approval and merge by Dongmin Yu.
 
 ## Boundaries
 

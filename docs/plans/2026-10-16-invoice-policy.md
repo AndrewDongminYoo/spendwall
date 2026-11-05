@@ -15,4 +15,4 @@ No worktree or dependency change is required.
    Checks establish local policy behavior and storage correctness, not live provider delivery.
 6. Complete two independent read-only reviews for policy/retry integrity and storage/permission security, then root adversarial assessment and scoped repairs.
 7. Group semantic commits, push, open the PR and finish hosted review plus current-head CI under the parent PR loop.
-   Request operator merge only after those gates pass.
+   Request a merge by Dongmin Yu only after those gates pass.

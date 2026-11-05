@@ -12,7 +12,7 @@ No worktree or dependency is needed.
 4. Add scripts/agent-keys.mjs and scripts/agent-proxy.mjs for explicit private configuration, then document operation in docs/agent-auth.md and link it from docs/proxy.md.
 5. Run pnpm check, trunk check --all --no-fix and Compose validation with pinned Node/pnpm.
    Preserve token.ts and existing payment retry semantics; inspect the full diff and run independent core-area reviews.
-6. Create scoped semantic commits and PR, observe current-head CI and hosted reviews, then request operator merge.
+6. Create scoped semantic commits and PR, observe current-head CI and hosted reviews, then request a merge by Dongmin Yu.
 
 ## Safety and completion
 

@@ -3,7 +3,7 @@
 ## Contract and authority
 
 Implement [issue 15](https://github.com/AndrewDongminYoo/spendwall/issues/15) against the existing [approval API](../approval-api.md).
-The operator requested implementation, verification and a PR through pr-loop on 2026-10-16.
+Dongmin Yu requested implementation, verification and a PR through pr-loop on 2026-10-16.
 Real deployment and trial issuance remain deferred.
 The app must not contain PayPal credentials or perform provider refunds itself.
 The server remains authoritative for ownership, argument binding, policy, expiry and execution.
@@ -64,7 +64,7 @@ Duplicate and stale notifications must lead to the current server state.
 Biometrics are a client-side confirmation gate, not server-verified device attestation.
 A stolen valid JWT retains the existing demo API's authority until expiry or server revocation.
 No production identity system, background payment execution, credential refresh, account selection, public hosting or licensed dashboard release is added.
-Firebase configuration is operator-provided and must not be borrowed from another project or account.
+Firebase configuration is user-provided and must not be borrowed from another project or account.
 Native project generation is authorized by the selected mobile issue; no App Store or Play publication is included.
 
 Oracle source `wiki/entities/flutter-ui-ux-review.md` at `c1681868ac634e4b2414874716bb75a7864113c4` confirms that analyzer, widget, rendered and native-device evidence establish different properties.
@@ -79,6 +79,6 @@ Official package and Firebase setup documentation were checked on 2026-10-16.
 3. UI → widget tests exercise actual pending, expired, completed, authentication failure and uncertain-result states; rendered evidence shows the required information hierarchy and accessible actions.
 4. Native integration → analyze, format, tests and a native build verify plugin integration; simulator interactions and screenshots establish only their stated local scenarios.
 5. Full issue completion → an explicitly authorized physical device receives a real push, opens the bound detail, authenticates biometrically and observes the sandbox execution; expired/completed requests remain disabled.
-6. Delivery → repository gates, Flutter checks, local adversarial review and current-head hosted reviews pass; the operator reviews visual artifacts before merge.
+6. Delivery → repository gates, Flutter checks, local adversarial review and current-head hosted reviews pass; Dongmin Yu reviews visual artifacts before merge.
 
 If external configuration or a private connection prevents check 5, retain the exact prerequisite as incomplete and do not close issue 15 or describe synthetic success as real-device acceptance.
