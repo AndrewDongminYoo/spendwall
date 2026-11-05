@@ -16,7 +16,7 @@ The root owns all edits, staging, commits, and final verification.
 5. Review the policy boundary and #7 integration contract independently under the core-area review rule.
    Repair supported findings and repeat only the affected checks.
 6. Commit the contract and implementation by concern, push, open the PR, and observe current-head CI and hosted review.
-   Request operator merge only after all required signals and the complete review-thread gate pass.
+   Request merge only after all required signals and the complete review-thread gate pass.
 
 ## Owned files and limits
 

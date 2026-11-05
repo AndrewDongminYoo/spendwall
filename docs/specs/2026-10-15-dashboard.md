@@ -8,7 +8,7 @@ Do not copy its PayPal credential access or optional AI proxy.
 The existing empty React package needs React, AG Studio, and a bundler; Vite supplies a static build without adding a second application server framework.
 
 Expose read-only `GET /audit` and `GET /stats` through a dedicated loopback server.
-An explicit operator bearer token authenticates access to one configured merchant; it is distinct from agent keys and never grants payment or approval rights.
+An explicit user bearer token authenticates access to one configured merchant; it is distinct from agent keys and never grants payment or approval rights.
 Reject foreign Host/Origin, query parameters, methods, and missing/incorrect credentials before database reads.
 The browser holds the supplied token only in memory and clears all loaded data on disconnect or failed refresh.
 Serve the built dashboard and API from the same origin, with no cross-origin grants.
@@ -32,7 +32,7 @@ No policy, approval, payment, or report persistence mutation is exposed.
 
 ## Design contract
 
-Audience: a merchant operator checking payment activity and approval backlog.
+Audience: a merchant user checking payment activity and approval backlog.
 Use a light, quiet operational canvas with dark ink, green confirmed activity, amber pending activity, and red denials.
 Use shared CSS tokens for the shell and Studio theme, locally available sans-serif typography, tabular monetary figures, a 24-column desktop report, and a single-column narrow report.
 Prioritize pending approval count, confirmed amount, and data freshness above the analytical report.
@@ -45,8 +45,8 @@ Original API data remains authoritative and no generated prose appears here.
 HTTP and actual PostgreSQL tests must establish authorization, merchant separation, read-only behavior, deduplication, expiry, uncertainty, and bounded failure.
 Browser checks must render the actual AG Studio widgets and custom theme over a disposable database populated through existing services, including refresh, error, empty, and narrow states.
 Synthetic seeded payment outcomes are not live PayPal verification.
-Operator visual approval is required for the final candidate.
-The operator confirmed no trial license has been issued.
+Visual approval is required for the final candidate.
+It was confirmed that no trial license has been issued.
 [AG Studio installation guidance](https://www.ag-grid.com/studio/react/installation/) permits local evaluation without a license; deployment, license acquisition, and judging-period validity remain unverified and are not claimed complete.
 The [license guidance](https://www.ag-grid.com/studio/react/enterprise-licence/) requires a license for deployment.
 No external AI or payment request is part of this task.

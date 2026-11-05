@@ -36,7 +36,7 @@ The focused tests already covered this path with a stubbed provider; this run ad
 
 ## Direct-dashboard refund
 
-The operator signed in to the sandbox business account and refunded seeded capture `4YM00645KJ797323T` (USD 5.00) from the PayPal dashboard.
+I signed in to the sandbox business account and refunded seeded capture `4YM00645KJ797323T` (USD 5.00) from the PayPal dashboard.
 The dashboard showed refund transaction `0VK69001115561627` at 1:24:49 AM EDT (05:24:49 UTC).
 PayPal's event list showed `PAYMENT.CAPTURE.REFUNDED` event `WH-857686969R399190P-68N071919S8595535`, created at 05:24:53 UTC for that refund.
 The delivery reached the receiver at 05:25:08 UTC and was answered with 200 after signature postback and capture lookup.

@@ -2,7 +2,7 @@
 
 Repository draft for [#24](https://github.com/AndrewDongminYoo/spendwall/issues/24), originally reviewed against `bd5a9ac6c56f27fd52eb218cccac6934168b3413` on October 16, 2026.
 The narrative and preparation notes were reconciled against `ce91dfaaa8cfa9af09cfdb3b597c40593b87d14d` and the linked acceptance records on October 30, 2026.
-The operator reported saving the initial Devpost draft on October 17, as recorded in the [issue closure evidence](notes/2026-10-17-issue-closure-evidence.md#24-devpost-draft).
+The initial Devpost draft was reported saved on October 17, as recorded in the [issue closure evidence](notes/2026-10-17-issue-closure-evidence.md#24-devpost-draft).
 This update changes repository text only; it does not update or recheck the saved Devpost fields and makes no final submission.
 The narrative below is proposed submission copy; the review notes at the end are for preparation.
 
@@ -117,7 +117,7 @@ No public hosted demo URL or submission video URL is supplied in this draft.
 | Flutter implementation and device acceptance limits              | [Approver guide](../apps/approver/README.md), [manifest](../apps/approver/pubspec.yaml)                                                                                      |
 | iPhone sandbox approval and iOS edge checks                      | [Sandbox recording](recording-approval.md#paypal-sandbox-mode), [iOS checks](notes/2026-10-27-approver-ios-edge-checks.md)                                                   |
 | Runtime AI surfaces and live-model distinction                   | [README AI table](../README.md#where-ai-is-used), [live rehearsal](notes/2026-10-16-live-rehearsal.md)                                                                       |
-| Development tool disclosure                                      | Operator confirmation on October 16, 2026: Codex only; reflected in [README](../README.md#where-ai-is-used)                                                                  |
+| Development tool disclosure                                      | Confirmation on October 16, 2026: Codex only; reflected in [README](../README.md#where-ai-is-used)                                                                           |
 | Hosting and webhook limits                                       | [Hosting guide](hosting.md), [webhook guide](webhooks.md), [sandbox delivery record](notes/2026-10-27-webhook-delivery-rehearsal.md)                                         |
 
 ### Save and submission checklist
@@ -128,7 +128,7 @@ These requirements do not establish this project's eligibility or completion.
 The issue's November 6 draft target is an internal milestone; the official submission deadline is November 12, 2026 at noon Pacific time.
 
 - [ ] Confirm the actual Devpost fields and character limits before copying this draft; those fields have not been inspected.
-- [ ] Review this refreshed narrative and AI disclosure, then update the saved draft through the verified operator account and confirm persistence without final submission.
+- [ ] Review this refreshed narrative and AI disclosure, then update the saved draft through my verified account and confirm persistence without final submission.
 - [ ] Add the real demonstration video URL after recording and publication; do not substitute the dashboard GIF for the required video.
 - [ ] Recheck licensing, access and remaining acceptance evidence against the intended submission.
 - [ ] Review the issue's prize interests: Grand Prizes, Best Use of Agentic Commerce and Best Use of AG Grid.

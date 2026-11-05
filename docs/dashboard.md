@@ -117,10 +117,10 @@ No standalone enterprise grid or chart is embedded in the custom widget.
 
 AG Studio permits [local evaluation without a license](https://www.ag-grid.com/studio/react/installation/); console/license warnings and watermarks are expected in this mode.
 Every deployment requires a license under the [enterprise license guidance](https://www.ag-grid.com/studio/react/enterprise-licence/).
-The operator raised the timing concern: a 45-day trial issued on October 15 would end before the issue's December 1–15 judging window.
-Issuance was deferred until November 1; the operator requested a trial on 2026-11-01.
+The timing concern was raised: a 45-day trial issued on October 15 would end before the issue's December 1–15 judging window.
+Issuance was deferred until November 1; a trial was requested on 2026-11-01.
 The issuance email states that the key expires on 16 December 2026, which covers the judging window.
-With the key set, the operator observed that the local preview no longer showed the AG Studio watermark.
+With the key set, it was observed that the local preview no longer showed the AG Studio watermark.
 Public deployment is not part of the local evaluation evidence.
 
 ### Installing the license key
@@ -149,15 +149,15 @@ docker compose --env-file .env.example config --quiet
 `tests/dashboard.test.mjs` covers projection meaning, failure limits, and pre-database authentication.
 `tests/dashboard-postgres.test.mjs` covers actual SQL, lifecycle writes from existing services, merchant separation, HTTP, and unchanged audit data.
 Browser verification must include populated/empty snapshots, invalid credentials, refresh failure, narrow layout, and the actual custom widget fill.
-Operator approval of the rendered candidate remains required before merge.
+Approval of the rendered candidate remains required before merge.
 
 ## Policy workshop (optional)
 
 The workshop generates a policy draft, compares it with the configured base and reevaluates available historical inputs.
 It does not apply policies or execute payments.
-The final action downloads a validated YAML draft only after explicit human confirmation; activation remains a separate operator action.
+The final action downloads a validated YAML draft only after explicit human confirmation; activation remains a separate user action.
 A changed base version invalidates the draft and requires reloading and review.
-Schema and CEL validation cannot establish that a generated policy matches the operator's intent.
+Schema and CEL validation cannot establish that a generated policy matches the user's intent.
 
 Add `policyPreview` to the private dashboard configuration:
 
@@ -178,12 +178,12 @@ Add `policyPreview` to the private dashboard configuration:
 
 This is an optional section alongside the existing dashboard fields.
 Every policy route requires the existing dashboard bearer plus the independent `policyPreview.accessToken` in `x-spendwall-policy-token`, before any policy, model or history work.
-Give the reviewer credential only to operators authorized to infer sensitive retained input: arbitrary CEL predicates and exact counts can reveal attributes, even though plaintext is not returned.
+Give the reviewer credential only to users authorized to infer sensitive retained input: arbitrary CEL predicates and exact counts can reveal attributes, even though plaintext is not returned.
 The ordinary dashboard token cannot access proposals, replay or export by itself.
 The UI keeps the reviewer token only in component memory and clears it on lock, dashboard refresh or disconnect.
 It does not replace the audit-query Claude configuration.
 The generator follows the [Claude structured-output contract](https://platform.claude.com/docs/en/build-with-claude/structured-outputs).
-Enabling it sends the operator instruction and current policy to Anthropic and can incur charges.
+Enabling it sends the user instruction and current policy to Anthropic and can incur charges.
 Decrypted replay inputs are never model inputs.
 The model has no tools, redirects or automatic retries; only validated output can become a draft.
 One provider operation may run at a time, including an abandoned operation that has not settled.
@@ -227,7 +227,7 @@ The worker commits each batch separately.
 The worker is owned by that launcher and stops with it; no machine scheduler is installed.
 Physical deletion can lag by the worker interval, an expired-record backlog or process downtime, and resumes when the launcher or recorder next runs.
 Audit events remain append-only and are not deleted by this retention worker.
-Database backups, key rotation and deployment-wide lifecycle management remain operator responsibilities.
+Database backups, key rotation and deployment-wide lifecycle management remain user responsibilities.
 Changing or losing the replay key makes old ciphertext unavailable; never replace missing historical inputs with guesses.
 
 ### Reading coverage

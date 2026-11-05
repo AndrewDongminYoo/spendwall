@@ -52,7 +52,7 @@ Unlike on October 16, the manifest was not compared with a fresh `git ls-remote 
 Unlike the October 16 manifest, it holds no `refs/pull/39/merge` ref.
 
 The second branch, `refs/heads/codex/issue-10-agent-auth` (closed draft PR #39), was in the snapshot.
-It was deleted from the remote after the scan, on the operator's instruction.
+It was deleted from the remote after the scan, as instructed.
 Its commits stay reachable through `refs/pull/39/head`.
 
 ```plaintext

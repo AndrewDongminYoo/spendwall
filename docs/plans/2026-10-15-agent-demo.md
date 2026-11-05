@@ -2,7 +2,7 @@
 
 ## Authority and scope
 
-The operator requested implementation of issue 13 through `pr-loop`.
+Implementation of issue 13 through `pr-loop` was requested.
 Use the main workspace on `codex/issue-13-agent-demo`.
 The root owns all edits, staging, commits, and final verification.
 No worktree is necessary.
@@ -16,7 +16,7 @@ No worktree is necessary.
 5. Add disposable database lifecycle and CLI output, including a separate human approval path.
 6. Exercise denial, approval separation, replay, and persisted velocity behavior through MCP.
 7. Run the project gates, review the candidate adversarially, and repair verified findings.
-8. Create scoped semantic commits and a PR, then complete hosted review and CI before requesting operator merge.
+8. Create scoped semantic commits and a PR, then complete hosted review and CI before requesting merge.
 
 ## Owned paths
 

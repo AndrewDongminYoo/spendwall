@@ -37,5 +37,5 @@ The [Orders card use cases](https://developer.paypal.com/api/rest/integration/or
 The [idempotency reference](https://developer.paypal.com/api/rest/reference/idempotency/) limits replay protection to server retention; the [Orders SDK reference](https://developer.paypal.com/sdk/orders/v2/orders-create/) documents six-hour retention.
 The [sandbox card guide](https://developer.paypal.com/sandbox-testing/card-testing) supplies the fixed test card.
 The five-hour client limit leaves a margin and does not claim permanent exactly-once execution.
-Deleting or editing the fixture defeats its recovery guarantees; a stale lock after a killed process requires operator inspection.
+Deleting or editing the fixture defeats its recovery guarantees; a stale lock after a killed process requires user inspection.
 CLI and machine-readable data changes require no visual approval.

@@ -22,13 +22,13 @@ Independent reviewers remain read-only.
 4. Add a private-config loopback receiver runner and opt-in reconciliation reads to the local dashboard runner/server.
    Keep hosted API permissions and surface unchanged; extend its privilege check to reject access to the new schema.
 5. Add the dashboard reconciliation panel, fixture and preview states.
-   Inspect desktop and narrow layouts with the installed isolated browser and preserve screenshots for operator approval.
+   Inspect desktop and narrow layouts with the installed isolated browser and preserve screenshots for approval.
 6. Update affected README, AGENTS and operational documentation in this PR.
    Explain opt-in configuration, roles, migration order, coverage and external acceptance gaps.
 7. Run the declared gates, then parallel bounded security/data-integrity review plus an adversarial cross-check appropriate to this core-area change.
    Repair confirmed findings within the two-round local budget.
 8. Create concern-based commits, push, open the PR and complete current-head hosted review and CI within the recorded budget.
-   Request visual approval and operator merge with visible evidence.
+   Request visual approval and merge with visible evidence.
 
 ## Verification
 

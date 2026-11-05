@@ -2,7 +2,7 @@
 
 ## Current evidence
 
-The operator requested implementation, verification, and a PR for [issue #8](https://github.com/AndrewDongminYoo/spendwall/issues/8).
+Implementation, verification, and a PR for [issue #8](https://github.com/AndrewDongminYoo/spendwall/issues/8) were requested.
 Issue #8 names [issue #11](https://github.com/AndrewDongminYoo/spendwall/issues/11) as a prerequisite and requires audit-backed sums and counts, inclusion of pending approvals, and same-agent concurrency control.
 Issue #11 is open, and the current repository has a PostgreSQL Compose service but no audit table, database client, migrations, or audit storage implementation.
 The merged [issue #7 contract](../specs/2026-10-14-policy-evaluator.md) accepts caller-resolved `agg` data but does not obtain or authenticate it.
@@ -36,7 +36,7 @@ Keep real payment execution and the future #9 context resolver outside these PRs
 ## Authority and status
 
 Implementation of #8 is authorized.
-The operator approved implementing #11 through verification and PR first, then resuming #8 after its merge on 2026-10-14.
+Implementing #11 through verification and PR first, then resuming #8 after its merge on 2026-10-14, was approved.
 This plan does not authorize issue changes, payment calls, release publication, or merge.
 Oracle retrieval returned `[no precedent found]` for velocity aggregation and audit concurrency.
 An Advisor checkpoint recommended resolving the missing prerequisite rather than treating an in-memory fixture as completed audit-backed enforcement.

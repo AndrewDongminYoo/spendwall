@@ -5,7 +5,7 @@
 Follow [the approved contract](../specs/2026-10-16-policy-preview.md).
 Use the existing main workspace and branch `codex/issue-21-policy-preview` under the approved encrypted replay-retention decision.
 Do not create a worktree or change existing token management.
-The operator approved encrypted retention and exact reevaluation on 2026-10-16.
+Encrypted retention and exact reevaluation were approved on 2026-10-16.
 The root owns edits, staging, commits and final verification.
 
 ## Intended files and boundaries
@@ -43,7 +43,7 @@ Reassess rather than silently adding a library if implementation disproves this 
    Run independent core-area reviews for storage/privacy and proposal/confirmation boundaries, followed by a root adversarial cross-check.
 8. Make concern-based commits and open a scoped PR referencing issue 21 without closing unfulfilled acceptance criteria.
    Observe current-head CI and code/security review within the recorded public-repository budget.
-   Present screenshots and request operator visual approval and merge only after the implementation and reviews are concrete.
+   Present screenshots and request visual approval and merge only after the implementation and reviews are concrete.
 
 ## Completion boundary
 

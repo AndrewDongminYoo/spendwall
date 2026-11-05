@@ -113,7 +113,7 @@ function isSandboxConfig(value: unknown): value is SandboxTarget {
 }
 
 // Every invocation, including devices reloads, validates and reads the same
-// opened file. Never repair an operator's ownership or permissions implicitly.
+// opened file. Never repair a user's ownership or permissions implicitly.
 export function readRecordingConfig(file: string): RecordingConfig {
   try {
     const config = JSON.parse(readPrivateFile(file));

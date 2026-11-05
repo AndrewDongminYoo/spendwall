@@ -1,6 +1,6 @@
 # Velocity implementation plan
 
-The operator approved #8 implementation and its PR after #11's merge.
+Implementation of #8 and its PR were approved after #11's merge.
 Use [the velocity specification](../specs/2026-10-14-velocity-aggregation.md) as the current contract; the prerequisite proposal contains an older discovery snapshot.
 Work in the main checkout on `codex/issue-8-velocity-aggregation`.
 Do not call PayPal, apply production migrations, change issues, or merge.
@@ -22,7 +22,7 @@ Do not call PayPal, apply production migrations, change issues, or merge.
 5. Review the complete change and repair blocking findings with regression evidence.
    Verify: independent reviews calibrated to the final core-area scope, followed by final checks on the candidate.
 6. Make scoped conventional commits and publish the approved PR.
-   Verify: exact-head CI, actual hosted verdict, fully paginated review threads, clean checkout, and operator merge request.
+   Verify: exact-head CI, actual hosted verdict, fully paginated review threads, clean checkout, and the merge request.
 
 No new dependency is planned.
 Preserve `migrations/001-audit.sql`, the v1 event payload, and unrelated proxy/resolver code.

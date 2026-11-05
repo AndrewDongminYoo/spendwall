@@ -226,7 +226,7 @@ export async function createDemo(
                       result: completed,
                       reconciliation: 'unresolved',
                       message:
-                        'Refund completed. Do not submit another refund; the operator must recover its reconciliation receipt using this execution ID.',
+                        'Refund completed. Do not submit another refund; the user must recover its reconciliation receipt using this execution ID.',
                     });
                   }
                 }

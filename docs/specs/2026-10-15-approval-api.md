@@ -1,7 +1,7 @@
 # Human approval API and delivery
 
 Implement [issue #14](https://github.com/AndrewDongminYoo/spendwall/issues/14) on merge `ad68b13b8fe012ad994c483c70f458071379341e` and the durable approval service from #12.
-The operator authorized implementation, checks, commits, push, PR and hosted review through `pr-loop`.
+Implementation, checks, commits, push, PR and hosted review through `pr-loop` were authorized.
 Merge, live payments, live notifications, production migration, issue edits and post-merge cleanup/recording are not authorized.
 The security-review exception for PR #41 does not cover this issue.
 
@@ -27,7 +27,7 @@ Re-registration increments generation and invalidates old sessions.
 Configuration removal, changed scope or unavailable device state fails closed.
 Signing and identity keys are separate stable private keys.
 No public signup, cookie auth, refresh endpoint, device attestation or production identity claim is included.
-Document that expiry needs operator reprovisioning in this demo and that a stolen unconsumed enrollment token can enroll a device.
+Document that expiry needs user reprovisioning in this demo and that a stolen unconsumed enrollment token can enroll a device.
 Do not log or return enrollment credentials, signing keys, Google credentials or FCM tokens.
 
 ## HTTP contract

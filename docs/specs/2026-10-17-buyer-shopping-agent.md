@@ -51,5 +51,5 @@ Provider idempotency windows and sandbox approve-link rendering remain unverifie
 
 ## Precedent
 
-The brief records the operator's approval of this plan on 2026-10-17.
+The brief records the approval of this plan on 2026-10-17.
 No oracle lookup ran in this build session (the subagent had no oracle access), so no retrieved precedent was used as design authority.

@@ -26,8 +26,8 @@ Credential records contain a key ID, merchant ID, agent ID, SHA-256 key digest, 
 Keys contain 32 cryptographically random bytes; they are not user-selected passwords, so a password KDF is not used.
 Raw keys are returned only at issuance and never sent to the database.
 Merchant and agent identifiers use 1–128 ASCII letters, digits, underscores or hyphens.
-Treat the configured merchant identity as an operator-provisioned boundary, not proof of PayPal account ownership.
-Use a separate credential database/reader login when stronger isolation between operators is required.
+Treat the configured merchant identity as a user-provisioned boundary, not proof of PayPal account ownership.
+Use a separate credential database/reader login when stronger isolation between users is required.
 
 Create a private JSON configuration outside the repository containing the owner connection, merchant, agent and exact tools from the reviewed catalog:
 

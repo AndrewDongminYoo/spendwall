@@ -14,7 +14,7 @@ Trusted ticket metadata fixes the customer and permitted captures outside agent 
 Ticket text is untrusted data, including instructions to refund other orders.
 The firewall denies out-of-ticket captures, invalid arguments, and unavailable context.
 Only `create_refund` and read-only `check_approval` are agent tools.
-An operator-side approval callback is separate from the MCP server.
+A user-side approval callback is separate from the MCP server.
 Recorded mode labels its scripted human decision explicitly.
 Live mode requires terminal confirmation before approving a synthetic refund.
 
