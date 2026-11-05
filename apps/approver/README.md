@@ -27,7 +27,7 @@ The integration fixture is a separate test entrypoint and never runs from `lib/m
 
 ## Configure a personal device
 
-`firebase.json` names Dongmin Yu's `spendwall-approver` Firebase project and the FlutterFire output paths; no generated Firebase configuration file, APNs credential, enrollment token or public endpoint is included.
+`firebase.json` names the `spendwall-approver` Firebase project and the FlutterFire output paths; no generated Firebase configuration file, APNs credential, enrollment token or public endpoint is included.
 Builds without Firebase configuration open an explanatory setup screen and disable enrollment.
 Use only the user's approved personal Spendwall Firebase project.
 The generated identifiers are `dev.spendwall.spendwallApprover` on iOS and `dev.spendwall.spendwall_approver` on Android; confirm these before registration.

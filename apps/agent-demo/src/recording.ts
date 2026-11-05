@@ -17,7 +17,7 @@ const agentId = 'demo-support';
 const syntheticCaptureId = 'DEMO_CAPTURE_00002';
 const refundPath = /^\/v2\/payments\/captures\/[^/]+\/refund$/;
 
-// Trusted operator facts from the private configuration, never values from
+// Trusted facts from the user's private configuration, never values from
 // the approval HTTP API.
 export type SandboxTarget = {
   captureId: string;
