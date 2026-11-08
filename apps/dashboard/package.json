@@ -9,8 +9,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "ag-studio": "3.0.0",
-    "ag-studio-react": "3.0.0",
+    "ag-studio": "3.1.0",
+    "ag-studio-react": "3.1.0",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
@@ -18,6 +18,6 @@
     "@types/node": "24.19.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "vite": "8.3.5"
+    "vite": "8.3.6"
   }
 }
