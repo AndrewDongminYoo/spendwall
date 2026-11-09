@@ -5,11 +5,7 @@ import {
   AgStudioModuleRegistry,
   createAiHarness,
 } from 'ag-studio';
-import type {
-  AgAiChatSession,
-  AgAiHarness,
-  AgAiHarnessSetupParams,
-} from 'ag-studio';
+import type { AgAiChatSession, AgAiHarness, AgStudioCommon } from 'ag-studio';
 import { auditPrompts } from '../../firewall/src/dashboard/query-contract.ts';
 import type { AuditResult } from '../../firewall/src/dashboard/query-contract.ts';
 import { auditRunner, queryView } from './audit-runner.ts';
@@ -42,7 +38,7 @@ export function AuditAgent({
     },
     [],
   );
-  const setup = useMemo<(params: AgAiHarnessSetupParams) => AgAiHarness>(
+  const setup = useMemo<(params: AgStudioCommon) => AgAiHarness>(
     () =>
       ({ api }) => {
         if (harness.current) return harness.current;
@@ -220,7 +216,10 @@ export function AuditAgent({
         <AgStudio
           data={empty.data}
           initialState={empty.state}
-          ai={setup}
+          ai={() => {
+            if (!harness.current) throw new Error('Audit studio is not ready.');
+            return harness.current;
+          }}
           theme={theme}
           panels={{ view: { left: [], right: [] } }}
           mode="view"
