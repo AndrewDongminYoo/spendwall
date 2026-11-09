@@ -54,10 +54,11 @@ Earlier local audit-assistant recording; synthetic classification, synthetic pay
 Run the current preview to inspect the added reconciliation panel.
 [Static frame](docs/assets/dashboard-demo.png) · [Dashboard setup and query limits](docs/dashboard.md).
 Local evaluation retains AG Studio's evaluation warnings and watermarks.
-An AG Studio trial has been requested ([license key setup](docs/dashboard.md#installing-the-license-key)).
+The AG Studio trial requested on 2026-11-01 expires on 16 December 2026 ([license record](docs/dashboard.md#ag-studio-and-licenses), [license key setup](docs/dashboard.md#installing-the-license-key)).
 
 The [hosted demo guide](docs/hosting.md) provides a container and Render template that serve this read-only dashboard over synthetic data, refreshed by a scheduled synthetic writer.
-The hosted demo was deployed on Render on 2026-11-01; its 48-hour operational check started that day and is tracked in [#20](https://github.com/AndrewDongminYoo/spendwall/issues/20).
+The hosted demo was deployed on Render on 2026-11-01 at <https://spendwall-dashboard.onrender.com>.
+The [judge guide](docs/judge-guide.md#hosted-dashboard-access-and-evidence) describes its access path and the November 3–5 synthetic dashboard/writer observation reported in the Devpost submission, which [#20](https://github.com/AndrewDongminYoo/spendwall/issues/20) does not yet record.
 The separate [local webhook receiver](docs/webhooks.md) verifies observed sandbox refunds and compares them with recorded firewall completions.
 One real sandbox delivery of a refund made in the PayPal dashboard was observed as unmediated on 2026-10-27 through a temporary ingress ([rehearsal note](docs/notes/2026-10-27-webhook-delivery-rehearsal.md)); an unmatched observation does not prove complete bypass detection.
 

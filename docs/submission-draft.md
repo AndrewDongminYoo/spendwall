@@ -6,6 +6,10 @@ The initial Devpost draft was reported saved on October 17, as recorded in the [
 This update changes repository text only; it does not update or recheck the saved Devpost fields and makes no final submission.
 The narrative below is proposed submission copy; the review notes at the end are for preparation.
 
+Status on November 10, 2026 (KST): this draft is kept as the October 30 proposed copy and is not the current submission text.
+The [public Devpost submission](https://devpost.com/software/spendwall-0u2qcm) was finally submitted on November 1, as recorded in [#25](https://github.com/AndrewDongminYoo/spendwall/issues/25#issuecomment-6553219874), and now adds the hosted read-only dashboard, the November 3–5 operating observation and the video.
+The [judge guide](judge-guide.md#hosted-dashboard-access-and-evidence) describes those additions and their limits.
+
 ## Project name and tagline
 
 **Spendwall**
