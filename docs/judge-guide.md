@@ -13,7 +13,7 @@ It displays synthetic data and does not run the terminal scenarios or connect to
 ## Hosted dashboard access and evidence
 
 1. Open <https://spendwall-dashboard.onrender.com>.
-2. Obtain the hosted read-only dashboard token from the private judge testing instructions in the Devpost submission.
+2. Obtain the hosted read-only dashboard token from the Devpost judge access instructions.
    Enter that 64-character hexadecimal token in **Dashboard access token**, then select **Connect**.
    No PayPal credentials, model key, database password or policy reviewer token is needed.
    The token is held in the current tab and cannot approve payments or change policy.
@@ -28,28 +28,35 @@ Model queries, policy proposals/replay/export, reconciliation, MCP and approval 
 The three audit prompts and policy workshop described in the README are features of the separate local preview.
 See the [hosting contract](hosting.md) for the deployed service's boundaries.
 
-If the private judge testing instructions do not contain a working token, use the credential-free local Quickstart below and request updated judge access from the submitter.
+If the Devpost access instructions do not contain a working token, use the credential-free local Quickstart below and request updated judge access from the submitter.
 A local preview token does not grant access to the hosted service.
-This guide does not publish credentials; the private judge testing instructions were not inspected for this guide.
+The public [Devpost submission](https://devpost.com/software/spendwall-0u2qcm), checked on November 10, 2026 (KST), directs judges to this hosted URL and the read-only token in the private judge testing instructions.
+This guide does not publish credentials; the private instructions and token validity were not independently verified in this documentation check.
 
-On November 9, 2026, at 23:26–23:28 UTC (November 10, 08:26–08:28 KST), direct unauthenticated checks observed:
+On November 5, 2026, at 12:57 UTC (21:57 KST), direct unauthenticated checks observed:
 
-- `GET /`: HTTP 200 with the dashboard HTML.
+- `GET /`: HTTP 200 with the dashboard HTML; the browser also rendered the token-entry screen.
 - `GET /healthz`: HTTP 200 with `{"ready":true}`.
 - `GET /stats` and `GET /audit`: HTTP 401 with `Dashboard authentication required.`
 
 These observations confirm reachability and the unauthenticated boundary at that time.
-No hosted token was used in this check, so it does not verify authenticated data, writer continuity or the licensed report rendering.
+No hosted token was used in this check, so authenticated data, writer continuity and the licensed report rendering remain unverified by this check.
 The health endpoint checks restricted database access; it does not prove PayPal connectivity or audit integrity.
 The [license record](dashboard.md#ag-studio-and-licenses) reports a trial expiry of December 16, 2026; local unlicensed evaluation remains a separate path.
 
-## Operational observation
+The [deployment record](https://github.com/AndrewDongminYoo/spendwall/issues/20#issuecomment-6553119348) started a 48-hour observation on November 1 at 03:56 UTC, due for follow-up after November 3 at 03:56 UTC.
+It explicitly scoped that observation to the dashboard and synthetic writer, not PayPal Sandbox token renewal.
+The current [Devpost submission](https://devpost.com/software/spendwall-0u2qcm) reports a later observation window, November 3 at 06:00 UTC through November 5 at 06:00 UTC:
 
-The [deployment record](https://github.com/AndrewDongminYoo/spendwall/issues/20#issuecomment-6553119348) started observation on November 1 at 03:56 UTC and scoped it to the dashboard and synthetic writer, not PayPal Sandbox token renewal.
-The [Devpost submission](https://devpost.com/software/spendwall-0u2qcm) reports Render records for the 48 hours from November 3 at 06:00 UTC to November 5 at 06:00 UTC.
-Those records show 24 successful scheduled writer batches, matched to 96 audit decisions, and a running dashboard instance with no recorded deployment or restart during that window.
-This is a dated platform-record observation, not a guarantee of continuous HTTP availability or PayPal connectivity.
-The Render records are not reproduced in this repository, and the November 9 check above did not use a token to re-read them.
+- 24 successful scheduled writer batches in Render records, matched to 96 audit decisions.
+- A running dashboard instance with no deployment or restart recorded during that window.
+
+These are the submitter's reported platform-record observations, not independent verification performed for this guide update.
+The underlying Render and audit records were not inspected in this check.
+As checked on November 10, 2026 (KST), #20 still contains only the November 1 observation-start report and its acceptance boxes remain unchecked; it does not yet record the later Devpost result.
+The reported 48-hour window covers the synthetic dashboard and writer, not PayPal Sandbox token renewal.
+It does not establish continuous HTTP availability, current authenticated judge access or PayPal connectivity.
+Elapsed time and a successful health check alone do not establish uninterrupted operation without human intervention.
 
 ## Prerequisites
 
@@ -187,17 +194,21 @@ A [repeat scan on October 18, 2026](notes/2026-10-18-history-secret-scan.md), at
 
 ## Remaining submission work
 
-- This guide does not verify authenticated hosted access with the token supplied through Devpost, and [#20](https://github.com/AndrewDongminYoo/spendwall/issues/20) does not yet record the November 3–5 Render observation itself.
+- Verify authenticated judge access using the token supplied through Devpost, and reconcile [#20](https://github.com/AndrewDongminYoo/spendwall/issues/20) with the later dashboard/writer observation reported on Devpost and its supporting records.
 - The integrated live-sandbox judge flow is not delivered by the synthetic demo.
 - Broader live Claude coverage and Android push/biometric approval ([#103](https://github.com/AndrewDongminYoo/spendwall/issues/103)) require separate verification.
   The [iPhone recording](recording-approval.md#paypal-sandbox-mode) and [iOS edge checks](notes/2026-10-27-approver-ios-edge-checks.md) have dated evidence; physical-device dispute deadline delivery remains unverified under #28.
 - The architecture diagram shows current composition, not completion of every item in the roadmap.
 
 [Issue #25's November 1 update](https://github.com/AndrewDongminYoo/spendwall/issues/25#issuecomment-6553219874) records final Devpost submission and a public [163–164-second video](https://www.youtube.com/watch?v=APdU5XjmZM0).
-The [public Devpost page](https://devpost.com/software/spendwall-0u2qcm), checked on November 9, 2026 (UTC), lists submission to PayPal AI Hackathon, the hosted read-only dashboard URL, the November 3–5 Render observation described above and the video.
-The repository's [submission draft](submission-draft.md) predates those edits and omits the hosted URL and video; it is not evidence of the current Devpost fields.
-The private judge testing instructions and submission controls were not accessible in this public-page check.
-This guide update does not modify Devpost.
+That dated issue update left the hosted URL addition and saved-copy updates pending after the #20 observation.
+The repository's [submission draft](submission-draft.md) still omits the hosted URL and video and leaves final submission unchecked; it is not evidence of the current Devpost fields.
+The [public Devpost page](https://devpost.com/software/spendwall-0u2qcm), checked on November 10, 2026 (KST), now includes the hosted dashboard URL, directs judges to the private read-only token instructions and describes the 2-minute-43-second video.
+It identifies hosted payment data as synthetic, separates the local preview's evaluation watermarks and reports the November 3–5 dashboard/writer observation described above.
+The earlier statement that Devpost offered no hosted dashboard is no longer current.
+The private judge access instructions and final submission controls were not inspected in this public-page check.
+Verify judge access and reconcile the remaining records before the November 13, 2026, 05:00 KST deadline (November 12, 20:00 UTC).
+This guide update changes only the repository documentation; it does not modify Devpost, verify the private token or certify final submission eligibility.
 
 The [official rules](https://paypalaihackathon.devpost.com/rules) allow complete runnable setup instructions instead of a hosted URL.
 That does not establish this project's final submission eligibility or satisfy outstanding project acceptance criteria automatically.
