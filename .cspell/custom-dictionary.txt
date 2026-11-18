@@ -32,6 +32,7 @@ dispatchable
 dists
 Dongmin
 downstreams
+extglob
 FMWK
 functiondef
 hackathon
@@ -126,6 +127,8 @@ unparseable
 unrefunded
 USBC
 usename
+vjpf
+Vulns
 wholemodule
 worktrees
 xact
